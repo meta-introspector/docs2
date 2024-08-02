@@ -1,0 +1,1523 @@
+<!DOCTYPE html><html>
+<head>
+<title></title>
+<style type="text/css">
+<!--
+.xflip {
+    -moz-transform: scaleX(-1);
+    -webkit-transform: scaleX(-1);
+    -o-transform: scaleX(-1);
+    transform: scaleX(-1);
+    filter: fliph;
+}
+.yflip {
+    -moz-transform: scaleY(-1);
+    -webkit-transform: scaleY(-1);
+    -o-transform: scaleY(-1);
+    transform: scaleY(-1);
+    filter: flipv;
+}
+.xyflip {
+    -moz-transform: scaleX(-1) scaleY(-1);
+    -webkit-transform: scaleX(-1) scaleY(-1);
+    -o-transform: scaleX(-1) scaleY(-1);
+    transform: scaleX(-1) scaleY(-1);
+    filter: fliph + flipv;
+}
+-->
+</style>
+</head>
+<body>
+<a name=1></a><b>Robust&#160;and&#160;Fast&#160;Blockchain&#160;State&#160;Synchronization</b><br/>
+<b>Enrique&#160;Fynn&#160;</b><a href="mailto:enrique.fynn@usi.ch">#<br/></a>Università&#160;della&#160;Svizzera&#160;italiana&#160;(USI),&#160;Lugano,&#160;Switzerland<br/>
+<b>Ethan&#160;Buchman&#160;</b><a href="mailto:ethan@informal.systems">#<br/></a>Informal&#160;Systems,&#160;Guelph,&#160;Canada<br/>
+<b>Zarko&#160;Milosevic&#160;</b><a href="mailto:zarko@informal.systems">#<br/></a>Informal&#160;Systems,&#160;Guelph,&#160;Canada<br/>
+<b>Robert&#160;Soulé&#160;</b><a href="mailto:robert.soule@yale.edu">#</a><br/>
+Yale&#160;University,&#160;New&#160;Haven,&#160;CT,&#160;USA<br/>
+<b>Fernando&#160;Pedone&#160;</b><a href="mailto:fernando.pedone@usi.ch">#<br/></a>Università&#160;della&#160;Svizzera&#160;italiana&#160;(USI),&#160;Lugano,&#160;Switzerland<br/>
+<b>Abstract</b><br/>
+State&#160;synchronization,&#160;the&#160;process&#160;by&#160;which&#160;a&#160;new&#160;or&#160;recovering&#160;peer&#160;catches&#160;up&#160;with&#160;the&#160;state&#160;of<br/>
+other&#160;operational&#160;peers,&#160;is&#160;critical&#160;to&#160;the&#160;operation&#160;of&#160;blockchain-based&#160;systems.&#160;Existing&#160;approaches<br/>
+to&#160;state&#160;synchronization&#160;typically&#160;involve&#160;downloading&#160;snapshots&#160;of&#160;system&#160;state.&#160;Such&#160;approaches<br/>
+introduce&#160;an&#160;attack&#160;vector&#160;from&#160;malicious&#160;peers&#160;that&#160;can&#160;significantly&#160;degrade&#160;performance.&#160;Moreover,<br/>
+the&#160;process&#160;of&#160;creating&#160;snapshots&#160;leads&#160;to&#160;performance&#160;hiccups.&#160;This&#160;paper&#160;presents&#160;a&#160;technique&#160;for<br/>
+peers&#160;to&#160;catch&#160;up&#160;with&#160;operational&#160;peers&#160;without&#160;trusting&#160;any&#160;particular&#160;peer&#160;and&#160;gracefully&#160;recover<br/>
+from&#160;misbehavior&#160;during&#160;the&#160;process.&#160;We&#160;have&#160;integrated&#160;our&#160;design&#160;into&#160;a&#160;production&#160;blockchain<br/>
+middleware.&#160;Our&#160;evaluation&#160;shows&#160;that&#160;during&#160;operation,&#160;the&#160;transaction&#160;throughput&#160;is&#160;consistently<br/>
+higher&#160;without&#160;pauses&#160;for&#160;snapshot&#160;construction.&#160;Moreover,&#160;the&#160;time&#160;it&#160;takes&#160;for&#160;a&#160;new&#160;peer&#160;to&#160;join<br/>
+the&#160;blockchain&#160;is&#160;halved,&#160;while&#160;at&#160;the&#160;same&#160;time&#160;tolerating&#160;Byzantine&#160;peers.<br/>
+<b>2012&#160;ACM&#160;Subject&#160;Classification&#160;</b>Computer&#160;systems&#160;organization&#160;→&#160;Reliability;&#160;Computer&#160;sys-<br/>
+tems&#160;organization&#160;→&#160;Availability;&#160;Computer&#160;systems&#160;organization&#160;→&#160;Redundancy;&#160;Computing<br/>
+methodologies&#160;→&#160;Distributed&#160;algorithms<br/>
+<b>Keywords&#160;and&#160;phrases&#160;</b>state&#160;synchronization,&#160;replication,&#160;blockchain<br/>
+<b>Digital&#160;Object&#160;Identifier&#160;</b><a href="https://doi.org/10.4230/LIPIcs.OPODIS.2022.8">10.4230/LIPIcs.OPODIS.2022.8</a><br/>
+<b>Funding&#160;</b>This&#160;work&#160;was&#160;supported&#160;in&#160;part&#160;by&#160;the&#160;Swiss&#160;National&#160;Science&#160;Foundation&#160;(grant&#160;175717)<br/>
+and&#160;NSF&#160;FMitF&#160;(grant&#160;2019285).<br/>
+<b>1</b><br/>
+<b>Introduction</b><br/>
+Intuitively,&#160;a&#160;blockchain&#160;provides&#160;an&#160;append-only&#160;log&#160;of&#160;transactions&#160;implemented&#160;by&#160;geo-<br/>graphically&#160;distributed&#160;peers.&#160;The&#160;execution&#160;of&#160;these&#160;transactions&#160;determines&#160;the&#160;system<br/>state.&#160;Each&#160;peer&#160;stores&#160;the&#160;system&#160;state&#160;in&#160;a&#160;Merkle&#160;tree&#160;<a href="opodis2022s.html#18">[23],&#160;</a>or&#160;similar&#160;data&#160;structures&#160;(e.g.,<br/>Merkle-Patricia-tree&#160;<a href="opodis2022s.html#18">[26]).&#160;</a>Executing&#160;a&#160;transaction&#160;involves&#160;performing&#160;operations&#160;on&#160;the<br/>tree.&#160;By&#160;executing&#160;the&#160;log&#160;of&#160;transactions&#160;in&#160;the&#160;same&#160;order,&#160;each&#160;peer&#160;transitions&#160;through<br/>the&#160;same&#160;state&#160;changes&#160;(i.e.,&#160;state&#160;machine&#160;replication&#160;model&#160;<a href="opodis2022s.html#18">[22]).&#160;</a>The&#160;fact&#160;that&#160;the&#160;state&#160;is<br/>stored&#160;in&#160;a&#160;Merkle&#160;tree&#160;allows&#160;a&#160;peer&#160;to&#160;validate&#160;the&#160;consistency&#160;of&#160;the&#160;state&#160;by&#160;computing<br/>a&#160;hash&#160;on&#160;the&#160;reconstructed&#160;tree.&#160;A&#160;Merkle-tree&#160;is&#160;a&#160;tree&#160;in&#160;which&#160;every&#160;leaf&#160;node&#160;stores<br/>a&#160;cryptographic&#160;hash&#160;of&#160;its&#160;value,&#160;and&#160;every&#160;non-leaf&#160;node&#160;stores&#160;the&#160;hash&#160;of&#160;its&#160;children.<br/>Every&#160;block&#160;header&#160;in&#160;the&#160;blockchain&#160;stores&#160;the&#160;hash&#160;of&#160;the&#160;tree&#160;root&#160;constructed&#160;by&#160;the<br/>transactions&#160;in&#160;a&#160;previous&#160;block&#160;(e.g.,&#160;block&#160;<i>n&#160;</i>contains&#160;the&#160;hash&#160;of&#160;the&#160;tree&#160;root&#160;computed<br/>
+with&#160;transactions&#160;in&#160;block&#160;<i>n&#160;</i>−&#160;1).<br/>
+©&#160;Enrique&#160;Fynn,&#160;Ethan&#160;Buchman,&#160;Zarko&#160;Milosevic,&#160;Robert&#160;Soulé,&#160;and&#160;Fernando&#160;Pedone;<br/>licensed&#160;under&#160;Creative&#160;Commons&#160;License&#160;CC-BY&#160;4.0<br/>
+26th&#160;International&#160;Conference&#160;on&#160;Principles&#160;of&#160;Distributed&#160;Systems&#160;(OPODIS&#160;2022).<br/>Editors:&#160;Eshcar&#160;Hillel,&#160;Roberto&#160;Palmieri,&#160;and&#160;Etienne&#160;Rivière;&#160;Article&#160;No.&#160;8;&#160;pp.&#160;8:1–8:22<br/>
+<a href="https://www.dagstuhl.de/lipics/">Leibniz&#160;International&#160;Proceedings&#160;in&#160;Informatics<br/></a><a href="https://www.dagstuhl.de">Schloss&#160;Dagstuhl&#160;–&#160;Leibniz-Zentrum&#160;für&#160;Informatik,&#160;Dagstuhl&#160;Publishing,&#160;Germany</a><br/>
+<hr/>
+<a name=2></a><b>8:2</b><br/>
+<b>Robust&#160;and&#160;Fast&#160;Blockchain&#160;State&#160;Synchronization</b><br/>
+In&#160;theory,&#160;a&#160;new&#160;peer&#160;joining&#160;the&#160;network&#160;(or&#160;a&#160;recovering&#160;peer)&#160;could&#160;download&#160;the<br/>
+transactions&#160;it&#160;misses,&#160;possibly&#160;the&#160;entire&#160;blockchain,&#160;and&#160;reconstruct&#160;the&#160;state&#160;by&#160;re-executing<br/>every&#160;missing&#160;transaction.&#160;However,&#160;this&#160;is&#160;impractical,&#160;since&#160;the&#160;number&#160;of&#160;transactions<br/>grows&#160;too&#160;large&#160;over&#160;time.&#160;Therefore,&#160;existing&#160;blockchain-based&#160;systems&#160;(e.g.,&#160;<a href="opodis2022s.html#18">[2,&#160;26])&#160;</a>rely&#160;on<br/>periodic&#160;snapshots&#160;of&#160;the&#160;system&#160;state.&#160;The&#160;snapshot&#160;is&#160;a&#160;serialized&#160;representation&#160;of&#160;the&#160;tree<br/>data&#160;structure.&#160;When&#160;a&#160;new&#160;peer&#160;joins&#160;the&#160;blockchain&#160;(or&#160;a&#160;failed&#160;peer&#160;recovers),&#160;it&#160;downloads<br/>the&#160;blockchain&#160;blocks&#160;with&#160;transactions&#160;(or&#160;block&#160;headers,&#160;with&#160;a&#160;summary&#160;of&#160;the&#160;block)<br/>and&#160;the&#160;snapshot.&#160;The&#160;peer&#160;then&#160;installs&#160;the&#160;snapshot&#160;and&#160;replays&#160;all&#160;transactions&#160;since&#160;the<br/>snapshot&#160;was&#160;taken,&#160;to&#160;reconstruct&#160;the&#160;current&#160;system&#160;state.&#160;To&#160;validate&#160;a&#160;snapshot,&#160;a&#160;peer<br/>simply&#160;computes&#160;the&#160;hash&#160;on&#160;its&#160;tree&#160;and&#160;compares&#160;the&#160;computed&#160;value&#160;with&#160;the&#160;value&#160;stored<br/>in&#160;the&#160;trusted&#160;block&#160;header.&#160;To&#160;further&#160;decrease&#160;the&#160;time&#160;it&#160;takes&#160;for&#160;a&#160;new&#160;peer&#160;to&#160;join&#160;the<br/>blockchain,&#160;a&#160;snapshot&#160;can&#160;be&#160;divided&#160;into&#160;<i>chunks</i>,&#160;each&#160;one&#160;containing&#160;multiple&#160;nodes&#160;of&#160;the<br/>tree.&#160;This&#160;allows&#160;new&#160;peers&#160;to&#160;download&#160;chunks&#160;from&#160;many&#160;peers&#160;concurrently.&#160;A&#160;natural<br/>strategy&#160;to&#160;assign&#160;tree&#160;nodes&#160;to&#160;chunks&#160;is&#160;to&#160;traverse&#160;the&#160;tree&#160;(e.g.,&#160;using&#160;depth-first&#160;search)<br/>and&#160;build&#160;fixed-sized&#160;chunks&#160;<a href="opodis2022s.html#18">[3].</a><br/>
+Unfortunately,&#160;this&#160;approach&#160;to&#160;state&#160;synchronization&#160;suffers&#160;from&#160;two&#160;subtle,&#160;but&#160;import-<br/>
+ant&#160;problems.&#160;The&#160;first&#160;problem&#160;is&#160;due&#160;to&#160;the&#160;relationship&#160;between&#160;chunks&#160;and&#160;validation.&#160;If<br/>nodes&#160;of&#160;the&#160;state&#160;tree&#160;are&#160;assigned&#160;to&#160;chunks&#160;in&#160;a&#160;naïve&#160;way,&#160;as&#160;described&#160;above,&#160;then&#160;the<br/>chunks&#160;cannot&#160;be&#160;validated&#160;independently.&#160;Instead,&#160;a&#160;peer&#160;must&#160;download&#160;the&#160;entire&#160;tree<br/>before&#160;it&#160;can&#160;compute&#160;the&#160;hash.&#160;This&#160;introduces&#160;an&#160;effective&#160;attack&#160;vector&#160;for&#160;misbehaving<br/>peers.&#160;If&#160;a&#160;single&#160;malicious&#160;peer&#160;shares&#160;an&#160;invalid&#160;chunk,&#160;the&#160;new&#160;peer&#160;cannot&#160;identify&#160;the<br/>problem&#160;until&#160;it&#160;has&#160;downloaded&#160;all&#160;of&#160;the&#160;chunks.&#160;This&#160;wastes&#160;network&#160;and&#160;disk&#160;resources<br/>of&#160;both&#160;the&#160;sender&#160;and&#160;the&#160;receiver,&#160;and&#160;can&#160;significantly&#160;prolong&#160;the&#160;time&#160;it&#160;takes&#160;for&#160;a<br/>new&#160;peer&#160;to&#160;join&#160;the&#160;blockchain.&#160;The&#160;second&#160;problem&#160;is&#160;with&#160;performance.&#160;When&#160;a&#160;peer<br/>computes&#160;a&#160;snapshot,&#160;it&#160;needs&#160;to&#160;search&#160;the&#160;tree,&#160;serialize&#160;all&#160;nodes,&#160;build&#160;chunks,&#160;and&#160;save<br/>them&#160;to&#160;local&#160;storage.&#160;We&#160;show&#160;in&#160;the&#160;paper&#160;that&#160;existing&#160;blockchain-based&#160;systems&#160;based<br/>on&#160;this&#160;approach&#160;experience&#160;periodic&#160;hiccups,&#160;dropping&#160;transaction&#160;throughput.<br/>
+In&#160;this&#160;paper,&#160;we&#160;provide&#160;data&#160;structures&#160;and&#160;algorithms&#160;for&#160;robust&#160;and&#160;fast&#160;blockchain<br/>
+state&#160;synchronization.&#160;By&#160;robust,&#160;we&#160;mean&#160;that&#160;our&#160;solution&#160;can&#160;tolerate&#160;Byzantine&#160;failures.<br/>By&#160;fast,&#160;we&#160;mean&#160;that&#160;(i)&#160;validation&#160;and&#160;state&#160;reconstruction&#160;can&#160;be&#160;performed&#160;quickly,&#160;and<br/>
+(ii)&#160;peers&#160;do&#160;not&#160;have&#160;to&#160;pause&#160;operation&#160;in&#160;order&#160;to&#160;compute&#160;a&#160;snapshot.&#160;The&#160;key&#160;component<br/>
+of&#160;our&#160;solution&#160;is&#160;the&#160;design&#160;of&#160;a&#160;novel&#160;data&#160;structure&#160;targeted&#160;specifically&#160;to&#160;the&#160;state<br/>synchronization&#160;use&#160;case.&#160;This&#160;data&#160;structure,&#160;which&#160;we&#160;call&#160;an&#160;AVL*&#160;tree,&#160;is&#160;a&#160;Merklized<br/>
+AVL&#160;tree&#160;in&#160;which&#160;the&#160;tree&#160;leaves&#160;are&#160;organized&#160;into&#160;chunks.&#160;However,&#160;the&#160;assignment&#160;of<br/>
+nodes&#160;to&#160;chunks&#160;ensures&#160;that&#160;each&#160;chunk&#160;always&#160;contains&#160;a&#160;sub-tree&#160;of&#160;the&#160;system&#160;state.&#160;This<br/>enables&#160;batches&#160;of&#160;leaves&#160;to&#160;be&#160;securely&#160;and&#160;efficiently&#160;downloaded&#160;concurrently,&#160;while&#160;also<br/>permitting&#160;chunks&#160;to&#160;be&#160;verified&#160;for&#160;integrity&#160;using&#160;a&#160;compact&#160;proof.&#160;Finally,&#160;the&#160;structure&#160;of<br/>the&#160;tree&#160;is&#160;such&#160;that&#160;after&#160;a&#160;transaction&#160;is&#160;executed,&#160;a&#160;peer&#160;needs&#160;only&#160;to&#160;recompute&#160;the&#160;hash<br/>of&#160;the&#160;affected&#160;chunk,&#160;and&#160;propagate&#160;the&#160;hash&#160;up&#160;the&#160;tree&#160;to&#160;the&#160;root.&#160;It&#160;does&#160;not&#160;need&#160;to<br/>recompute&#160;the&#160;entire&#160;snapshot.&#160;Thus,&#160;during&#160;normal&#160;operation,&#160;the&#160;peer&#160;never&#160;has&#160;to&#160;pause<br/>transaction&#160;processing.<br/>
+Incorporating&#160;leaf&#160;batching&#160;into&#160;a&#160;Merkle-ized&#160;AVL&#160;tree&#160;might&#160;seem&#160;straightforward.<br/>
+In&#160;reality,&#160;the&#160;problem&#160;introduces&#160;several&#160;challenges.&#160;First&#160;among&#160;these&#160;is&#160;identifying&#160;the<br/>proper&#160;invariants&#160;that&#160;must&#160;be&#160;maintained&#160;so&#160;that&#160;the&#160;integrity&#160;of&#160;the&#160;chunks&#160;can&#160;be&#160;checked<br/>independently.&#160;Second&#160;is&#160;designing&#160;the&#160;non-trivial&#160;changes&#160;to&#160;the&#160;AVL&#160;tree’s&#160;operation<br/>methods&#160;to&#160;preserve&#160;the&#160;invariants.&#160;Third,&#160;during&#160;state&#160;transfer,&#160;peers&#160;will&#160;download&#160;different<br/>chunks&#160;in&#160;parallel,&#160;and&#160;can&#160;start&#160;reconstructing&#160;the&#160;tree.&#160;In&#160;general,&#160;inserting&#160;the&#160;data&#160;into&#160;a<br/>tree&#160;can&#160;result&#160;in&#160;different&#160;trees.&#160;To&#160;ensure&#160;correctness,&#160;we&#160;need&#160;to&#160;guarantee&#160;that&#160;the&#160;tree<br/>construction&#160;algorithm&#160;deterministically&#160;builds&#160;the&#160;same&#160;tree&#160;on&#160;different&#160;peers.<br/>
+<hr/>
+<a name=3></a><b>E.&#160;Fynn,&#160;E.&#160;Buchman,&#160;Z.&#160;Milosevic,&#160;R.&#160;Soulé,&#160;and&#160;F.&#160;Pedone</b><br/>
+<b>8:3</b><br/>
+We&#160;have&#160;implemented&#160;the&#160;AVL*&#160;tree&#160;data&#160;structure&#160;and&#160;integrated&#160;it&#160;into&#160;the&#160;Tendermint<br/>
+blockchain&#160;middleware.&#160;We&#160;show&#160;that&#160;the&#160;time&#160;it&#160;takes&#160;for&#160;a&#160;new&#160;peer&#160;to&#160;join&#160;the&#160;blockchain<br/>using&#160;AVL*&#160;is&#160;halved,&#160;while&#160;at&#160;the&#160;same&#160;time&#160;tolerating&#160;Byzantine&#160;peers.&#160;Moreover,&#160;the<br/>improvements&#160;in&#160;the&#160;performance&#160;of&#160;state&#160;synchronization&#160;do&#160;not&#160;degrade&#160;the&#160;performance&#160;of<br/>steady&#160;execution.&#160;In&#160;fact,&#160;AVL*&#160;slightly&#160;increases&#160;throughput&#160;and&#160;reduces&#160;latency.&#160;Finally,<br/>
+we&#160;show&#160;that&#160;these&#160;improvements&#160;increase&#160;with&#160;the&#160;system&#160;size.<br/>
+The&#160;rest&#160;of&#160;this&#160;paper&#160;is&#160;organized&#160;as&#160;follows.&#160;We&#160;first&#160;provide&#160;the&#160;necessary&#160;background<br/>
+<a href="opodis2022s.html#3">(§2).&#160;</a>We&#160;then&#160;describe&#160;the&#160;basic&#160;structure&#160;and&#160;operations&#160;of&#160;our&#160;AVL*&#160;tree&#160;<a href="opodis2022s.html#5">(§3),&#160;</a>followed<br/>
+by&#160;algorithms&#160;that&#160;enable&#160;fast&#160;state&#160;synchronization&#160;<a href="opodis2022s.html#10">(§4).&#160;</a>We&#160;then&#160;provide&#160;a&#160;thorough<br/>evaluation&#160;of&#160;AVL*&#160;trees,&#160;comparing&#160;to&#160;an&#160;AVL&#160;tree&#160;<a href="opodis2022s.html#11">(§5).&#160;</a>Finally,&#160;we&#160;present&#160;related&#160;work<br/>
+<a href="opodis2022s.html#16">(§6)&#160;</a>and&#160;conclude&#160;<a href="opodis2022s.html#17">(§7).&#160;</a>The&#160;Appendix&#160;contains&#160;a&#160;correctness&#160;argument&#160;for&#160;tree&#160;operations<br/>
+and&#160;state&#160;synchronization,&#160;and&#160;the&#160;detailed&#160;algorithms&#160;proposed&#160;in&#160;the&#160;paper.<br/>
+<b>2</b><br/>
+<b>Background</b><br/>
+<b>2.1</b><br/>
+<b>Blockchain</b><br/>
+A&#160;blockchain&#160;is&#160;a&#160;distributed&#160;ledger,&#160;an&#160;append-only&#160;log&#160;of&#160;transactions&#160;implemented&#160;by<br/>
+geographically&#160;distributed&#160;peers.&#160;Clients&#160;submit&#160;transactions&#160;to&#160;the&#160;blockchain,&#160;which&#160;are<br/>appended&#160;to&#160;the&#160;log&#160;and&#160;executed&#160;by&#160;peers.&#160;Clients&#160;and&#160;peers&#160;may&#160;be&#160;<i>honest</i>,&#160;if&#160;they&#160;follow<br/>the&#160;protocol&#160;specification,&#160;or&#160;<i>malicious&#160;</i>(Byzantine),&#160;if&#160;nothing&#160;can&#160;be&#160;assumed&#160;about&#160;their<br/>behavior.&#160;The&#160;blockchain&#160;behaves&#160;correctly&#160;if&#160;a&#160;fraction&#160;of&#160;the&#160;peers,&#160;typically&#160;more&#160;than<br/>two-thirds,&#160;is&#160;honest&#160;<a href="opodis2022s.html#18">[20].</a><br/>
+The&#160;append-only&#160;log&#160;is&#160;structured&#160;as&#160;a&#160;linked-list&#160;of&#160;blocks,&#160;each&#160;block&#160;divided&#160;into&#160;a<br/>
+header&#160;and&#160;a&#160;body.&#160;The&#160;header&#160;contains,&#160;among&#160;other&#160;information,&#160;a&#160;cryptographic&#160;link<br/>to&#160;the&#160;previous&#160;block&#160;and&#160;a&#160;hash&#160;of&#160;the&#160;state.&#160;The&#160;body&#160;contains&#160;a&#160;list&#160;of&#160;transactions,<br/>each&#160;transaction&#160;cryptographically&#160;signed&#160;by&#160;the&#160;client&#160;that&#160;submitted&#160;it.&#160;Some&#160;blockchain<br/>systems&#160;(e.g.,&#160;<a href="opodis2022s.html#18">[24,&#160;26])&#160;</a>allow&#160;the&#160;chain&#160;of&#160;blocks&#160;to&#160;momentarily&#160;fork,&#160;a&#160;situation&#160;in&#160;which<br/>multiple&#160;blocks&#160;are&#160;linked&#160;to&#160;a&#160;previous&#160;block.&#160;An&#160;alternative&#160;design&#160;is&#160;to&#160;ensure&#160;a&#160;total<br/>order&#160;on&#160;linked&#160;blocks&#160;(e.g.,&#160;<a href="opodis2022s.html#18">[15]).&#160;</a>In&#160;this&#160;case,&#160;peers&#160;must&#160;agree&#160;on&#160;the&#160;next&#160;block&#160;to&#160;be<br/>appended&#160;by&#160;means&#160;of&#160;a&#160;byzantine&#160;fault-tolerant&#160;consensus&#160;protocol&#160;(e.g.,&#160;<a href="opodis2022s.html#18">[16,&#160;21]).</a><br/>
+<b>2.2</b><br/>
+<b>Merkle&#160;trees</b><br/>
+Generally,&#160;the&#160;state&#160;of&#160;a&#160;blockchain&#160;is&#160;stored&#160;locally&#160;by&#160;each&#160;peer&#160;in&#160;a&#160;key-value&#160;store<br/>structured&#160;as&#160;a&#160;Merkle-tree&#160;<a href="opodis2022s.html#18">[25],&#160;</a>or&#160;similar&#160;data&#160;structure&#160;(e.g.,&#160;Merkle-Patricia-tree&#160;<a href="opodis2022s.html#18">[26]).&#160;</a>In<br/>a&#160;Merkle-tree,&#160;each&#160;leaf&#160;holds&#160;the&#160;value&#160;and&#160;its&#160;hash,&#160;and&#160;each&#160;inner&#160;node&#160;holds&#160;the&#160;hash&#160;of<br/>its&#160;children.&#160;The&#160;hash&#160;of&#160;the&#160;tree’s&#160;root&#160;(Merkle-root)&#160;is&#160;stored&#160;in&#160;the&#160;blockchain&#160;header,<br/>
+which&#160;ensures&#160;its&#160;integrity.&#160;The&#160;key&#160;function&#160;of&#160;Merkle-trees&#160;is&#160;to&#160;provide&#160;succinct&#160;proofs&#160;of<br/>
+data&#160;integrity&#160;of&#160;any&#160;node&#160;of&#160;the&#160;tree.&#160;One&#160;can&#160;prove&#160;in&#160;logarithmic&#160;time&#160;and&#160;space&#160;that&#160;a<br/>leaf&#160;<i>v&#160;</i>belongs&#160;to&#160;the&#160;tree&#160;by&#160;providing&#160;the&#160;hash&#160;of&#160;the&#160;siblings&#160;of&#160;the&#160;tree&#160;nodes&#160;in&#160;the&#160;path<br/>from&#160;<i>v&#160;</i>to&#160;the&#160;Merkle-root&#160;<i>m</i>.&#160;In&#160;Figure&#160;<a href="opodis2022s.html#4">1,&#160;</a>these&#160;hashes&#160;are&#160;<i>h</i>0&#160;and&#160;<i>h</i>3.&#160;One&#160;can&#160;verify&#160;that&#160;<i>v<br/></i>belongs&#160;to&#160;the&#160;tree&#160;by&#160;recalculating&#160;<i>h</i>2,&#160;<i>h</i>1&#160;and&#160;<i>m</i>,&#160;and&#160;then&#160;verifying&#160;that&#160;the&#160;recalculated<br/><i>m&#160;</i>is&#160;equal&#160;to&#160;the&#160;known&#160;trusted&#160;Merkle-root&#160;hash,&#160;stored&#160;in&#160;the&#160;blockchain.<br/>
+The&#160;Merkle-tree&#160;of&#160;a&#160;blockchain&#160;is&#160;multi-version:&#160;a&#160;new&#160;tree&#160;is&#160;created&#160;for&#160;every&#160;new<br/>
+blockchain&#160;block,&#160;typically&#160;implemented&#160;with&#160;copy-on-write&#160;for&#160;performance&#160;reasons.&#160;When&#160;a<br/>new&#160;version&#160;of&#160;the&#160;tree&#160;is&#160;instantiated,&#160;the&#160;Merkle-root&#160;from&#160;the&#160;current&#160;version&#160;is&#160;copied&#160;to&#160;a<br/>new&#160;Merkle-root&#160;and&#160;made&#160;the&#160;Merkle-root&#160;of&#160;the&#160;new&#160;version.&#160;Modified&#160;nodes&#160;are&#160;duplicated<br/>and&#160;saved&#160;under&#160;the&#160;new&#160;tree.&#160;Although&#160;it&#160;is&#160;not&#160;common&#160;for&#160;peers&#160;to&#160;navigate&#160;on&#160;older<br/>
+<b>O&#160;P&#160;O&#160;D&#160;I&#160;S&#160;2&#160;0&#160;2&#160;2</b><br/>
+<hr/>
+<a name=4></a><b>8:4</b><br/>
+<b>Robust&#160;and&#160;Fast&#160;Blockchain&#160;State&#160;Synchronization</b><br/>
+<i>b</i><br/>
+.&#160;.&#160;.<br/>
+0<br/>
+<i>b</i>1<br/>
+<i>b</i>2<br/>
+<i>bn</i><br/>
+<i>m&#160;</i>:&#160;<i>H</i>(<i>h</i>0<i>,&#160;h</i>1)<br/>
+<i>h</i>0<br/>
+<i>h</i>1&#160;:&#160;<i>H</i>(<i>h</i>2<i>,&#160;h</i>3)<br/>
+<i>h</i>2&#160;:&#160;<i>H</i>(<i>v</i>)<br/>
+<i>h</i>3<br/>
+<i>v</i><br/>
+<b>Figure&#160;1&#160;</b>Blockchain&#160;<i>b</i>0<i>,&#160;...,&#160;bn&#160;</i>and&#160;Merkle-proof&#160;<i>h</i>0;<i>h</i>3&#160;of&#160;<i>v</i>.&#160;Hashes&#160;<i>m</i>,&#160;<i>h</i>1&#160;and&#160;<i>h</i>2&#160;are&#160;computed<br/>
+from&#160;<i>v</i>,&#160;<i>h</i>0,&#160;and&#160;<i>h</i>3,&#160;and&#160;hash&#160;function&#160;<i>H</i>();&#160;<i>v&#160;</i>is&#160;valid&#160;if&#160;<i>m&#160;</i>matches&#160;the&#160;value&#160;stored&#160;in&#160;block&#160;<i>b</i>1.<br/>
+versions&#160;of&#160;the&#160;tree,&#160;it&#160;is&#160;required&#160;for&#160;certain&#160;inter-blockchain&#160;communication&#160;protocols&#160;<a href="opodis2022s.html#18">[6],<br/></a>where&#160;peers&#160;serve&#160;as&#160;relayers&#160;between&#160;blockchains,&#160;allowing&#160;one&#160;blockchain&#160;to&#160;verify&#160;state<br/>proofs&#160;from&#160;another&#160;at&#160;a&#160;recent&#160;block.<br/>
+<b>2.3</b><br/>
+<b>State&#160;synchronization&#160;problem</b><br/>
+A&#160;new&#160;(or&#160;recovering)&#160;blockchain&#160;peer&#160;needs&#160;to&#160;retrieve&#160;and&#160;execute&#160;transactions&#160;from&#160;all<br/>
+the&#160;blocks&#160;it&#160;has&#160;missed&#160;in&#160;order&#160;to&#160;catch&#160;up&#160;with&#160;operational&#160;peers.&#160;Merkle-trees&#160;enable<br/>fast&#160;catch&#160;up&#160;techniques&#160;based&#160;on&#160;traditional&#160;state&#160;machine&#160;replication&#160;<a href="opodis2022s.html#18">[16]:&#160;</a>Instead&#160;of<br/>re-executing&#160;all&#160;missing&#160;transactions,&#160;the&#160;peer&#160;retrieves&#160;a&#160;recent&#160;version&#160;of&#160;the&#160;Merkle-tree<br/>
+(i.e.,&#160;a&#160;snapshot)&#160;from&#160;other&#160;peers&#160;and&#160;applies&#160;only&#160;the&#160;transactions&#160;in&#160;blocks&#160;that&#160;succeed<br/>
+the&#160;retrieved&#160;Merkle-tree.&#160;This&#160;technique&#160;has&#160;been&#160;implemented&#160;in&#160;popular&#160;blockchain&#160;clients<br/>
+(e.g.,&#160;Geth&#160;<a href="opodis2022s.html#18">[7],&#160;</a>Ethereum’s&#160;main&#160;client).<br/>
+The&#160;obvious&#160;question,&#160;though,&#160;is&#160;how&#160;should&#160;a&#160;peer&#160;download&#160;the&#160;snapshot?&#160;On&#160;the&#160;one<br/>
+hand,&#160;since&#160;a&#160;snapshot&#160;can&#160;be&#160;large,&#160;the&#160;download&#160;process&#160;can&#160;be&#160;accelerated&#160;by&#160;partitioning<br/>the&#160;tree&#160;into&#160;chunks,&#160;and&#160;downloading&#160;chunks&#160;from&#160;several&#160;peers&#160;in&#160;parallel.&#160;On&#160;the&#160;other<br/>hand,&#160;in&#160;blockchain&#160;systems,&#160;leaf&#160;sizes&#160;tend&#160;to&#160;be&#160;small&#160;(e.g.,&#160;a&#160;hundred&#160;bytes),&#160;and&#160;the<br/>number&#160;of&#160;leaves&#160;quite&#160;large,&#160;creating&#160;significant&#160;I/O&#160;overhead&#160;if&#160;one&#160;were&#160;to&#160;serve&#160;each&#160;leaf<br/>independently.&#160;It&#160;makes&#160;sense&#160;to&#160;batch&#160;leaves&#160;together&#160;to&#160;reduce&#160;the&#160;I/O&#160;overhead.<br/>
+Existing&#160;systems&#160;choose&#160;a&#160;fixed-size&#160;chunk&#160;and&#160;assign&#160;nodes&#160;to&#160;the&#160;chunk&#160;until&#160;it&#160;is&#160;full&#160;<a href="opodis2022s.html#18">[2].</a><br/>
+A&#160;natural&#160;implementation&#160;strategy&#160;is&#160;to&#160;perform&#160;a&#160;traversal&#160;of&#160;the&#160;tree&#160;(e.g.,&#160;in&#160;depth-first<br/>
+order)&#160;and&#160;assign&#160;nodes&#160;to&#160;chunks.&#160;However,&#160;this&#160;approach&#160;fails&#160;to&#160;capitalize&#160;on&#160;the&#160;key<br/>property&#160;of&#160;Merkle-trees:&#160;that&#160;subtrees&#160;can&#160;be&#160;validated&#160;independently.&#160;Consequently,&#160;the<br/>snapshot&#160;cannot&#160;be&#160;validated&#160;until&#160;a&#160;peer&#160;has&#160;downloaded&#160;the&#160;complete&#160;state.&#160;Put&#160;another<br/>
+way,&#160;the&#160;peer&#160;must&#160;download&#160;all&#160;chunks&#160;before&#160;it&#160;can&#160;check&#160;if&#160;they&#160;are&#160;valid.&#160;Consequently,&#160;a<br/>
+single&#160;misbehaving&#160;peer&#160;serving&#160;an&#160;invalid&#160;chunk&#160;can&#160;initiate&#160;a&#160;type&#160;of&#160;“denial&#160;of&#160;service”<br/>attack,&#160;significantly&#160;prolonging&#160;the&#160;time&#160;it&#160;takes&#160;for&#160;a&#160;new&#160;peer&#160;to&#160;join&#160;the&#160;blockchain.<br/>
+<hr/>
+<a name=5></a><b>E.&#160;Fynn,&#160;E.&#160;Buchman,&#160;Z.&#160;Milosevic,&#160;R.&#160;Soulé,&#160;and&#160;F.&#160;Pedone</b><br/>
+<b>8:5</b><br/>
+left<br/>
+rotation<br/>
+20<br/>
+20<br/>
+20<br/>
+25<br/>
+right<br/>
+rotation<br/>
+10<br/>
+30<br/>
+10<br/>
+30<br/>
+10<br/>
+25<br/>
+20<br/>
+30<br/>
+#0<br/>
+#0<br/>
+#0<br/>
+20<br/>
+30<br/>
+25<br/>
+20<br/>
+30<br/>
+10<br/>
+25<br/>
+#1<br/>
+#1<br/>
+#0<br/>
+#3<br/>
+20<br/>
+25<br/>
+30<br/>
+25<br/>
+30<br/>
+20<br/>
+30<br/>
+#1<br/>
+#2<br/>
+#3<br/>
+#2<br/>
+#1<br/>
+#2<br/>
+(a)<br/>
+(b)<br/>
+(c)<br/>
+(d)<br/>
+<b>Figure&#160;2&#160;</b>Insertion&#160;and&#160;rotations&#160;in&#160;AVL*&#160;(white&#160;square:&#160;inner&#160;node;&#160;white&#160;circle:&#160;leaf;&#160;gray<br/>
+rectangle:&#160;chunk&#160;with&#160;chunk&#160;id;&#160;bold&#160;square/leaf:&#160;chunk&#160;root).&#160;(a)&#160;a&#160;balanced&#160;AVL&#160;tree,&#160;(b)&#160;an<br/>imbalanced&#160;AVL&#160;tree&#160;after&#160;the&#160;insertion&#160;of&#160;25,&#160;(c)&#160;an&#160;imbalanced&#160;AVL&#160;tree&#160;after&#160;right&#160;rotation&#160;of<br/>previous&#160;tree&#160;at&#160;inner&#160;node&#160;30,&#160;(d)&#160;a&#160;balanced&#160;AVL&#160;tree&#160;after&#160;left&#160;rotation&#160;of&#160;previous&#160;tree&#160;at&#160;pivot<br/>
+(inner&#160;node&#160;20).<br/>
+<b>3</b><br/>
+<b>The&#160;AVL*&#160;chunked&#160;tree</b><br/>
+The&#160;AVL*&#160;tree&#160;is&#160;a&#160;Merkle-ized,&#160;balanced&#160;binary&#160;search&#160;tree.&#160;As&#160;an&#160;AVL+&#160;tree&#160;<a href="opodis2022s.html#5">(§3.1),&#160;</a>it<br/>
+preserves&#160;the&#160;same&#160;invariant:&#160;the&#160;height&#160;difference&#160;between&#160;its&#160;left&#160;and&#160;right&#160;children&#160;is<br/>at&#160;most&#160;1.&#160;The&#160;key&#160;difference&#160;between&#160;the&#160;two&#160;is&#160;that&#160;the&#160;leaf&#160;nodes&#160;in&#160;an&#160;AVL*&#160;tree&#160;are<br/>organized&#160;into&#160;<i>chunks</i>,&#160;or&#160;batches&#160;<a href="opodis2022s.html#6">(§3.2),&#160;</a>and&#160;each&#160;AVL*&#160;chunk&#160;can&#160;be&#160;validated&#160;individually.<br/>
+The&#160;AVL*&#160;tree&#160;requires&#160;new&#160;data&#160;structures&#160;<a href="opodis2022s.html#6">(§3.3),&#160;</a>and&#160;algorithms&#160;for&#160;searching&#160;<a href="opodis2022s.html#7">(§3.4),</a><br/>
+inserting&#160;<a href="opodis2022s.html#7">(§3.5),&#160;</a>and&#160;deleting&#160;<a href="opodis2022s.html#8">(§3.6)&#160;</a>nodes.&#160;Moreover,&#160;organizing&#160;the&#160;tree&#160;in&#160;chunks&#160;has<br/>implications&#160;on&#160;re-balancing&#160;<a href="opodis2022s.html#8">(§3.7),&#160;</a>multi-versioning&#160;<a href="opodis2022s.html#9">(§3.8),&#160;</a>and&#160;the&#160;correctness&#160;of&#160;the&#160;tree<br/>
+(discussed&#160;in&#160;the&#160;Appendix).&#160;A&#160;chunked&#160;AVL*&#160;tree&#160;can&#160;be&#160;downloaded&#160;in&#160;parallel&#160;during<br/>
+state&#160;synchronization,&#160;and&#160;independently&#160;checked&#160;for&#160;integrity.<br/>
+<b>3.1</b><br/>
+<b>AVL+&#160;trees</b><br/>
+While&#160;the&#160;techniques&#160;described&#160;in&#160;the&#160;paper&#160;could&#160;be&#160;used&#160;with&#160;any&#160;Merkle-ized&#160;trees,&#160;we<br/>
+focus&#160;the&#160;discussion&#160;on&#160;AVL&#160;trees&#160;<a href="opodis2022s.html#18">[12,&#160;5].&#160;</a>An&#160;AVL+&#160;tree&#160;is&#160;a&#160;self-balanced&#160;ordered&#160;binary<br/>tree&#160;that&#160;implements&#160;a&#160;key-value&#160;storage&#160;API,&#160;where&#160;all&#160;values&#160;are&#160;stored&#160;in&#160;leaves&#160;and&#160;inner<br/>nodes&#160;store&#160;keys,&#160;used&#160;to&#160;keep&#160;the&#160;tree&#160;ordered.&#160;Leaves&#160;store&#160;the&#160;hash&#160;of&#160;values,&#160;and&#160;inner<br/>nodes&#160;the&#160;hash&#160;of&#160;their&#160;children&#160;and&#160;keys.&#160;As&#160;an&#160;immutable&#160;data&#160;structure,&#160;all&#160;updates&#160;are<br/>performed&#160;using&#160;copy-on-write.&#160;To&#160;add&#160;a&#160;key-value&#160;pair,&#160;the&#160;tree&#160;is&#160;traversed&#160;from&#160;its&#160;root<br/>until&#160;a&#160;leaf&#160;is&#160;found.&#160;Then,&#160;a&#160;new&#160;inner&#160;node&#160;is&#160;created,&#160;from&#160;which&#160;the&#160;found&#160;leaf&#160;and&#160;the<br/>new&#160;leaf&#160;(with&#160;the&#160;key-value&#160;to&#160;be&#160;included)&#160;will&#160;descend.<br/>
+When&#160;the&#160;height&#160;difference&#160;between&#160;the&#160;left&#160;and&#160;right&#160;subtrees&#160;of&#160;an&#160;inner&#160;node&#160;is&#160;greater<br/>
+than&#160;one,&#160;the&#160;tree&#160;is&#160;said&#160;to&#160;be&#160;imbalanced.&#160;To&#160;re-balance&#160;the&#160;tree,&#160;one&#160;or&#160;two&#160;rotations&#160;are<br/>needed&#160;involving&#160;the&#160;lowest&#160;imbalanced&#160;subtree,&#160;whose&#160;root&#160;is&#160;called&#160;pivot&#160;node.&#160;Figures&#160;<a href="opodis2022s.html#5">2</a><br/>
+(b)&#160;and&#160;(c)&#160;show&#160;imbalanced&#160;trees&#160;with&#160;inner&#160;node&#160;20&#160;as&#160;pivot.&#160;A&#160;left&#160;rotation&#160;at&#160;the&#160;pivot&#160;is<br/>
+enough&#160;if&#160;the&#160;subtree&#160;on&#160;the&#160;right&#160;of&#160;the&#160;pivot&#160;is&#160;higher&#160;than&#160;the&#160;subtree&#160;on&#160;the&#160;left&#160;of&#160;the<br/>pivot&#160;(Figure&#160;<a href="opodis2022s.html#5">2&#160;</a>(c)).&#160;But&#160;a&#160;right&#160;rotation&#160;at&#160;the&#160;right&#160;child&#160;of&#160;the&#160;pivot&#160;must&#160;happen&#160;first,&#160;if<br/>the&#160;left&#160;side&#160;of&#160;the&#160;pivot’s&#160;right&#160;child&#160;is&#160;higher&#160;than&#160;the&#160;right&#160;side&#160;of&#160;the&#160;pivot’s&#160;right&#160;child.<br/>
+This&#160;is&#160;what&#160;happens&#160;in&#160;Figure&#160;<a href="opodis2022s.html#5">2&#160;</a>(b)&#160;since&#160;the&#160;left&#160;side&#160;of&#160;inner&#160;node&#160;30,&#160;on&#160;the&#160;right&#160;of&#160;pivot<br/>20,&#160;is&#160;higher&#160;than&#160;its&#160;right&#160;side.&#160;The&#160;cases&#160;for&#160;right&#160;and&#160;left-right&#160;rotations&#160;are&#160;symmetric.<br/>
+<b>O&#160;P&#160;O&#160;D&#160;I&#160;S&#160;2&#160;0&#160;2&#160;2</b><br/>
+<hr/>
+<a name=6></a><b>8:6</b><br/>
+<b>Robust&#160;and&#160;Fast&#160;Blockchain&#160;State&#160;Synchronization</b><br/>
+<b>3.2</b><br/>
+<b>Chunks</b><br/>
+A&#160;chunk&#160;is&#160;a&#160;set&#160;of&#160;nodes&#160;that&#160;are&#160;grouped&#160;together,&#160;and&#160;serves&#160;as&#160;the&#160;unit&#160;of&#160;access&#160;for&#160;the<br/>
+persistent&#160;store,&#160;communication,&#160;and&#160;integrity&#160;check.&#160;Grouping&#160;the&#160;nodes&#160;of&#160;the&#160;tree&#160;into<br/>batches&#160;facilitates&#160;parallel&#160;downloads.&#160;But,&#160;the&#160;assignment&#160;of&#160;nodes&#160;to&#160;chunks&#160;is&#160;important.<br/>If&#160;done&#160;incorrectly,&#160;it&#160;would&#160;not&#160;allow&#160;individual&#160;chunks&#160;to&#160;be&#160;checked&#160;for&#160;integrity.&#160;Each<br/>chunk&#160;has&#160;a&#160;<i>root&#160;</i>which&#160;is&#160;defined&#160;as&#160;follows:<br/>
+▶&#160;<b>Definition&#160;1.&#160;</b><i>The&#160;root&#160;of&#160;a&#160;chunk&#160;C,&#160;root</i>(<i>C</i>)<i>,&#160;is&#160;the&#160;lowest&#160;(i.e.&#160;deepest)&#160;node&#160;that&#160;has</i><br/>
+<i>all&#160;the&#160;nodes&#160;in&#160;C&#160;as&#160;descendants.</i><br/>
+Given&#160;this&#160;definition,&#160;the&#160;important&#160;invariant&#160;preserved&#160;by&#160;AVL*&#160;when&#160;assigning&#160;nodes&#160;to<br/>chunks&#160;is&#160;as&#160;follows:<br/>
+▶&#160;<b>Property&#160;1.&#160;</b><i>For&#160;any&#160;chunks&#160;Ca&#160;and&#160;Cb,&#160;neither&#160;root</i>(<i>Ca</i>)&#160;<i>is&#160;a&#160;descendant&#160;of&#160;root</i>(<i>Cb</i>)&#160;<i>nor<br/>root</i>(<i>Cb</i>)&#160;<i>is&#160;a&#160;descendant&#160;of&#160;root</i>(<i>Ca</i>)<i>.</i><br/>
+Property&#160;<a href="opodis2022s.html#6">1&#160;</a>ensures&#160;an&#160;overall&#160;minimal&#160;proof&#160;size&#160;for&#160;checking&#160;the&#160;integrity&#160;of&#160;a&#160;chunk.&#160;A<br/>
+client&#160;peer&#160;can&#160;check&#160;the&#160;integrity&#160;of&#160;chunk&#160;<i>C&#160;</i>with&#160;<i>C&#160;</i>and&#160;the&#160;proof&#160;that&#160;<i>root</i>(<i>C</i>)&#160;is&#160;a&#160;valid<br/>node.&#160;If&#160;<i>root</i>(<i>C</i>)&#160;is&#160;valid&#160;(see&#160;<a href="opodis2022s.html#3">§2.2)&#160;</a>then&#160;all&#160;data&#160;it&#160;stores&#160;is&#160;valid,&#160;including&#160;the&#160;hash&#160;of&#160;its<br/>subtree.&#160;The&#160;client&#160;peer&#160;then&#160;computes&#160;the&#160;hash&#160;that&#160;should&#160;be&#160;stored&#160;in&#160;<i>root</i>(<i>C</i>)&#160;from&#160;the<br/>leaves&#160;in&#160;<i>C&#160;</i>all&#160;the&#160;way&#160;up&#160;to&#160;<i>root</i>(<i>C</i>)&#160;and&#160;then&#160;checks&#160;whether&#160;the&#160;computed&#160;hash&#160;matches<br/>the&#160;hash&#160;stored&#160;in&#160;<i>root</i>(<i>C</i>).<br/>
+Trivially,&#160;we&#160;see&#160;that&#160;this&#160;property&#160;would&#160;be&#160;satisfied&#160;if&#160;we&#160;were&#160;to&#160;assign&#160;every&#160;node&#160;to<br/>
+the&#160;same&#160;chunk,&#160;or&#160;assign&#160;each&#160;node&#160;to&#160;its&#160;own&#160;chunk,&#160;begging&#160;the&#160;question&#160;of&#160;how&#160;big&#160;a<br/>chunk&#160;should&#160;be?&#160;There&#160;is&#160;a&#160;trade-off:&#160;if&#160;a&#160;chunk&#160;is&#160;too&#160;large,&#160;then&#160;we&#160;lose&#160;the&#160;ability&#160;to<br/>download&#160;multiple&#160;chunks&#160;concurrently,&#160;but&#160;if&#160;a&#160;chunk&#160;is&#160;too&#160;small,&#160;we&#160;lose&#160;the&#160;benefits&#160;of<br/>batching.&#160;The&#160;chunk&#160;size&#160;is&#160;a&#160;constant&#160;set&#160;when&#160;the&#160;tree&#160;is&#160;instantiated.&#160;In&#160;our&#160;experiments,<br/>
+we&#160;empirically&#160;evaluate&#160;different&#160;chunk&#160;sizes.<br/>
+The&#160;key&#160;challenge&#160;in&#160;designing&#160;the&#160;AVL*&#160;tree&#160;is&#160;updating&#160;the&#160;insertion&#160;and&#160;delete<br/>
+algorithms&#160;of&#160;the&#160;AVL+&#160;tree&#160;to&#160;respect&#160;this&#160;invariant,&#160;despite&#160;tree&#160;rotations.<br/>
+<b>3.3</b><br/>
+<b>Data&#160;structures</b><br/>
+In&#160;an&#160;AVL*&#160;tree,&#160;inner&#160;nodes&#160;are&#160;stored&#160;in&#160;volatile&#160;memory&#160;only&#160;(DRAM);&#160;leaves&#160;are<br/>embedded&#160;in&#160;chunks,&#160;which&#160;are&#160;stored&#160;in&#160;volatile&#160;memory&#160;and&#160;in&#160;a&#160;persistent&#160;store.&#160;Table&#160;<a href="opodis2022s.html#7">1<br/></a>details&#160;the&#160;structure&#160;of&#160;inner&#160;nodes,&#160;leaf&#160;nodes,&#160;and&#160;chunks.<br/>
+An&#160;inner&#160;node&#160;contains&#160;a&#160;<i>key</i>,&#160;used&#160;to&#160;search&#160;the&#160;tree;&#160;a&#160;pointer&#160;to&#160;a&#160;<i>chunk</i>,&#160;if&#160;the&#160;key<br/>
+is&#160;the&#160;root&#160;of&#160;the&#160;chunk;&#160;pointers&#160;to&#160;<i>left&#160;</i>and&#160;<i>right&#160;</i>nodes&#160;(inner&#160;or&#160;leaf);&#160;the&#160;<i>height&#160;</i>of&#160;the<br/>node;&#160;a&#160;<i>hash</i>,&#160;discussed&#160;below;&#160;and&#160;a&#160;boolean&#160;<i>is_leaf&#160;</i>that&#160;asserts&#160;that&#160;a&#160;pointer&#160;to&#160;the&#160;node<br/>references&#160;an&#160;inner&#160;no<a href="opodis2022s.html#6">de.1</a><br/>
+A&#160;leaf&#160;node&#160;contains&#160;a&#160;key-value&#160;pair;&#160;a&#160;pointer&#160;to&#160;a&#160;<i>chunk</i>,&#160;if&#160;the&#160;key&#160;is&#160;the&#160;root&#160;of&#160;the<br/>
+chunk;&#160;an&#160;<i>i_node&#160;</i>pointer&#160;to&#160;an&#160;inner&#160;node,&#160;if&#160;the&#160;leaf’s&#160;key&#160;is&#160;also&#160;an&#160;inner&#160;node;&#160;the&#160;<i>height<br/></i>of&#160;the&#160;node,&#160;which&#160;is&#160;zero&#160;if&#160;the&#160;key&#160;is&#160;not&#160;stored&#160;as&#160;an&#160;inner&#160;node&#160;or&#160;the&#160;height&#160;of&#160;the&#160;inner<br/>node&#160;that&#160;stores&#160;the&#160;same&#160;key&#160;as&#160;the&#160;leaf;&#160;a&#160;<i>hash</i>;&#160;and&#160;a&#160;constant&#160;boolean&#160;<i>is_leaf</i>.<br/>
+A&#160;chunk&#160;contains&#160;a&#160;unique&#160;chunk&#160;identifier&#160;<i>cid</i>,&#160;a&#160;number&#160;in&#160;0<i>..</i>(<i>m&#160;</i>−&#160;1),&#160;where&#160;<i>m&#160;</i>is&#160;the<br/>
+number&#160;of&#160;chunks;&#160;the&#160;<i>version&#160;</i>of&#160;the&#160;chunk,&#160;the&#160;number&#160;of&#160;leaves&#160;stored&#160;in&#160;the&#160;chunk,&#160;<i>size</i>;<br/>a&#160;pointer&#160;to&#160;the&#160;chunk&#160;<i>root</i>,&#160;which&#160;can&#160;be&#160;an&#160;inner&#160;node&#160;or&#160;a&#160;leaf;&#160;and&#160;a&#160;set&#160;<i>leaf&#160;</i>with&#160;all&#160;the<br/>leaves&#160;stored&#160;in&#160;the&#160;chunk.&#160;A&#160;chunk&#160;can&#160;store&#160;up&#160;to&#160;<i>Cp&#160;</i>leaves,&#160;a&#160;parameter&#160;of&#160;the&#160;system.<br/>
+1&#160;For&#160;simplicity,&#160;we&#160;assume&#160;that&#160;pointers&#160;can&#160;reference&#160;either&#160;inner&#160;nodes&#160;or&#160;leaves.<br/>
+<hr/>
+<a name=7></a><b>E.&#160;Fynn,&#160;E.&#160;Buchman,&#160;Z.&#160;Milosevic,&#160;R.&#160;Soulé,&#160;and&#160;F.&#160;Pedone</b><br/>
+<b>8:7</b><br/>
+<b>Table&#160;1&#160;</b>The&#160;data&#160;structures&#160;used&#160;in&#160;the&#160;AVL*.<br/>
+<b>Inner&#160;node</b><br/>
+key<br/>
+unique&#160;item&#160;identifier<br/>
+chunk<br/>
+pointer&#160;to&#160;chunk,&#160;if&#160;chunk&#160;root<br/>
+left<br/>
+pointer&#160;to&#160;the&#160;left&#160;node,&#160;inner&#160;or&#160;leaf<br/>
+right<br/>
+pointer&#160;to&#160;the&#160;right&#160;node,&#160;inner&#160;or&#160;leaf<br/>
+height<br/>
+the&#160;height&#160;of&#160;the&#160;node<br/>
+hash<br/>
+needed&#160;by&#160;the&#160;Merkle-ized&#160;tree<br/>
+is_leaf<br/>
+false<br/>
+<b>Leaf&#160;node</b><br/>
+key<br/>
+unique&#160;item&#160;identifier<br/>
+value<br/>
+arbitrary&#160;data&#160;held&#160;in&#160;the&#160;node<br/>
+chunk<br/>
+pointer&#160;to&#160;chunk,&#160;if&#160;chunk&#160;root<br/>
+i_node<br/>
+pointer&#160;to&#160;matching&#160;inner&#160;node,&#160;if&#160;any<br/>
+height<br/>
+0&#160;or&#160;i_node&#160;height&#160;(when&#160;sending&#160;chunk)<br/>
+hash<br/>
+needed&#160;by&#160;the&#160;Merkle-ized&#160;tree<br/>
+is_leaf<br/>
+true<br/>
+<b>Chunk</b><br/>
+cid<br/>
+unique&#160;chunk&#160;id,&#160;starting&#160;in&#160;0<br/>
+version<br/>
+version&#160;number&#160;of&#160;the&#160;chunk<br/>
+size<br/>
+number&#160;of&#160;leaves&#160;in&#160;the&#160;chunk<br/>
+root<br/>
+pointer&#160;to&#160;the&#160;chunk&#160;root,&#160;inner&#160;or&#160;leaf<br/>
+leaf[0<i>..</i>(<i>Cp&#160;</i>−&#160;1)]<br/>
+set&#160;of&#160;leaf&#160;nodes&#160;in&#160;the&#160;chunk<br/>
+Hashes&#160;are&#160;computed&#160;after&#160;all&#160;changes&#160;in&#160;the&#160;tree&#160;have&#160;been&#160;performed,&#160;that&#160;is,&#160;the<br/>
+blockchain&#160;block&#160;the&#160;tree&#160;corresponds&#160;to&#160;has&#160;been&#160;fully&#160;processed.&#160;The&#160;hash&#160;of&#160;a&#160;leaf&#160;takes<br/>as&#160;input&#160;the&#160;key,&#160;value,&#160;height&#160;of&#160;the&#160;tree,&#160;and&#160;the&#160;chunk&#160;id&#160;and&#160;version,&#160;if&#160;the&#160;leaf&#160;is&#160;the<br/>chunk&#160;root.&#160;The&#160;hash&#160;of&#160;an&#160;inner&#160;node&#160;includes&#160;the&#160;key,&#160;the&#160;hashes&#160;of&#160;its&#160;children,&#160;and&#160;the<br/>chunk&#160;id&#160;and&#160;version,&#160;if&#160;the&#160;leaf&#160;is&#160;the&#160;chunk&#160;root.<br/>
+<b>3.4</b><br/>
+<b>Search</b><br/>
+Searching&#160;for&#160;a&#160;key&#160;in&#160;the&#160;AVL*&#160;tree&#160;is&#160;just&#160;like&#160;a&#160;search&#160;in&#160;a&#160;regular&#160;AVL&#160;tree.&#160;The&#160;only<br/>difference&#160;is&#160;that&#160;if&#160;the&#160;search&#160;traverses&#160;a&#160;part&#160;of&#160;the&#160;tree&#160;that&#160;is&#160;not&#160;stored&#160;in&#160;main&#160;memory,<br/>then&#160;the&#160;corresponding&#160;chunk&#160;is&#160;read&#160;from&#160;disk&#160;and&#160;its&#160;entire&#160;subtree&#160;is&#160;stored&#160;in&#160;main<br/>memory.<br/>
+<b>3.5</b><br/>
+<b>Insertion</b><br/>
+The&#160;insertion&#160;starts&#160;by&#160;searching&#160;down&#160;the&#160;tree&#160;for&#160;a&#160;leaf&#160;with&#160;a&#160;key&#160;that&#160;is&#160;immediately<br/>
+smaller&#160;or&#160;bigger&#160;than&#160;the&#160;key&#160;to&#160;be&#160;inserted.&#160;This&#160;will&#160;determine&#160;the&#160;position&#160;of&#160;the&#160;new<br/>leaf,&#160;either&#160;left&#160;or&#160;right&#160;of&#160;the&#160;found&#160;leaf,&#160;with&#160;the&#160;key-value&#160;element&#160;to&#160;be&#160;inserted.&#160;When<br/>searching&#160;down&#160;the&#160;tree,&#160;the&#160;root&#160;of&#160;a&#160;chunk&#160;is&#160;eventually&#160;found.&#160;From&#160;Property&#160;<a href="opodis2022s.html#6">1&#160;</a>(see&#160;<a href="opodis2022s.html#6">§3.2),<br/></a>only&#160;one&#160;root&#160;chunk&#160;is&#160;traversed&#160;when&#160;inserting&#160;an&#160;element&#160;in&#160;the&#160;tree.&#160;If&#160;the&#160;root&#160;chunk<br/>points&#160;to&#160;a&#160;full&#160;chunk,&#160;before&#160;searching&#160;further,&#160;the&#160;chunk&#160;is&#160;split.&#160;The&#160;split,&#160;detailed&#160;next,<br/>does&#160;not&#160;change&#160;the&#160;structure&#160;of&#160;the&#160;tree&#160;but&#160;ensures&#160;that&#160;there&#160;is&#160;an&#160;available&#160;position&#160;in&#160;the<br/>chunk&#160;to&#160;accommodate&#160;the&#160;new&#160;leaf.&#160;To&#160;insert&#160;the&#160;new&#160;element,&#160;one&#160;inner&#160;node&#160;is&#160;created,<br/>pointing&#160;to&#160;the&#160;found&#160;leaf&#160;and&#160;the&#160;new&#160;leaf.&#160;When&#160;unrolling&#160;the&#160;recursion&#160;that&#160;leads&#160;to&#160;the<br/>insertion&#160;of&#160;an&#160;element,&#160;the&#160;height&#160;of&#160;every&#160;visited&#160;tree&#160;node&#160;is&#160;recomputed.&#160;If&#160;the&#160;subtree<br/>rooted&#160;at&#160;the&#160;visited&#160;node&#160;becomes&#160;imbalanced,&#160;a&#160;rotation&#160;is&#160;executed.<br/>
+For&#160;example,&#160;in&#160;Figure&#160;<a href="opodis2022s.html#5">2&#160;</a>we&#160;add&#160;a&#160;node&#160;with&#160;key&#160;25&#160;in&#160;the&#160;tree&#160;depicted&#160;in&#160;(a),&#160;which<br/>
+has&#160;two&#160;chunks.&#160;Chunk&#160;#0&#160;has&#160;one&#160;leaf&#160;and&#160;chunk&#160;#1&#160;is&#160;full&#160;with&#160;two&#160;leaves.&#160;The&#160;insertion<br/>starts&#160;from&#160;the&#160;tree&#160;root&#160;and&#160;traverses&#160;to&#160;the&#160;right&#160;child&#160;at&#160;node&#160;30,&#160;the&#160;chunk&#160;root&#160;of&#160;chunk<br/>
+<b>O&#160;P&#160;O&#160;D&#160;I&#160;S&#160;2&#160;0&#160;2&#160;2</b><br/>
+<hr/>
+<a name=8></a><b>8:8</b><br/>
+<b>Robust&#160;and&#160;Fast&#160;Blockchain&#160;State&#160;Synchronization</b><br/>
+#1,&#160;which&#160;is&#160;at&#160;maximum&#160;capacity,&#160;and&#160;splits&#160;it,&#160;creating&#160;chunk&#160;#2.&#160;The&#160;algorithm&#160;continues<br/>traversing&#160;the&#160;tree&#160;until&#160;leaf&#160;20&#160;is&#160;reached.&#160;Since&#160;the&#160;new&#160;key&#160;is&#160;bigger&#160;than&#160;the&#160;leaf’s&#160;key,<br/>a&#160;new&#160;inner&#160;node&#160;is&#160;added&#160;copying&#160;the&#160;value&#160;of&#160;the&#160;new&#160;key&#160;and&#160;rearranging&#160;the&#160;leaves<br/>accordingly,&#160;resulting&#160;in&#160;the&#160;tree&#160;(b)&#160;before&#160;balancing&#160;is&#160;done.<br/>
+To&#160;split&#160;a&#160;chunk,&#160;we&#160;create&#160;two&#160;new&#160;chunks&#160;and&#160;run&#160;a&#160;depth-first&#160;search&#160;(DFS)&#160;from&#160;the<br/>
+left&#160;and&#160;right&#160;children&#160;of&#160;the&#160;chunk&#160;root&#160;to&#160;be&#160;split.&#160;Each&#160;call&#160;to&#160;DFS&#160;builds&#160;a&#160;new&#160;chunk<br/>that&#160;is&#160;assigned&#160;to&#160;the&#160;left&#160;and&#160;right&#160;children&#160;of&#160;the&#160;old&#160;chunk&#160;root.&#160;At&#160;the&#160;end&#160;of&#160;the&#160;split<br/>the&#160;old&#160;chunk&#160;is&#160;deallocated&#160;and&#160;its&#160;chunk&#160;root&#160;set&#160;to&#160;nil.<br/>
+<b>3.6</b><br/>
+<b>Deletion</b><br/>
+Deleting&#160;a&#160;node&#160;from&#160;the&#160;AVL*&#160;tree&#160;is&#160;similar&#160;to&#160;deleting&#160;a&#160;node&#160;from&#160;an&#160;AVL&#160;tree.&#160;We<br/>discuss&#160;next&#160;the&#160;basic&#160;procedure&#160;and&#160;then&#160;two&#160;extensions&#160;that&#160;account&#160;for&#160;chunks.<br/>
+To&#160;delete&#160;key&#160;<i>k</i>,&#160;we&#160;start&#160;by&#160;searching&#160;the&#160;tree&#160;to&#160;find&#160;a&#160;pivot&#160;node&#160;<i>p&#160;</i>such&#160;that&#160;(i)&#160;<i>p</i>’s&#160;left<br/>
+node&#160;is&#160;a&#160;leaf,&#160;or&#160;(ii)&#160;<i>p&#160;</i>is&#160;an&#160;inner&#160;node&#160;with&#160;key&#160;<i>k</i>.&#160;Then,&#160;there&#160;are&#160;four&#160;cases&#160;to&#160;consider:<br/>
+Case&#160;(a):&#160;<i>p</i>’s&#160;left&#160;child&#160;is&#160;the&#160;leaf&#160;with&#160;key&#160;<i>k</i>.&#160;In&#160;this&#160;scenario,&#160;<i>p</i>’s&#160;left&#160;node&#160;is&#160;deleted,<br/><i>p</i>’s&#160;right&#160;node&#160;takes&#160;the&#160;place&#160;of&#160;the&#160;pivot,&#160;and&#160;the&#160;original&#160;pivot&#160;is&#160;deleted.&#160;This&#160;case<br/>happens&#160;when&#160;we&#160;want&#160;to&#160;remove&#160;key&#160;10&#160;in&#160;Figure&#160;<a href="opodis2022s.html#5">2&#160;</a>(a),&#160;where&#160;the&#160;pivot&#160;is&#160;inner&#160;node&#160;20.<br/>Case&#160;(b):&#160;<i>p</i>’s&#160;right&#160;child&#160;is&#160;the&#160;leaf&#160;with&#160;key&#160;<i>k</i>.&#160;In&#160;this&#160;case,&#160;<i>p&#160;</i>is&#160;necessarily&#160;the&#160;inner&#160;node<br/>
+with&#160;the&#160;key&#160;to&#160;be&#160;deleted.&#160;Both&#160;<i>p&#160;</i>and&#160;its&#160;right&#160;child&#160;are&#160;deleted&#160;and&#160;<i>p</i>’s&#160;left&#160;child&#160;takes<br/>
+the&#160;place&#160;of&#160;the&#160;pivot.&#160;This&#160;case&#160;happens&#160;when&#160;we&#160;want&#160;to&#160;remove&#160;key&#160;30&#160;in&#160;Figure&#160;<a href="opodis2022s.html#5">2&#160;</a>(a),<br/>
+where&#160;the&#160;pivot&#160;is&#160;inner&#160;node&#160;30.<br/>
+Case&#160;(c):&#160;The&#160;left&#160;child&#160;of&#160;<i>p</i>’s&#160;right&#160;child&#160;is&#160;the&#160;leaf&#160;with&#160;key&#160;<i>k</i>.&#160;The&#160;leaf&#160;with&#160;<i>k&#160;</i>is&#160;deleted,<br/><i>p&#160;</i>is&#160;replaced&#160;with&#160;<i>p</i>’s&#160;right&#160;child,&#160;and&#160;the&#160;original&#160;pivot&#160;is&#160;deleted.&#160;For&#160;this&#160;case,&#160;consider<br/>the&#160;deletion&#160;of&#160;key&#160;20&#160;in&#160;Figure&#160;<a href="opodis2022s.html#5">2&#160;</a>(a),&#160;where&#160;the&#160;pivot&#160;is&#160;inner&#160;node&#160;20.<br/>Case&#160;(d):&#160;Otherwise,&#160;we&#160;find&#160;the&#160;inner&#160;node&#160;<i>x&#160;</i>with&#160;the&#160;lowest&#160;value&#160;at&#160;the&#160;sub-tree&#160;on<br/>the&#160;right&#160;of&#160;<i>p</i>,&#160;delete&#160;<i>x</i>’s&#160;left&#160;leaf,&#160;replace&#160;pivot&#160;<i>p&#160;</i>with&#160;<i>x</i>,&#160;and&#160;delete&#160;the&#160;inner&#160;node&#160;<i>p</i>.&#160;We<br/>illustrate&#160;this&#160;case&#160;with&#160;the&#160;deletion&#160;of&#160;key&#160;20&#160;in&#160;Figure&#160;<a href="opodis2022s.html#5">2&#160;</a>(b),&#160;where&#160;the&#160;pivot&#160;is&#160;inner<br/>node&#160;20&#160;and&#160;<i>x&#160;</i>is&#160;inner&#160;node&#160;25.<br/>
+Akin&#160;to&#160;the&#160;AVL-tree&#160;deletion,&#160;when&#160;unrolling&#160;from&#160;the&#160;recursion&#160;that&#160;found&#160;pivot&#160;<i>p</i>,&#160;the<br/>
+nodes&#160;involved&#160;in&#160;the&#160;deletion&#160;have&#160;their&#160;heights&#160;updated&#160;and&#160;possibly&#160;rotated.&#160;Differently<br/>from&#160;the&#160;insertion,&#160;a&#160;deletion&#160;may&#160;involve&#160;rotations&#160;at&#160;all&#160;nodes&#160;in&#160;the&#160;way&#160;up&#160;to&#160;the&#160;root.<br/>
+Deletion&#160;of&#160;a&#160;node&#160;in&#160;an&#160;AVL*&#160;tree&#160;differ&#160;from&#160;deletion&#160;in&#160;an&#160;AVL&#160;tree&#160;in&#160;two&#160;aspects.<br/>
+First,&#160;in&#160;cases&#160;(c)&#160;and&#160;(d)&#160;above,&#160;when&#160;an&#160;inner&#160;node&#160;<i>x&#160;</i>replaces&#160;a&#160;deleted&#160;inner&#160;node&#160;(i.e.,<br/>the&#160;pivot).&#160;If&#160;<i>x&#160;</i>is&#160;a&#160;chunk&#160;root,&#160;then&#160;it&#160;will&#160;no&#160;longer&#160;be&#160;root,&#160;and&#160;the&#160;root&#160;of&#160;the&#160;chunk&#160;it<br/>referred&#160;to&#160;will&#160;be&#160;a&#160;node&#160;that&#160;descends&#160;from&#160;<i>x</i>.<br/>
+Second,&#160;when&#160;deleting&#160;a&#160;leaf,&#160;it&#160;may&#160;happen&#160;that&#160;a&#160;chunk&#160;ends&#160;up&#160;with&#160;no&#160;leaves.&#160;This<br/>
+situation&#160;requires&#160;attention&#160;since&#160;the&#160;validity&#160;of&#160;a&#160;chunk&#160;is&#160;attested&#160;by&#160;the&#160;chunk&#160;root<br/>
+(discussed&#160;in&#160;<a href="opodis2022s.html#10">§4),&#160;</a>and&#160;an&#160;empty&#160;chunk&#160;has&#160;no&#160;root.&#160;To&#160;handle&#160;this&#160;case,&#160;when&#160;a&#160;chunk<br/>
+becomes&#160;empty,&#160;we&#160;take&#160;the&#160;chunk&#160;with&#160;the&#160;current&#160;largest&#160;unique&#160;id,&#160;assign&#160;to&#160;this&#160;chunk<br/>the&#160;id&#160;of&#160;the&#160;empty&#160;chunk,&#160;and&#160;decrement&#160;by&#160;one&#160;the&#160;number&#160;<i>m&#160;</i>of&#160;existing&#160;chunks&#160;(see&#160;<a href="opodis2022s.html#6">§3.3).</a><br/>
+This&#160;ensures&#160;that&#160;every&#160;chunk&#160;with&#160;id&#160;in&#160;0<i>..</i>(<i>m&#160;</i>−&#160;1)&#160;has&#160;at&#160;least&#160;one&#160;node,&#160;and&#160;therefore&#160;a<br/>
+chunk&#160;root.<br/>
+<b>3.7</b><br/>
+<b>Re-balancing</b><br/>
+If,&#160;as&#160;a&#160;result&#160;of&#160;an&#160;insertion&#160;or&#160;a&#160;deletion,&#160;there&#160;is&#160;a&#160;height&#160;difference&#160;between&#160;two&#160;child<br/>subtrees,&#160;then&#160;the&#160;parent&#160;tree&#160;must&#160;be&#160;re-balanced.&#160;Similar&#160;to&#160;the&#160;AVL&#160;tree,&#160;a&#160;rotation&#160;in<br/>an&#160;AVL*&#160;tree&#160;happens&#160;if&#160;the&#160;height&#160;difference&#160;from&#160;the&#160;children&#160;of&#160;a&#160;node&#160;is&#160;greater&#160;than<br/>
+<hr/>
+<a name=9></a><b>E.&#160;Fynn,&#160;E.&#160;Buchman,&#160;Z.&#160;Milosevic,&#160;R.&#160;Soulé,&#160;and&#160;F.&#160;Pedone</b><br/>
+<b>8:9</b><br/>
+one.&#160;There&#160;can&#160;be&#160;four&#160;types&#160;of&#160;rotations:&#160;left,&#160;right-left,&#160;right,&#160;and&#160;left-right.&#160;Left&#160;and&#160;right<br/>rotations&#160;happen&#160;with&#160;a&#160;single&#160;rotation&#160;to&#160;the&#160;left&#160;or&#160;right,&#160;respectively.&#160;When&#160;rotating&#160;to<br/>the&#160;left&#160;on&#160;a&#160;pivot,&#160;the&#160;right&#160;child&#160;of&#160;the&#160;pivot&#160;takes&#160;the&#160;place&#160;of&#160;the&#160;pivot&#160;(called&#160;new&#160;pivot),<br/>the&#160;right&#160;child&#160;of&#160;the&#160;old&#160;pivot&#160;becomes&#160;the&#160;left&#160;child&#160;of&#160;the&#160;new&#160;pivot,&#160;and&#160;the&#160;left&#160;child<br/>of&#160;the&#160;new&#160;pivot&#160;becomes&#160;the&#160;old&#160;pivot.&#160;For&#160;the&#160;right-left&#160;rotation,&#160;first&#160;the&#160;right&#160;child&#160;of<br/>the&#160;pivot&#160;is&#160;rotated&#160;to&#160;the&#160;right&#160;and&#160;finally&#160;the&#160;pivot&#160;is&#160;rotated&#160;to&#160;the&#160;left.&#160;The&#160;right&#160;and<br/>left-right&#160;rotations&#160;are&#160;symmetrical&#160;to&#160;the&#160;cases&#160;explained&#160;before.&#160;The&#160;tree&#160;can&#160;be&#160;balanced<br/>
+with&#160;at&#160;most&#160;two&#160;rotations&#160;after&#160;an&#160;insertion.<br/>
+If&#160;the&#160;rotation&#160;involves&#160;a&#160;chunk&#160;root,&#160;then&#160;there&#160;are&#160;two&#160;cases&#160;to&#160;consider.&#160;First,&#160;if&#160;the<br/>
+root&#160;of&#160;the&#160;chunk&#160;is&#160;the&#160;pivot&#160;of&#160;the&#160;rotation,&#160;then&#160;the&#160;node&#160;that&#160;takes&#160;the&#160;position&#160;of&#160;the<br/>pivot&#160;becomes&#160;the&#160;new&#160;chunk&#160;root.&#160;Second,&#160;if&#160;the&#160;pivot&#160;of&#160;the&#160;rotation&#160;is&#160;not&#160;the&#160;root&#160;of&#160;a<br/>chunk,&#160;but&#160;the&#160;node&#160;that&#160;takes&#160;the&#160;position&#160;of&#160;the&#160;pivot&#160;is&#160;the&#160;root&#160;of&#160;a&#160;chunk,&#160;then&#160;we&#160;split<br/>the&#160;chunk&#160;before&#160;doing&#160;the&#160;rotation.&#160;This&#160;is&#160;done&#160;to&#160;ensure&#160;Property&#160;<a href="opodis2022s.html#6">1.&#160;</a>As&#160;a&#160;consequence,<br/>there&#160;will&#160;be&#160;extra&#160;splits&#160;even&#160;when&#160;a&#160;chunk&#160;is&#160;not&#160;full;&#160;in&#160;our&#160;experimental&#160;evaluation&#160;these<br/>splits&#160;amount&#160;for&#160;around&#160;4%&#160;of&#160;the&#160;total&#160;number&#160;of&#160;splits.<br/>
+Continuing&#160;from&#160;the&#160;example&#160;in&#160;Figure&#160;<a href="opodis2022s.html#5">2,&#160;</a>the&#160;tree&#160;(b)&#160;is&#160;imbalanced&#160;after&#160;the&#160;insertion.<br/>
+Since&#160;the&#160;height&#160;of&#160;the&#160;root’s&#160;right&#160;child&#160;is&#160;greater&#160;than&#160;the&#160;height&#160;of&#160;the&#160;root’s&#160;left&#160;child,<br/>it&#160;triggers&#160;a&#160;left&#160;or&#160;a&#160;right-left&#160;rotation.&#160;Since&#160;the&#160;root’s&#160;right&#160;child&#160;has&#160;a&#160;higher&#160;height&#160;on<br/>its&#160;left&#160;child&#160;than&#160;the&#160;right&#160;one&#160;we&#160;do&#160;a&#160;right-left&#160;rotation.&#160;First&#160;we&#160;rotate&#160;inner&#160;node&#160;30<br/>to&#160;the&#160;right&#160;and&#160;then&#160;rotate&#160;the&#160;inner&#160;node&#160;20&#160;(root)&#160;to&#160;the&#160;left.&#160;When&#160;rotating&#160;the&#160;inner<br/>node&#160;30&#160;to&#160;the&#160;right,&#160;we&#160;observe&#160;that&#160;its&#160;left&#160;child&#160;is&#160;a&#160;chunk&#160;root&#160;and&#160;split&#160;the&#160;chunk&#160;before<br/>continuing&#160;with&#160;the&#160;rotation.&#160;After&#160;this&#160;step,&#160;the&#160;tree&#160;is&#160;depicted&#160;in&#160;(c);&#160;observe&#160;that&#160;the&#160;tree<br/>has&#160;an&#160;extra&#160;chunk&#160;#3&#160;created&#160;by&#160;the&#160;split&#160;and&#160;still&#160;is&#160;imbalanced.&#160;After&#160;the&#160;final&#160;rotation<br/>to&#160;the&#160;left,&#160;the&#160;tree&#160;is&#160;finally&#160;balanced&#160;as&#160;shown&#160;in&#160;(d).<br/>
+<b>3.8</b><br/>
+<b>Multi-versioning</b><br/>
+An&#160;AVL*&#160;tree&#160;is&#160;multi-versioned,&#160;and&#160;a&#160;new&#160;version&#160;of&#160;the&#160;tree&#160;is&#160;created&#160;for&#160;every&#160;new<br/>
+blockchain&#160;block.&#160;For&#160;performance,&#160;a&#160;new&#160;tree&#160;is&#160;created&#160;using&#160;copy-on-write.&#160;Differently<br/>from&#160;an&#160;AVL+&#160;tree,&#160;in&#160;the&#160;AVL*&#160;tree&#160;the&#160;unit&#160;of&#160;allocation&#160;is&#160;a&#160;chunk.&#160;This&#160;means&#160;that<br/>
+when&#160;a&#160;node&#160;is&#160;modified&#160;in&#160;the&#160;new&#160;version&#160;of&#160;the&#160;tree,&#160;the&#160;complete&#160;chunk&#160;that&#160;contains<br/>
+the&#160;node&#160;is&#160;copied.&#160;This&#160;chunk-based&#160;allocation&#160;suggests&#160;a&#160;tradeoff:&#160;small&#160;chunks&#160;reduce<br/>the&#160;overhead&#160;of&#160;creating&#160;the&#160;new&#160;tree,&#160;but&#160;increase&#160;the&#160;number&#160;of&#160;chunks&#160;that&#160;need&#160;to&#160;be<br/>propagated&#160;upon&#160;state&#160;synchronization.&#160;We&#160;experimentally&#160;evaluate&#160;this&#160;tradeoff&#160;in&#160;<a href="opodis2022s.html#11">§5.</a><br/>
+<b>3.9</b><br/>
+<b>Correctness&#160;of&#160;tree&#160;operations</b><br/>
+We&#160;initially&#160;argue&#160;that,&#160;in&#160;the&#160;absence&#160;of&#160;rotations,&#160;the&#160;insertion&#160;and&#160;deletion&#160;algorithms<br/>
+preserve&#160;Property&#160;<a href="opodis2022s.html#6">1.</a><br/>
+In&#160;the&#160;case&#160;of&#160;an&#160;insertion,&#160;the&#160;property&#160;could&#160;only&#160;be&#160;invalidated&#160;when&#160;creating&#160;new<br/>
+chunks.&#160;When&#160;splitting&#160;a&#160;chunk,&#160;two&#160;new&#160;disjoint&#160;chunks&#160;are&#160;created&#160;and&#160;assigned&#160;to&#160;the<br/>left&#160;and&#160;right&#160;subtrees&#160;as&#160;the&#160;original&#160;chunk&#160;is&#160;extinguished.&#160;These&#160;steps&#160;do&#160;not&#160;violate<br/>Property&#160;<a href="opodis2022s.html#6">1&#160;</a>since&#160;they&#160;do&#160;not&#160;create&#160;descendants&#160;below&#160;or&#160;above&#160;each&#160;chunk&#160;root.<br/>
+To&#160;see&#160;why&#160;deletion&#160;preserves&#160;Property&#160;<a href="opodis2022s.html#6">1,&#160;</a>assume&#160;node&#160;<i>x&#160;</i>replaces&#160;the&#160;pivot,&#160;and&#160;<i>x&#160;</i>is&#160;root<br/>
+of&#160;its&#160;chunk.&#160;From&#160;the&#160;protocol,&#160;a&#160;descendant&#160;<i>y&#160;</i>of&#160;<i>x&#160;</i>becomes&#160;chunk&#160;root&#160;in&#160;place&#160;of&#160;<i>x</i>.&#160;Since<br/><i>x&#160;</i>was&#160;chunk&#160;root,&#160;none&#160;of&#160;the&#160;nodes&#160;in&#160;its&#160;subtree&#160;are&#160;chunk&#160;root,&#160;and&#160;thus,&#160;no&#160;descendant<br/>of&#160;<i>y&#160;</i>is&#160;a&#160;chunk&#160;root.<br/>
+We&#160;now&#160;argue&#160;that&#160;a&#160;right&#160;rotation&#160;preserves&#160;Property&#160;<a href="opodis2022s.html#6">1;&#160;</a>the&#160;same&#160;reasoning&#160;applies&#160;for&#160;a<br/>
+left&#160;rotation.&#160;When&#160;rotating&#160;a&#160;node&#160;<i>x&#160;</i>to&#160;the&#160;right,&#160;<i>x</i>’s&#160;left&#160;child&#160;is&#160;assigned&#160;as&#160;the&#160;right&#160;child<br/>of&#160;<i>x</i>’s&#160;original&#160;left&#160;child.&#160;The&#160;only&#160;case&#160;a&#160;rotation&#160;would&#160;lead&#160;to&#160;a&#160;violation&#160;of&#160;Property&#160;<a href="opodis2022s.html#6">1&#160;</a>is<br/>
+<b>O&#160;P&#160;O&#160;D&#160;I&#160;S&#160;2&#160;0&#160;2&#160;2</b><br/>
+<hr/>
+<a name=10></a><b>8:10</b><br/>
+<b>Robust&#160;and&#160;Fast&#160;Blockchain&#160;State&#160;Synchronization</b><br/>
+when&#160;there&#160;are&#160;chunk&#160;roots&#160;in&#160;<i>x</i>’s&#160;siblings.&#160;To&#160;deal&#160;with&#160;this&#160;case,&#160;before&#160;the&#160;assignment,&#160;we<br/>
+split&#160;the&#160;left&#160;chunk&#160;root&#160;in&#160;case&#160;of&#160;a&#160;right&#160;rotation&#160;(and&#160;right&#160;chunk&#160;root&#160;in&#160;case&#160;of&#160;a&#160;left<br/>rotation).&#160;After&#160;the&#160;split,&#160;the&#160;assigned&#160;node&#160;is&#160;a&#160;chunk&#160;root&#160;and&#160;can&#160;be&#160;safely&#160;moved&#160;to&#160;the<br/>opposite&#160;part&#160;of&#160;the&#160;tree.<br/>
+<b>4</b><br/>
+<b>Robust&#160;state&#160;synchronization</b><br/>
+In&#160;general,&#160;there&#160;may&#160;be&#160;many&#160;ways&#160;to&#160;build&#160;a&#160;balanced&#160;binary&#160;tree&#160;from&#160;the&#160;same&#160;data.<br/>
+To&#160;be&#160;correct,&#160;we&#160;must&#160;ensure&#160;that&#160;all&#160;peers&#160;build&#160;the&#160;same&#160;tree.&#160;This&#160;is&#160;ensured&#160;if&#160;a&#160;peer<br/>
+collects&#160;all&#160;chunks&#160;that&#160;make&#160;up&#160;a&#160;tree,&#160;these&#160;chunks&#160;are&#160;valid,&#160;and&#160;the&#160;re-construction&#160;of&#160;the<br/>tree&#160;is&#160;deterministic.&#160;More&#160;formally,&#160;the&#160;tree&#160;reconstruction&#160;algorithm&#160;ensures&#160;the&#160;following<br/>two&#160;properties:<br/>
+▶&#160;<b>Property&#160;2.&#160;</b><i>Let&#160;T&#160;be&#160;the&#160;AVL*&#160;tree&#160;built&#160;by&#160;a&#160;honest&#160;peer&#160;after&#160;executing&#160;the&#160;n-th&#160;block</i><br/>
+<i>of&#160;the&#160;blockchain,&#160;and&#160;CT&#160;</i>=&#160;{<i>C</i>0<i>,&#160;...,&#160;Cm</i>−1}&#160;<i>the&#160;chunks&#160;of&#160;T&#160;.&#160;Upon&#160;receiving&#160;chunk&#160;Ck&#160;from<br/>a&#160;peer,&#160;a&#160;client&#160;peer&#160;can&#160;check&#160;whether&#160;Ck&#160;is&#160;valid&#160;(i.e.,&#160;Ck&#160;</i>∈&#160;<i>CT&#160;)&#160;before&#160;receiving&#160;any&#160;other<br/>chunks&#160;in&#160;CT&#160;.</i><br/>
+▶&#160;<b>Property&#160;3.&#160;</b><i>Let&#160;T&#160;and&#160;T&#160;</i>′&#160;<i>be&#160;two&#160;AVL*&#160;trees&#160;with&#160;the&#160;same&#160;nodes.&#160;If&#160;we&#160;build&#160;T&#160;</i>′&#160;<i>by</i><br/>
+<i>inserting&#160;node&#160;by&#160;node&#160;following&#160;their&#160;order&#160;of&#160;height&#160;in&#160;T&#160;,&#160;then&#160;T&#160;and&#160;T&#160;</i>′&#160;<i>are&#160;isomorphic.</i><br/>
+We&#160;now&#160;describe&#160;a&#160;procedure&#160;to&#160;reconstruct&#160;the&#160;tree&#160;that&#160;satisfies&#160;Properties&#160;<a href="opodis2022s.html#10">2&#160;</a>and&#160;<a href="opodis2022s.html#10">3.&#160;</a>To<br/>
+check&#160;that&#160;<i>T&#160;</i>is&#160;valid,&#160;the&#160;client&#160;needs&#160;the&#160;trusted&#160;Merkle-root&#160;hash&#160;of&#160;<i>T&#160;</i>and&#160;the&#160;number<br/><i>m&#160;</i>of&#160;chunks&#160;in&#160;this&#160;tree.&#160;Both&#160;the&#160;Merkle-root&#160;hash&#160;and&#160;the&#160;number&#160;of&#160;chunks&#160;in&#160;the&#160;tree<br/>must&#160;be&#160;included&#160;in&#160;the&#160;block&#160;headers&#160;of&#160;the&#160;blockchain&#160;to&#160;ensure&#160;that&#160;they&#160;are&#160;trusted.&#160;In<br/>a&#160;blockchain,&#160;this&#160;information&#160;is&#160;available&#160;in&#160;the&#160;headers&#160;of&#160;a&#160;block&#160;that&#160;succeeds&#160;the&#160;<i>n</i>-th<br/>block&#160;(e.g.,&#160;in&#160;the&#160;(<i>n&#160;</i>+&#160;1)-th&#160;block).<br/>
+A&#160;client&#160;peer&#160;requests&#160;a&#160;chunk&#160;by&#160;its&#160;identifier&#160;(i.e.,&#160;a&#160;value&#160;in&#160;0<i>..</i>(<i>m&#160;</i>−&#160;1))&#160;and&#160;receives&#160;as<br/>
+a&#160;response&#160;the&#160;requested&#160;chunk&#160;with&#160;the&#160;proof&#160;of&#160;inclusion&#160;of&#160;the&#160;chunk’s&#160;root.&#160;The&#160;peer<br/>then&#160;rebuilds&#160;the&#160;subtree&#160;rooted&#160;at&#160;the&#160;chunk’s&#160;root&#160;with&#160;all&#160;the&#160;nodes&#160;in&#160;the&#160;chunk.&#160;The<br/>procedure&#160;that&#160;checks&#160;the&#160;validity&#160;of&#160;the&#160;chunk&#160;(Property&#160;<a href="opodis2022s.html#10">2)&#160;</a>proceeds&#160;in&#160;two&#160;steps.&#160;In&#160;the<br/>first&#160;step,&#160;the&#160;peer&#160;verifies&#160;the&#160;proof’s&#160;validity&#160;by&#160;reconstructing&#160;the&#160;path&#160;from&#160;the&#160;chunk’s<br/>root&#160;until&#160;the&#160;Merkle-root&#160;based&#160;on&#160;the&#160;hashes&#160;provided&#160;in&#160;the&#160;proof.&#160;The&#160;proof&#160;is&#160;valid&#160;if<br/>and&#160;only&#160;if&#160;the&#160;reconstructed&#160;Merkle-root&#160;matches&#160;the&#160;trusted&#160;one.&#160;In&#160;the&#160;second&#160;step,&#160;the<br/>peer&#160;recomputes&#160;the&#160;hashes&#160;of&#160;the&#160;subtree&#160;from&#160;the&#160;leaves&#160;up&#160;to&#160;the&#160;chunk&#160;root.&#160;The&#160;chunk<br/>is&#160;valid&#160;if&#160;the&#160;computed&#160;hash&#160;of&#160;the&#160;chunk&#160;root&#160;matches&#160;the&#160;hash&#160;provided,&#160;known&#160;to&#160;be<br/>valid&#160;from&#160;the&#160;first&#160;step.<br/>
+To&#160;ensure&#160;that&#160;the&#160;client&#160;peer&#160;builds&#160;a&#160;proper&#160;subtree&#160;with&#160;the&#160;leaves&#160;in&#160;a&#160;chunk<br/>
+(Property&#160;<a href="opodis2022s.html#10">3),&#160;</a>the&#160;peer&#160;first&#160;sorts&#160;all&#160;leaves&#160;by&#160;height.&#160;Recall&#160;from&#160;<a href="opodis2022s.html#6">§3.3&#160;</a>that&#160;the&#160;height&#160;stored<br/>
+in&#160;a&#160;leaf&#160;is&#160;either&#160;0,&#160;if&#160;the&#160;leaf’s&#160;key&#160;is&#160;not&#160;an&#160;inner&#160;node,&#160;or&#160;the&#160;inner&#160;node’s&#160;height&#160;in&#160;the<br/>tree.&#160;Then,&#160;the&#160;peer&#160;builds&#160;the&#160;tree&#160;by&#160;adding&#160;one&#160;node&#160;at&#160;a&#160;time,&#160;in&#160;descending&#160;order&#160;of<br/>the&#160;node&#160;height&#160;(i.e.,&#160;root&#160;first).&#160;Multiple&#160;subtrees&#160;can&#160;be&#160;built&#160;in&#160;parallel&#160;to&#160;speed&#160;up&#160;the<br/>process.&#160;When&#160;the&#160;last&#160;chunk&#160;is&#160;built,&#160;the&#160;peer&#160;links&#160;all&#160;the&#160;chunk&#160;subtrees:&#160;The&#160;peer&#160;sorts<br/>all&#160;subtrees&#160;in&#160;descending&#160;order&#160;of&#160;their&#160;root&#160;node&#160;height,&#160;at&#160;which&#160;point&#160;the&#160;tree’s&#160;root&#160;lies<br/>necessarily&#160;in&#160;the&#160;first&#160;position&#160;of&#160;the&#160;array.&#160;Each&#160;subtree&#160;is&#160;then&#160;added&#160;sequentially&#160;in&#160;the<br/>tree.&#160;When&#160;the&#160;last&#160;element&#160;is&#160;added&#160;the&#160;tree&#160;is&#160;complete.&#160;The&#160;correctness&#160;of&#160;this&#160;procedure<br/>is&#160;shown&#160;below.&#160;After&#160;the&#160;tree&#160;is&#160;built,&#160;the&#160;peer&#160;recomputes&#160;all&#160;the&#160;hashes.<br/>
+<hr/>
+<a name=11></a><b>E.&#160;Fynn,&#160;E.&#160;Buchman,&#160;Z.&#160;Milosevic,&#160;R.&#160;Soulé,&#160;and&#160;F.&#160;Pedone</b><br/>
+<b>8:11</b><br/>
+<b>4.1</b><br/>
+<b>Correctness&#160;state&#160;synchronization</b><br/>
+We&#160;initially&#160;consider&#160;Property&#160;<a href="opodis2022s.html#10">2.&#160;</a>The&#160;first&#160;step&#160;of&#160;the&#160;protocol&#160;checks&#160;the&#160;validity&#160;of&#160;the<br/>
+chunk&#160;root&#160;using&#160;the&#160;proof&#160;of&#160;integrity&#160;of&#160;a&#160;single&#160;node&#160;of&#160;the&#160;tree.&#160;This&#160;follows&#160;immediately<br/>from&#160;the&#160;properties&#160;of&#160;Merkle&#160;trees&#160;<a href="opodis2022s.html#3">(§2.2).&#160;</a>A&#160;valid&#160;chunk&#160;root&#160;provides&#160;a&#160;trusted&#160;hash&#160;of&#160;its<br/>subtree.&#160;Then,&#160;in&#160;the&#160;second&#160;step,&#160;we&#160;compute&#160;the&#160;hashes&#160;from&#160;the&#160;leaves&#160;all&#160;the&#160;way&#160;up&#160;to<br/>the&#160;chunk&#160;root.&#160;If&#160;the&#160;trusted&#160;and&#160;the&#160;computed&#160;hash&#160;match,&#160;then&#160;the&#160;chunk&#160;is&#160;valid.<br/>
+We&#160;now&#160;consider&#160;Property&#160;<a href="opodis2022s.html#10">3.&#160;</a>Let&#160;<i>h&#160;</i>be&#160;the&#160;height&#160;of&#160;<i>T&#160;</i>,&#160;and&#160;<i>T&#160;</i>(<i>n</i>)&#160;be&#160;a&#160;subtree&#160;of&#160;<i>T&#160;</i>that<br/>
+contains&#160;nodes&#160;from&#160;height&#160;<i>h&#160;</i>down&#160;to&#160;height&#160;<i>n</i>.&#160;The&#160;proof&#160;is&#160;by&#160;backwards&#160;induction&#160;on&#160;<i>n</i>.<br/>
+Base&#160;step.&#160;Trivially&#160;true&#160;for&#160;<i>n&#160;</i>=&#160;<i>h&#160;</i>since&#160;there&#160;is&#160;a&#160;single&#160;node&#160;with&#160;height&#160;<i>h&#160;</i>in&#160;subtrees<br/>
+<i>T&#160;</i>(<i>h</i>)&#160;and&#160;<i>T&#160;</i>′(<i>h</i>),&#160;the&#160;root.<br/>
+Inductive&#160;step.&#160;We&#160;assume&#160;that&#160;<i>T&#160;</i>(<i>n&#160;</i>+&#160;1)&#160;and&#160;<i>T&#160;</i>′(<i>n&#160;</i>+&#160;1)&#160;are&#160;isomorphic&#160;and&#160;show&#160;that<br/>
+<i>T&#160;</i>(<i>n</i>)&#160;and&#160;<i>T&#160;</i>′(<i>n</i>)&#160;are&#160;isomorphic&#160;too,&#160;for&#160;0&#160;≤&#160;<i>n&#160;&lt;&#160;h</i>.&#160;Let&#160;<i>k&#160;</i>be&#160;a&#160;node&#160;in&#160;<i>T&#160;</i>(<i>n</i>)&#160;that&#160;is&#160;not&#160;in<br/><i>T&#160;</i>(<i>n&#160;</i>+&#160;1).&#160;Since&#160;<i>T&#160;</i>is&#160;a&#160;binary&#160;search&#160;tree,&#160;there&#160;is&#160;only&#160;one&#160;path&#160;in&#160;<i>T&#160;</i>(<i>n&#160;</i>+&#160;1)&#160;that&#160;leads&#160;to&#160;<i>k</i>.<br/>From&#160;the&#160;inductive&#160;hypothesis,&#160;<i>T&#160;</i>(<i>n&#160;</i>+&#160;1)&#160;and&#160;<i>T&#160;</i>′(<i>n&#160;</i>+&#160;1)&#160;are&#160;isomorphic,&#160;thus,&#160;<i>k&#160;</i>will&#160;end&#160;up&#160;in<br/>the&#160;same&#160;location&#160;in&#160;<i>T&#160;</i>′(<i>n</i>).&#160;Since&#160;<i>T&#160;</i>(0)&#160;=&#160;<i>T&#160;</i>and&#160;<i>T&#160;</i>′(0)&#160;=&#160;<i>T&#160;</i>′,&#160;we&#160;conclude&#160;that&#160;<i>T&#160;</i>and&#160;<i>T&#160;</i>′&#160;are<br/>isomorphic.<br/>
+<b>5</b><br/>
+<b>Evaluation</b><br/>
+1.0<br/>
+<i>0.1s</i><br/>
+<i>1.0s</i><br/>
+<i>16.3s</i><br/>
+<i>102.6s</i><br/>
+1.0<br/>
+<i>0.1s</i><br/>
+<i>1.0s</i><br/>
+<i>13.1s</i><br/>
+<i>101.9s</i><br/>
+IAVL+<br/>
+IAVL+<br/>
+0.8<br/>
+AVL*<br/>
+0.8<br/>
+AVL*<br/>
+0.6<br/>
+0.6<br/>
+Ratio<br/>
+<i>0.5s</i><br/>
+<i>5.7s</i><br/>
+<i>45.8s</i><br/>
+Ratio<br/>
+<i>0.5s</i><br/>
+0.4<br/>
+<i>0.04s</i><br/>
+<i>0.04s</i><br/>
+0.4<br/>
+<i>41.0s</i><br/>
+<i>3.9s</i><br/>
+0.2<br/>
+0.2<br/>
+0.0<br/>
+10k<br/>
+100k<br/>
+1M<br/>
+10M<br/>
+0.0<br/>
+Number of key/value pairs<br/>
+10k<br/>
+100k<br/>
+1M<br/>
+10M<br/>
+Number of key/value pairs<br/>
+<b>(a)&#160;</b>10&#160;peers.<br/>
+<b>(b)&#160;</b>80&#160;peers.<br/>
+<b>Figure&#160;3&#160;</b>Time&#160;for&#160;a&#160;peer&#160;to&#160;recover&#160;from&#160;scratch,&#160;100k&#160;chunks,&#160;varying&#160;number&#160;of&#160;key/value<br/>
+pairs.<br/>
+<b>5.1</b><br/>
+<b>Implementation&#160;and&#160;environment</b><br/>
+To&#160;evaluate&#160;the&#160;behavior&#160;of&#160;our&#160;data&#160;structure&#160;and&#160;algorithms,&#160;we&#160;integrated&#160;them&#160;into<br/>Tendermint&#160;and&#160;conducted&#160;experiments&#160;under&#160;different&#160;conditions.&#160;Tendermint&#160;is&#160;a&#160;blockchain<br/>
+middleware&#160;that&#160;supports&#160;the&#160;replication&#160;of&#160;arbitrary&#160;applications.&#160;Tendermint&#160;provides<br/>applications&#160;with&#160;an&#160;AVL+&#160;tree&#160;to&#160;manage&#160;state,&#160;called&#160;IAVL+.&#160;Peers&#160;can&#160;join&#160;the&#160;network<br/>by&#160;fetching&#160;a&#160;snapshot&#160;of&#160;the&#160;system&#160;state.&#160;To&#160;speed&#160;up&#160;the&#160;process,&#160;a&#160;peer&#160;can&#160;fetch&#160;a<br/>snapshot&#160;in&#160;chunks&#160;of&#160;fixed&#160;size.<br/>
+All&#160;tests&#160;were&#160;conducted&#160;in&#160;a&#160;wide-area&#160;network&#160;(WAN)&#160;using&#160;Amazon’s&#160;Elastic&#160;Computing<br/>
+(EC2)&#160;platform.&#160;We&#160;evaluated&#160;the&#160;system&#160;with&#160;10&#160;peers&#160;(small&#160;setup)&#160;and&#160;80&#160;peers&#160;(large<br/>
+setup).&#160;Our&#160;large&#160;setup&#160;is&#160;a&#160;fair&#160;approximation&#160;of&#160;Cosmos/Tendermint’s&#160;current&#160;production<br/>system,&#160;with&#160;125&#160;peers.&#160;Peers&#160;were&#160;deployed&#160;in&#160;datacenters&#160;in&#160;seven&#160;Amazon&#160;regions:&#160;three<br/>datacenters&#160;in&#160;North&#160;America&#160;(Oregon,&#160;Ohio,&#160;Canada&#160;Central),&#160;two&#160;in&#160;Asia&#160;(Tokyo,&#160;Hong<br/>
+<b>O&#160;P&#160;O&#160;D&#160;I&#160;S&#160;2&#160;0&#160;2&#160;2</b><br/>
+<hr/>
+<a name=12></a><b>8:12</b><br/>
+<b>Robust&#160;and&#160;Fast&#160;Blockchain&#160;State&#160;Synchronization</b><br/>
+Kong),&#160;three&#160;in&#160;Europe&#160;(Paris,&#160;Frankfurt,&#160;and&#160;London),&#160;one&#160;in&#160;South&#160;America&#160;(Sao&#160;Paulo),<br/>one&#160;in&#160;the&#160;Middle&#160;East&#160;(Bahrain),&#160;and&#160;one&#160;in&#160;Africa&#160;(South&#160;Africa).&#160;We&#160;used&#160;t3.xlarge&#160;and<br/>r5.xlarge&#160;instances.<br/>
+We&#160;used&#160;most&#160;of&#160;Tendermint’s&#160;default&#160;parameters,&#160;and&#160;set&#160;the&#160;mempool&#160;cache&#160;with&#160;50k<br/>
+transactions,&#160;and&#160;block&#160;interval&#160;of&#160;1&#160;second&#160;for&#160;executions&#160;with&#160;10&#160;peers&#160;and&#160;5&#160;seconds&#160;for<br/>for&#160;executions&#160;with&#160;80&#160;peers.&#160;These&#160;parameters&#160;led&#160;to&#160;the&#160;best&#160;results&#160;for&#160;throughput&#160;and<br/>latency&#160;for&#160;both&#160;the&#160;IAVL+&#160;and&#160;the&#160;AVL*&#160;experiments.&#160;In&#160;the&#160;setup&#160;with&#160;10&#160;peers,&#160;each<br/>peer&#160;is&#160;connected&#160;to&#160;every&#160;other&#160;peer;&#160;in&#160;the&#160;setup&#160;with&#160;80&#160;peers,&#160;each&#160;peer&#160;is&#160;connected&#160;to<br/>25&#160;random&#160;peers.<br/>
+We&#160;developed&#160;a&#160;key-value&#160;store&#160;application&#160;using&#160;Tendermint&#160;and&#160;benchmarked&#160;the<br/>
+application&#160;using&#160;the&#160;IAVL+&#160;tree&#160;and&#160;the&#160;AVL*&#160;tree.&#160;Clients&#160;submit&#160;transactions&#160;that&#160;add<br/>new&#160;key-value&#160;pairs&#160;to&#160;the&#160;store.&#160;A&#160;key&#160;contains&#160;20&#160;bytes&#160;and&#160;a&#160;value&#160;contains&#160;100&#160;bytes,<br/>both&#160;generated&#160;randomly&#160;by&#160;clients.&#160;We&#160;evaluated&#160;the&#160;IAVL+&#160;and&#160;the&#160;AVL*&#160;trees&#160;with<br/>chunks&#160;that&#160;can&#160;contain&#160;up&#160;to&#160;10k&#160;and&#160;100k&#160;key-value&#160;pairs,&#160;amounting&#160;to&#160;roughly&#160;1MB&#160;and<br/>
+10MB&#160;chunks,&#160;respectively.&#160;We&#160;considered&#160;executions&#160;in&#160;which&#160;clients&#160;include&#160;10k,&#160;100k,&#160;1M<br/>
+and&#160;10M&#160;key-value&#160;entries&#160;to&#160;the&#160;store.<br/>
+<b>5.2</b><br/>
+<b>State&#160;synchronization</b><br/>
+The&#160;first&#160;set&#160;of&#160;experiments&#160;evaluates&#160;the&#160;performance&#160;of&#160;the&#160;state&#160;synchronization&#160;operation.<br/>The&#160;main&#160;metric&#160;of&#160;concern&#160;is&#160;the&#160;time&#160;it&#160;takes&#160;to&#160;perform&#160;synchronization&#160;for&#160;a&#160;new&#160;peer<br/>
+joining&#160;the&#160;blockchain.<br/>
+In&#160;these&#160;experiments,&#160;all&#160;peers&#160;but&#160;one&#160;are&#160;pre-initialized&#160;with&#160;a&#160;full&#160;tree.&#160;When&#160;the<br/>
+experiment&#160;begins,&#160;the&#160;new&#160;peer&#160;recovers&#160;the&#160;state&#160;by&#160;downloading&#160;chunks&#160;in&#160;parallel&#160;from<br/>the&#160;operational&#160;peers.&#160;We&#160;vary&#160;three&#160;parameters:&#160;(i)&#160;the&#160;size&#160;of&#160;the&#160;tree,&#160;(ii)&#160;the&#160;number&#160;of<br/>validators&#160;(10&#160;and&#160;80),&#160;and&#160;(iii)&#160;the&#160;size&#160;of&#160;the&#160;chunks&#160;(10k&#160;and&#160;100k).<br/>
+Figure&#160;<a href="opodis2022s.html#11">3&#160;</a>shows&#160;the&#160;state&#160;synchronization&#160;times&#160;for&#160;IAVL+&#160;and&#160;AVL*.&#160;The&#160;results&#160;for&#160;10k<br/>
+chunks&#160;and&#160;100k&#160;chunks&#160;are&#160;similar;&#160;thus,&#160;we&#160;show&#160;results&#160;for&#160;100k&#160;chunks&#160;only.&#160;We&#160;report<br/>the&#160;results&#160;as&#160;a&#160;ratio,&#160;with&#160;the&#160;absolute&#160;time&#160;printed&#160;at&#160;the&#160;top&#160;of&#160;each&#160;column.&#160;There&#160;are<br/>two&#160;important&#160;features&#160;to&#160;note.&#160;First,&#160;for&#160;both&#160;IAVL+&#160;and&#160;AVL*,&#160;the&#160;synchronization&#160;time<br/>increases&#160;linearly&#160;with&#160;the&#160;size&#160;of&#160;the&#160;tree,&#160;and&#160;it&#160;does&#160;not&#160;depend&#160;on&#160;the&#160;size&#160;of&#160;the&#160;system.<br/>Second,&#160;the&#160;synchronization&#160;time&#160;for&#160;AVL*&#160;is&#160;roughly&#160;half&#160;the&#160;time&#160;required&#160;by&#160;IAVL+.&#160;This<br/>happens&#160;because&#160;in&#160;the&#160;AVL*,&#160;when&#160;a&#160;chunk&#160;is&#160;received,&#160;it&#160;can&#160;be&#160;validated&#160;individually<br/>and,&#160;if&#160;valid,&#160;the&#160;subtree&#160;it&#160;contains&#160;can&#160;be&#160;built&#160;before&#160;all&#160;chunks&#160;are&#160;received.<br/>
+<b>Table&#160;2&#160;</b>Throughput&#160;and&#160;latency&#160;for&#160;IAVL+&#160;and&#160;AVL*&#160;in&#160;different&#160;configurations.<br/>
+10&#160;peers<br/>
+10k&#160;chunks<br/>
+100k&#160;chunks<br/>
+Throughput&#160;(tx/s)<br/>
+Latency&#160;(s)<br/>
+Throughput&#160;(tx/s)<br/>
+Latency&#160;(s)<br/>
+average<br/>
+std.<br/>
+average<br/>
+std.<br/>
+average<br/>
+std.<br/>
+average<br/>
+std.<br/>
+IAVL+<br/>
+2373.86<br/>
+764.03<br/>
+4.18<br/>
+1.1<br/>
+2362.76<br/>
+713.46<br/>
+4.16<br/>
+1.02<br/>
+AVL*<br/>
+2538.63<br/>
+798.46<br/>
+3.85<br/>
+0.94<br/>
+2491.69<br/>
+802.94<br/>
+3.96<br/>
+0.99<br/>
+variation<br/>
++7%<br/>
+-8%<br/>
++5%<br/>
+-5%<br/>
+80&#160;peers<br/>
+10k&#160;chunks<br/>
+100k&#160;chunks<br/>
+Throughput&#160;(tx/s)<br/>
+Latency&#160;(s)<br/>
+Throughput&#160;(tx/s)<br/>
+Latency&#160;(s)<br/>
+average<br/>
+std.<br/>
+average<br/>
+std.<br/>
+average<br/>
+std.<br/>
+average<br/>
+std.<br/>
+IAVL+<br/>
+893.28<br/>
+218.33<br/>
+8.63<br/>
+2.27<br/>
+892.82<br/>
+235.59<br/>
+8.71<br/>
+2.6<br/>
+AVL*<br/>
+988.42<br/>
+124.39<br/>
+7.64<br/>
+1.53<br/>
+1001.25<br/>
+131.8<br/>
+7.54<br/>
+1.55<br/>
+variation<br/>
++11%<br/>
+-11%<br/>
++12%<br/>
+-13%<br/>
+<hr/>
+<a name=13></a><b>E.&#160;Fynn,&#160;E.&#160;Buchman,&#160;Z.&#160;Milosevic,&#160;R.&#160;Soulé,&#160;and&#160;F.&#160;Pedone</b><br/>
+<b>8:13</b><br/>
+5000<br/>
+5000<br/>
+4000<br/>
+4000<br/>
+3000<br/>
+3000<br/>
+tx/s<br/>
+tx/s<br/>
+2000<br/>
+2000<br/>
+1000<br/>
+1000<br/>
+0<br/>
+0<br/>
+0<br/>
+50<br/>
+100<br/>
+150<br/>
+200<br/>
+0<br/>
+50<br/>
+100<br/>
+150<br/>
+200<br/>
+block<br/>
+block<br/>
+1.0<br/>
+1.0<br/>
+0.8<br/>
+0.8<br/>
+0.6<br/>
+0.6<br/>
+%<br/>
+%<br/>
+0.4<br/>
+0.4<br/>
+0.2<br/>
+0.2<br/>
+0.0<br/>
+0.0<br/>
+0<br/>
+2<br/>
+4<br/>
+6<br/>
+8<br/>
+10<br/>
+0<br/>
+2<br/>
+4<br/>
+6<br/>
+8<br/>
+10<br/>
+seconds<br/>
+seconds<br/>
+<b>(a)&#160;</b>IAVL+&#160;with&#160;10k&#160;chunks.<br/>
+<b>(b)&#160;</b>AVL*&#160;with&#160;10k&#160;chunks.<br/>
+4000<br/>
+4000<br/>
+3000<br/>
+3000<br/>
+tx/s&#160;2000<br/>
+tx/s&#160;2000<br/>
+1000<br/>
+1000<br/>
+0<br/>
+0<br/>
+0<br/>
+50<br/>
+100<br/>
+150<br/>
+200<br/>
+0<br/>
+50<br/>
+100<br/>
+150<br/>
+200<br/>
+block<br/>
+block<br/>
+1.0<br/>
+1.0<br/>
+0.8<br/>
+0.8<br/>
+0.6<br/>
+0.6<br/>
+%<br/>
+%<br/>
+0.4<br/>
+0.4<br/>
+0.2<br/>
+0.2<br/>
+0.0<br/>
+0.0<br/>
+0<br/>
+2<br/>
+4<br/>
+6<br/>
+8<br/>
+0<br/>
+2<br/>
+4<br/>
+6<br/>
+8<br/>
+seconds<br/>
+seconds<br/>
+<b>(c)&#160;</b>IAVL+&#160;with&#160;100k&#160;chunks.<br/>
+<b>(d)&#160;</b>AVL*&#160;with&#160;100k&#160;chunks.<br/>
+<b>Figure&#160;4&#160;</b>Throughput&#160;and&#160;latency&#160;of&#160;transaction&#160;execution,&#160;10&#160;peers,&#160;1M&#160;key/value&#160;pairs.<br/>
+We&#160;do&#160;note&#160;one&#160;detail.&#160;Recall&#160;that&#160;the&#160;AVL*&#160;does&#160;not&#160;guarantee&#160;fixed-sized&#160;chunks.&#160;So,<br/>
+in&#160;these&#160;experiments,&#160;the&#160;AVL*&#160;chunks&#160;tend&#160;to&#160;be&#160;smaller&#160;than&#160;those&#160;made&#160;by&#160;snapshots&#160;in<br/>the&#160;IAVL+.&#160;Snapshots&#160;from&#160;the&#160;AVL*&#160;have&#160;around&#160;16%&#160;more&#160;chunks&#160;than&#160;the&#160;IAVL+&#160;tree.<br/>However,&#160;although&#160;there&#160;are&#160;more&#160;chunks&#160;in&#160;the&#160;application&#160;using&#160;the&#160;AVL*&#160;tree,&#160;the&#160;data<br/>stored&#160;in&#160;each&#160;chunk&#160;is&#160;increased,&#160;since&#160;it&#160;includes&#160;the&#160;proofs&#160;of&#160;inclusion&#160;for&#160;each&#160;chunk.<br/>
+Overall,&#160;the&#160;state&#160;synchronization&#160;time&#160;when&#160;using&#160;the&#160;AVL*&#160;is&#160;on&#160;average&#160;58%&#160;faster<br/>
+compared&#160;to&#160;the&#160;IAVL+&#160;tree,&#160;despite&#160;having&#160;to&#160;download&#160;more&#160;chunks.<br/>
+<b>5.3</b><br/>
+<b>Steady-state&#160;operation</b><br/>
+In&#160;the&#160;second&#160;set&#160;of&#160;experiments,&#160;we&#160;compare&#160;transaction&#160;throughput&#160;and&#160;latency&#160;of&#160;Tender-<br/>mint&#160;using&#160;an&#160;AVL*&#160;and&#160;an&#160;IAVL+&#160;tree.&#160;One&#160;distinctive&#160;aspect&#160;of&#160;AVL*&#160;is&#160;that&#160;peers&#160;do<br/>not&#160;need&#160;to&#160;periodically&#160;build&#160;state&#160;snapshots.&#160;To&#160;understand&#160;the&#160;overhead&#160;of&#160;IAVL+,&#160;we<br/>measure&#160;the&#160;time&#160;it&#160;takes&#160;to&#160;compute&#160;a&#160;snapshot.&#160;Finally,&#160;we&#160;assess&#160;AVL*&#160;space&#160;utilization.<br/>
+In&#160;all&#160;the&#160;experiments,&#160;clients&#160;operate&#160;in&#160;a&#160;closed-loop,&#160;meaning&#160;a&#160;client&#160;only&#160;submits&#160;a<br/>
+new&#160;transaction&#160;after&#160;it&#160;receives&#160;the&#160;response&#160;for&#160;the&#160;previously&#160;submitted&#160;transaction.&#160;The<br/>client&#160;subscribes&#160;to&#160;the&#160;blockchain&#160;and&#160;delivers&#160;the&#160;blockchain&#160;blocks.&#160;Latency&#160;is&#160;computed<br/>as&#160;the&#160;time&#160;it&#160;takes&#160;for&#160;a&#160;transaction&#160;to&#160;be&#160;included&#160;in&#160;a&#160;block.&#160;Throughput&#160;is&#160;the&#160;number&#160;of<br/>transactions&#160;in&#160;a&#160;block&#160;divided&#160;by&#160;the&#160;time&#160;it&#160;took&#160;for&#160;the&#160;block&#160;to&#160;be&#160;ordered&#160;(i.e.,&#160;interval<br/>between&#160;the&#160;current&#160;block&#160;and&#160;the&#160;previous&#160;one).&#160;In&#160;the&#160;experiments&#160;with&#160;the&#160;IAVL+&#160;tree,<br/>snapshots&#160;are&#160;built&#160;every&#160;ten&#160;blocks.<br/>
+<b>O&#160;P&#160;O&#160;D&#160;I&#160;S&#160;2&#160;0&#160;2&#160;2</b><br/>
+<hr/>
+<a name=14></a><b>8:14</b><br/>
+<b>Robust&#160;and&#160;Fast&#160;Blockchain&#160;State&#160;Synchronization</b><br/>
+1200<br/>
+1200<br/>
+1000<br/>
+1000<br/>
+800<br/>
+800<br/>
+tx/s&#160;600<br/>
+tx/s&#160;600<br/>
+400<br/>
+400<br/>
+200<br/>
+200<br/>
+0<br/>
+0<br/>
+0<br/>
+20<br/>
+40<br/>
+60<br/>
+80<br/>
+100<br/>
+120<br/>
+140<br/>
+160<br/>
+0<br/>
+20<br/>
+40<br/>
+60<br/>
+80<br/>
+100<br/>
+120<br/>
+140<br/>
+160<br/>
+block<br/>
+block<br/>
+1.0<br/>
+1.0<br/>
+0.8<br/>
+0.8<br/>
+0.6<br/>
+0.6<br/>
+%<br/>
+%<br/>
+0.4<br/>
+0.4<br/>
+0.2<br/>
+0.2<br/>
+0.0<br/>
+0.0<br/>
+0.0<br/>
+2.5<br/>
+5.0<br/>
+7.5<br/>
+10.0<br/>
+12.5<br/>
+15.0<br/>
+17.5<br/>
+20.0<br/>
+0.0<br/>
+2.5<br/>
+5.0<br/>
+7.5<br/>
+10.0<br/>
+12.5<br/>
+15.0<br/>
+17.5<br/>
+20.0<br/>
+seconds<br/>
+seconds<br/>
+<b>(a)&#160;</b>IAVL+&#160;with&#160;10k&#160;chunks.<br/>
+<b>(b)&#160;</b>AVL*&#160;with&#160;10k&#160;chunks.<br/>
+1200<br/>
+1200<br/>
+1000<br/>
+1000<br/>
+800<br/>
+800<br/>
+tx/s&#160;600<br/>
+tx/s&#160;600<br/>
+400<br/>
+400<br/>
+200<br/>
+200<br/>
+0<br/>
+0<br/>
+0<br/>
+20<br/>
+40<br/>
+60<br/>
+80<br/>
+100<br/>
+120<br/>
+140<br/>
+160<br/>
+0<br/>
+20<br/>
+40<br/>
+60<br/>
+80<br/>
+100<br/>
+120<br/>
+140<br/>
+160<br/>
+block<br/>
+block<br/>
+1.0<br/>
+1.0<br/>
+0.8<br/>
+0.8<br/>
+0.6<br/>
+0.6<br/>
+%<br/>
+%<br/>
+0.4<br/>
+0.4<br/>
+0.2<br/>
+0.2<br/>
+0.0<br/>
+0.0<br/>
+0<br/>
+5<br/>
+10<br/>
+15<br/>
+20<br/>
+25<br/>
+0<br/>
+5<br/>
+10<br/>
+15<br/>
+20<br/>
+25<br/>
+seconds<br/>
+seconds<br/>
+<b>(c)&#160;</b>IAVL+&#160;with&#160;100k&#160;chunks.<br/>
+<b>(d)&#160;</b>AVL*&#160;with&#160;100k&#160;chunks.<br/>
+<b>Figure&#160;5&#160;</b>Throughput&#160;and&#160;latency&#160;of&#160;transaction&#160;execution,&#160;80&#160;peers,&#160;1M&#160;key/value&#160;pairs.<br/>
+<b>5.3.1</b><br/>
+<b>Steady-state&#160;performance</b><br/>
+We&#160;show&#160;the&#160;throughput&#160;as&#160;a&#160;time&#160;series&#160;and&#160;the&#160;latency&#160;CDF&#160;for&#160;Tendermint&#160;using&#160;both<br/>
+IAVL+&#160;and&#160;AVL*.&#160;Figure&#160;<a href="opodis2022s.html#13">4&#160;</a>presents&#160;the&#160;results&#160;for&#160;a&#160;blockchain&#160;with&#160;10&#160;peers.&#160;Figure&#160;<a href="opodis2022s.html#13">4&#160;</a>(a)<br/>and&#160;(b)&#160;report&#160;the&#160;results&#160;for&#160;chunks&#160;of&#160;size&#160;10k,&#160;and&#160;Figure&#160;<a href="opodis2022s.html#13">4&#160;</a>(c)&#160;and&#160;(d)&#160;report&#160;results&#160;for<br/>chunks&#160;of&#160;size&#160;100k.&#160;Figures&#160;<a href="opodis2022s.html#14">5&#160;</a>shows&#160;the&#160;results&#160;for&#160;the&#160;same&#160;set&#160;of&#160;experiments&#160;when&#160;the<br/>number&#160;of&#160;peers&#160;is&#160;increased&#160;to&#160;80.<br/>
+The&#160;graphs&#160;show&#160;that&#160;using&#160;the&#160;AVL*&#160;tree&#160;results&#160;in&#160;more&#160;predictable&#160;performance.<br/>
+One&#160;of&#160;the&#160;reasons&#160;for&#160;the&#160;volatility&#160;of&#160;the&#160;IAVL+&#160;tree&#160;is&#160;that&#160;there&#160;are&#160;periodic&#160;drops&#160;in<br/>performance&#160;that&#160;occur&#160;during&#160;a&#160;snapshot&#160;operation.&#160;In&#160;the&#160;graph,&#160;the&#160;dashed-red&#160;lines<br/>indicate&#160;the&#160;time&#160;that&#160;a&#160;snapshot&#160;occurs.<br/>
+Although&#160;it&#160;is&#160;somewhat&#160;difficult&#160;to&#160;tell&#160;from&#160;the&#160;graphs,&#160;the&#160;performance&#160;of&#160;AVL*&#160;is&#160;not<br/>
+only&#160;more&#160;predictable,&#160;but&#160;it&#160;is&#160;also&#160;better,&#160;on&#160;average,&#160;than&#160;the&#160;IAVL+.&#160;Table&#160;<a href="opodis2022s.html#12">2&#160;</a>shows&#160;the<br/>mean&#160;values,&#160;the&#160;corresponding&#160;standard&#160;deviation,&#160;and&#160;the&#160;relative&#160;improvement&#160;of&#160;AVL*<br/>over&#160;IAVL+&#160;for&#160;all&#160;these&#160;experiments.<br/>
+In&#160;a&#160;blockchain&#160;with&#160;10&#160;validators,&#160;AVL*&#160;increases&#160;the&#160;throughput&#160;and&#160;reduces&#160;the&#160;latency<br/>
+by&#160;at&#160;least&#160;5%&#160;when&#160;compared&#160;to&#160;the&#160;IAVL+&#160;tree.&#160;These&#160;improvements&#160;increase&#160;with&#160;the<br/>size&#160;of&#160;the&#160;blockchain:&#160;with&#160;80&#160;validators,&#160;the&#160;improvements&#160;in&#160;throughput&#160;and&#160;latency&#160;are<br/>at&#160;least&#160;11%.<br/>
+<hr/>
+<a name=15></a><b>E.&#160;Fynn,&#160;E.&#160;Buchman,&#160;Z.&#160;Milosevic,&#160;R.&#160;Soulé,&#160;and&#160;F.&#160;Pedone</b><br/>
+<b>8:15</b><br/>
+<b>5.3.2</b><br/>
+<b>Time&#160;for&#160;a&#160;snapshot</b><br/>
+One&#160;of&#160;the&#160;major&#160;differences&#160;between&#160;IAVL+&#160;and&#160;AVL*&#160;is&#160;that&#160;AVL*&#160;trees&#160;do&#160;not&#160;need&#160;to<br/>pause&#160;execution&#160;to&#160;compute&#160;a&#160;snapshot.&#160;This&#160;happens&#160;because&#160;in&#160;AVL*&#160;trees,&#160;chunks&#160;are&#160;an<br/>integral&#160;part&#160;of&#160;the&#160;tree&#160;data&#160;structure.&#160;In&#160;IAVL+,&#160;chunks&#160;are&#160;built&#160;from&#160;tree&#160;snapshots.<br/>Because&#160;snapshot&#160;computation&#160;has&#160;a&#160;significant&#160;impact&#160;on&#160;the&#160;IAVL+&#160;performance,&#160;we<br/>
+wanted&#160;to&#160;quantify&#160;the&#160;overhead.<br/>
+Figure&#160;<a href="opodis2022s.html#15">6&#160;</a>shows&#160;the&#160;time&#160;it&#160;takes&#160;to&#160;compute&#160;a&#160;snapshot&#160;with&#160;IAVL+&#160;trees&#160;as&#160;the&#160;number<br/>
+of&#160;tree&#160;leaves&#160;(i.e.,&#160;key-value&#160;pairs)&#160;is&#160;increased,&#160;varying&#160;from&#160;0&#160;to&#160;one&#160;million&#160;leaves.&#160;As&#160;the<br/>tree&#160;gets&#160;bigger,&#160;snapshots&#160;take&#160;more&#160;time&#160;to&#160;complete.&#160;That&#160;happens&#160;because&#160;each&#160;snapshot<br/>has&#160;to&#160;serialize&#160;the&#160;whole&#160;tree.&#160;Changing&#160;the&#160;chunk&#160;sizes&#160;does&#160;not&#160;have&#160;a&#160;significant&#160;impact<br/>on&#160;the&#160;experiment’s&#160;performance.<br/>
+20.0<br/>
+10 peers 10k chunks<br/>
+17.5<br/>
+80 peers 10k chunks<br/>10 peers 100k chunks<br/>
+15.0<br/>
+80 peers 100k chunks<br/>
+12.5<br/>
+10.0<br/>
+Time (s)&#160;7.5<br/>
+5.0<br/>
+2.5<br/>
+0.0<br/>
+0.0<br/>
+0.2<br/>
+0.4<br/>
+0.6<br/>
+0.8<br/>
+1.0<br/>
+Number of key/value pairs<br/>
+1e6<br/>
+<b>Figure&#160;6&#160;</b>Time&#160;for&#160;an&#160;IAVL+&#160;snapshot.<br/>
+<b>5.3.3</b><br/>
+<b>Space&#160;efficiency</b><br/>
+The&#160;trade-off&#160;for&#160;using&#160;an&#160;AVL*&#160;is&#160;space&#160;efficiency,&#160;as&#160;the&#160;algorithm&#160;may&#160;fill&#160;chunks&#160;up&#160;to<br/>
+their&#160;capacity.&#160;We&#160;define&#160;space&#160;efficiency&#160;as&#160;the&#160;number&#160;of&#160;chunks&#160;in&#160;the&#160;AVL*&#160;divided&#160;by<br/>the&#160;ideal&#160;number&#160;of&#160;chunks&#160;(ceiling&#160;of&#160;elements&#160;divided&#160;by&#160;chunk&#160;size).&#160;For&#160;instance,&#160;if&#160;the<br/>space&#160;efficiency&#160;were&#160;2,&#160;it&#160;would&#160;mean&#160;that&#160;the&#160;AVL*&#160;uses&#160;twice&#160;as&#160;much&#160;chunks&#160;as&#160;the&#160;ideal<br/>scenario.&#160;Note&#160;that&#160;when&#160;creating&#160;snapshot&#160;for&#160;the&#160;IAVL+,&#160;the&#160;space&#160;efficiency&#160;is&#160;always&#160;1,<br/>because&#160;the&#160;serialization&#160;process&#160;always&#160;serializes&#160;the&#160;tree&#160;from&#160;scratch.&#160;We&#160;evaluated&#160;the<br/>space&#160;efficiency&#160;of&#160;the&#160;AVL*&#160;tree&#160;as&#160;we&#160;insert&#160;one&#160;million&#160;random&#160;keys&#160;into&#160;an&#160;empty&#160;AVL*<br/>tree.&#160;The&#160;space&#160;efficiency&#160;stabilizes&#160;at&#160;around&#160;1.4&#160;for&#160;random&#160;data,&#160;which&#160;we&#160;believe&#160;is&#160;an<br/>acceptable&#160;overhead.<br/>
+<b>5.4</b><br/>
+<b>State&#160;synchronization&#160;under&#160;attack</b><br/>
+A&#160;key&#160;benefit&#160;of&#160;an&#160;AVL*&#160;tree&#160;over&#160;the&#160;IAVL+&#160;tree&#160;is&#160;that&#160;it&#160;can&#160;gracefully&#160;recover&#160;from<br/>
+Byzantine&#160;or&#160;malicious&#160;behavior&#160;from&#160;peers.&#160;An&#160;IAVL+&#160;cannot&#160;be&#160;checked&#160;for&#160;validity&#160;until<br/>the&#160;entire&#160;tree&#160;has&#160;been&#160;downloaded&#160;and&#160;reconstructed.&#160;If,&#160;after&#160;reconstructing&#160;the&#160;tree,&#160;the<br/>tree’s&#160;root&#160;hash&#160;is&#160;different&#160;from&#160;the&#160;one&#160;in&#160;the&#160;trusted&#160;block&#160;header,&#160;then&#160;the&#160;client&#160;peer<br/>must&#160;refetch&#160;all&#160;chunks&#160;again.&#160;In&#160;contrast,&#160;the&#160;AVL*&#160;tree&#160;allows&#160;the&#160;client&#160;peer&#160;to&#160;detect<br/>invalid&#160;chunks&#160;easily,&#160;and&#160;remove&#160;misbehaving&#160;peers&#160;from&#160;their&#160;peer&#160;list.<br/>
+To&#160;quantify&#160;the&#160;performance&#160;of&#160;AVL*&#160;in&#160;the&#160;presence&#160;of&#160;malicious&#160;peers,&#160;we&#160;again<br/>
+performed&#160;the&#160;state&#160;synchronization&#160;experiment,&#160;but&#160;introduced&#160;malicious&#160;peers&#160;that&#160;respond<br/>
+with&#160;invalid&#160;chunks.&#160;In&#160;these&#160;experiments,&#160;we&#160;used&#160;a&#160;fixed&#160;number&#160;of&#160;80&#160;peers&#160;and&#160;a&#160;tree&#160;with<br/>
+<b>O&#160;P&#160;O&#160;D&#160;I&#160;S&#160;2&#160;0&#160;2&#160;2</b><br/>
+<hr/>
+<a name=16></a><b>8:16</b><br/>
+<b>Robust&#160;and&#160;Fast&#160;Blockchain&#160;State&#160;Synchronization</b><br/>
+one&#160;million&#160;entries.&#160;We&#160;varied&#160;the&#160;number&#160;of&#160;malicious&#160;peers&#160;from&#160;1&#160;to&#160;26.&#160;We&#160;performed<br/>the&#160;experiment&#160;five&#160;times,&#160;and&#160;report&#160;mean&#160;synchronization&#160;time,&#160;as&#160;well&#160;as&#160;the&#160;maximums<br/>and&#160;minimums&#160;in&#160;bars&#160;and&#160;whiskers.&#160;Figure&#160;<a href="opodis2022s.html#16">7&#160;</a>shows&#160;the&#160;results.<br/>
+In&#160;Figure&#160;<a href="opodis2022s.html#16">7&#160;</a>(a),&#160;we&#160;see&#160;that,&#160;as&#160;expected,&#160;the&#160;presence&#160;of&#160;malicious&#160;peers&#160;degrades&#160;the<br/>
+state&#160;synchronization&#160;time.&#160;The&#160;state&#160;synchronization&#160;time&#160;grows&#160;linearly&#160;with&#160;the&#160;number<br/>of&#160;malicious&#160;peers.&#160;Because&#160;a&#160;peer&#160;can&#160;respond&#160;to&#160;multiple&#160;requests&#160;for&#160;chunks&#160;in&#160;parallel<br/>before&#160;they&#160;are&#160;verified,&#160;the&#160;number&#160;of&#160;invalid&#160;chunks&#160;sent&#160;by&#160;peers&#160;can&#160;vary.&#160;In&#160;Figure&#160;<a href="opodis2022s.html#16">7&#160;</a>(b)<br/>
+we&#160;see&#160;that&#160;the&#160;number&#160;of&#160;chunks&#160;that&#160;need&#160;to&#160;be&#160;re-fetched&#160;is&#160;proportional&#160;to&#160;the&#160;state<br/>
+synchronization&#160;time.<br/>
+From&#160;<a href="opodis2022s.html#12">§5.2,&#160;</a>we&#160;know&#160;that&#160;without&#160;any&#160;byzantine&#160;peers,&#160;it&#160;takes&#160;16.3&#160;seconds&#160;for&#160;a&#160;client<br/>
+peer&#160;using&#160;IAVL+&#160;to&#160;complete&#160;state&#160;synchronization&#160;(with&#160;80&#160;peers,&#160;100k&#160;chunks&#160;and&#160;1M<br/>key-value&#160;pairs).&#160;With&#160;one&#160;byzantine&#160;peer,&#160;this&#160;time&#160;would&#160;double&#160;since&#160;the&#160;client&#160;peer&#160;would<br/>have&#160;to&#160;start&#160;from&#160;scratch.&#160;And&#160;even&#160;after&#160;retrying,&#160;there&#160;is&#160;no&#160;guarantee&#160;that&#160;the&#160;second<br/>attempt&#160;would&#160;succeed.&#160;Thus,&#160;a&#160;coordinated&#160;attack&#160;could&#160;substantially&#160;increase&#160;state&#160;sync<br/>time&#160;of&#160;IAVL+.&#160;AVL*&#160;outperforms&#160;IAVL+&#160;even&#160;under&#160;attack&#160;by&#160;20&#160;byzantine&#160;peers.<br/>
+25<br/>
+20<br/>
+20<br/>
+15<br/>
+15<br/>
+Time (s)&#160;10<br/>
+10<br/>
+5<br/>
+5<br/>
+Number of re-fetched chunks<br/>
+0<br/>
+0<br/>
+0<br/>
+5<br/>
+10<br/>
+15<br/>
+20<br/>
+25<br/>
+0<br/>
+5<br/>
+10<br/>
+15<br/>
+20<br/>
+25<br/>
+Number of byzantine peers<br/>
+Number of byzantine peers<br/>
+<b>(a)&#160;</b>Time&#160;for&#160;state&#160;synchronization.<br/>
+<b>(b)&#160;</b>Number&#160;of&#160;re-fetched&#160;chunks.<br/>
+<b>Figure&#160;7&#160;</b>State&#160;sync&#160;with&#160;byzantine&#160;peers,&#160;100k&#160;chunks,&#160;1M&#160;key/value&#160;pairs.<br/>
+<b>6</b><br/>
+<b>Related&#160;work</b><br/>
+Many&#160;systems&#160;for&#160;state&#160;machine&#160;replication&#160;with&#160;byzantine&#160;actors&#160;have&#160;addressed&#160;the&#160;problem<br/>of&#160;fast&#160;state&#160;synchronization&#160;without&#160;executing&#160;the&#160;entire&#160;transaction&#160;log.&#160;This&#160;is&#160;typically<br/>done&#160;by&#160;taking&#160;snapshots&#160;of&#160;the&#160;state,&#160;often&#160;called&#160;checkpoints.&#160;Such&#160;checkpoints&#160;can&#160;then&#160;be<br/>downloaded&#160;by&#160;new&#160;or&#160;recovering&#160;peers.&#160;While&#160;PBFT&#160;<a href="opodis2022s.html#18">[17]&#160;</a>proposed&#160;the&#160;use&#160;of&#160;a&#160;Merkle&#160;tree<br/>for&#160;its&#160;checkpoints,&#160;the&#160;Upright&#160;<a href="opodis2022s.html#18">[18]&#160;</a>and&#160;BFT-SMaRt&#160;<a href="opodis2022s.html#18">[13]&#160;</a>systems&#160;consider&#160;Merkle&#160;trees&#160;and<br/>copy-on-write&#160;semantics&#160;to&#160;be&#160;too&#160;invasive&#160;in&#160;general&#160;to&#160;the&#160;application&#160;developer.&#160;Upright<br/>outlines&#160;three&#160;simple&#160;approaches&#160;to&#160;state&#160;transfer&#160;<a href="opodis2022s.html#18">[18],&#160;</a>and&#160;BFT-SMaRt&#160;<a href="opodis2022s.html#18">[13]&#160;</a>describes&#160;a<br/>detailed&#160;Collaborative&#160;State&#160;Transfer&#160;protocol,&#160;where&#160;the&#160;full&#160;state&#160;is&#160;downloaded&#160;from&#160;a<br/>single&#160;peer&#160;and&#160;verified&#160;against&#160;hashes&#160;from&#160;other&#160;peers.&#160;In&#160;PBFT,&#160;a&#160;binary&#160;Merkle-tree&#160;is<br/>built&#160;at&#160;each&#160;checkpoint&#160;by&#160;partitioning&#160;the&#160;application&#160;state&#160;in&#160;4KB&#160;pages.&#160;The&#160;pages&#160;are<br/>stored&#160;as&#160;leaves&#160;of&#160;the&#160;Merkle-tree&#160;using&#160;copy-on-write&#160;to&#160;only&#160;persist&#160;pages&#160;that&#160;have&#160;been<br/>modified&#160;since&#160;the&#160;previous&#160;checkpoint.&#160;This&#160;approach&#160;is&#160;not&#160;efficient&#160;to&#160;encode&#160;a&#160;key-value<br/>storage,&#160;since&#160;operations&#160;on&#160;the&#160;key&#160;space&#160;(e.g.,&#160;searches)&#160;do&#160;not&#160;have&#160;logarithmic&#160;complexity.<br/>
+Unlike&#160;SMR&#160;systems,&#160;which&#160;either&#160;consider&#160;Merkle-trees&#160;too&#160;expensive&#160;<a href="opodis2022s.html#18">[18,&#160;13],&#160;</a>or<br/>
+construct&#160;them&#160;only&#160;for&#160;state&#160;synchronization&#160;at&#160;periodic&#160;checkpoints&#160;<a href="opodis2022s.html#18">[17],&#160;</a>many&#160;blockchain<br/>systems&#160;already&#160;use&#160;Merkle-ized&#160;data&#160;structures&#160;to&#160;store&#160;the&#160;state.&#160;The&#160;primary&#160;use&#160;case&#160;for<br/>such&#160;Merkle-trees&#160;is&#160;to&#160;facilitate&#160;light&#160;clients,&#160;who&#160;can&#160;efficiently&#160;query&#160;for&#160;particular&#160;leaves<br/>
+<hr/>
+<a name=17></a><b>E.&#160;Fynn,&#160;E.&#160;Buchman,&#160;Z.&#160;Milosevic,&#160;R.&#160;Soulé,&#160;and&#160;F.&#160;Pedone</b><br/>
+<b>8:17</b><br/>
+of&#160;the&#160;tree&#160;and&#160;verify&#160;their&#160;integrity,&#160;without&#160;ever&#160;downloading&#160;the&#160;entire&#160;state&#160;or&#160;transaction<br/>history.&#160;The&#160;use&#160;of&#160;Merkle-trees&#160;for&#160;state&#160;synchronization&#160;has&#160;received&#160;much&#160;less&#160;attention,<br/>but&#160;as&#160;the&#160;state&#160;of&#160;blockchain&#160;systems&#160;grow,&#160;synchronizing&#160;it&#160;becomes&#160;more&#160;expensive.<br/>
+In&#160;Geth&#160;<a href="opodis2022s.html#18">[7],&#160;</a>state&#160;synchronization&#160;is&#160;performed&#160;by&#160;requesting&#160;individual&#160;nodes&#160;of&#160;the&#160;tree.<br/>
+Peers&#160;do&#160;not&#160;have&#160;a&#160;way&#160;of&#160;knowing&#160;how&#160;long&#160;the&#160;state&#160;synchronization&#160;will&#160;last,&#160;because&#160;they<br/>do&#160;not&#160;know&#160;the&#160;total&#160;number&#160;of&#160;nodes&#160;<a href="opodis2022s.html#18">[4].&#160;</a>Since&#160;the&#160;Merkle-tree&#160;is&#160;part&#160;of&#160;the&#160;consensus<br/>rules&#160;(i.e.,&#160;Merkle-roots&#160;are&#160;stored&#160;in&#160;block&#160;headers),&#160;peers&#160;can&#160;verify&#160;that&#160;a&#160;received&#160;node<br/>from&#160;the&#160;tree&#160;is&#160;correct.&#160;However,&#160;given&#160;the&#160;small&#160;size&#160;of&#160;nodes&#160;(less&#160;than&#160;one&#160;KB),&#160;their<br/>randomized&#160;distribution&#160;in&#160;the&#160;underlying&#160;database,&#160;and&#160;the&#160;large&#160;size&#160;of&#160;the&#160;state&#160;(tens&#160;of<br/>GBs),&#160;requesting&#160;nodes&#160;individually&#160;leads&#160;to&#160;performance&#160;degradation&#160;for&#160;peers&#160;requesting<br/>and&#160;providing&#160;nodes.&#160;Batching&#160;nodes&#160;is&#160;a&#160;promising&#160;solution,&#160;however,&#160;it&#160;is&#160;challenging&#160;to<br/>batch&#160;nodes&#160;in&#160;a&#160;manner&#160;that&#160;can&#160;be&#160;securely&#160;verified&#160;by&#160;peers,&#160;and&#160;limits&#160;attacks&#160;on&#160;honest<br/>peers.&#160;For&#160;instance,&#160;in&#160;OpenEthereum&#160;<a href="opodis2022s.html#18">[8],&#160;</a>snapshots&#160;are&#160;taken&#160;periodically&#160;by&#160;serializing<br/>the&#160;entire&#160;state,&#160;and&#160;dividing&#160;it&#160;in&#160;large&#160;chunks.&#160;The&#160;hashes&#160;of&#160;each&#160;chunk&#160;are&#160;published<br/>in&#160;a&#160;manifest&#160;file.&#160;Since&#160;the&#160;manifest&#160;is&#160;not&#160;part&#160;of&#160;the&#160;consensus&#160;process,&#160;there&#160;is&#160;no&#160;way<br/>to&#160;verify&#160;that&#160;a&#160;chunk&#160;is&#160;correct&#160;before&#160;downloading&#160;all&#160;of&#160;them.&#160;Successfully&#160;completing<br/>the&#160;state&#160;synchronization&#160;in&#160;such&#160;a&#160;system&#160;thus&#160;depends&#160;on&#160;retrieving&#160;a&#160;correct&#160;manifest,<br/>
+which&#160;requires&#160;strong&#160;assumptions,&#160;for&#160;instance,&#160;that&#160;a&#160;particular&#160;peer&#160;can&#160;be&#160;trusted&#160;or&#160;that<br/>
+a&#160;majority&#160;of&#160;connected&#160;peers&#160;are&#160;correct.&#160;This&#160;is&#160;stronger&#160;than&#160;the&#160;usual&#160;assumption&#160;of&#160;a<br/>single&#160;(though&#160;unspecified)&#160;correct&#160;peer&#160;commonly&#160;used&#160;in&#160;blockchain&#160;systems.<br/>
+Other&#160;blockchain&#160;systems&#160;have&#160;proposed&#160;to&#160;take&#160;snapshots&#160;of&#160;the&#160;Merkle-tree&#160;by&#160;period-<br/>
+ically&#160;dividing&#160;it&#160;in&#160;chunks.&#160;In&#160;Codechain&#160;snapshots&#160;<a href="opodis2022s.html#18">[9],&#160;</a>chunks&#160;are&#160;built&#160;from&#160;nodes&#160;within<br/>a&#160;certain&#160;depth&#160;from&#160;a&#160;common&#160;root,&#160;and&#160;the&#160;hash&#160;of&#160;the&#160;snapshot&#160;is&#160;included&#160;in&#160;the&#160;block<br/>header&#160;so&#160;chunks&#160;can&#160;be&#160;verified&#160;incrementally&#160;by&#160;peers.&#160;Chunks&#160;may&#160;contain&#160;entire&#160;sub-trees,<br/>or&#160;may&#160;be&#160;limitted&#160;to&#160;the&#160;upper&#160;nodes&#160;in&#160;a&#160;sub-tree.&#160;In&#160;Tendermint&#160;IAVL+&#160;snapshots,&#160;tree<br/>nodes&#160;are&#160;serialized&#160;in&#160;order&#160;and&#160;assembled&#160;into&#160;chunks&#160;of&#160;a&#160;given&#160;size&#160;<a href="opodis2022s.html#18">[1].&#160;</a>However,&#160;since<br/>
+Tendermint’s&#160;block&#160;header&#160;does&#160;not&#160;currently&#160;support&#160;snapshot&#160;hashes,&#160;chunks&#160;cannot&#160;be<br/>
+incrementally&#160;verified&#160;by&#160;peers.&#160;Hence&#160;the&#160;need&#160;for&#160;a&#160;tree&#160;that&#160;incorporates&#160;chunking&#160;directly<br/>into&#160;its&#160;structure.<br/>
+Motivated&#160;by&#160;their&#160;use&#160;in&#160;the&#160;blockchain&#160;context,&#160;numerous&#160;Merkle-tree&#160;designs&#160;have<br/>
+been&#160;proposed&#160;lately.&#160;TurboGeth&#160;<a href="opodis2022s.html#18">[10]&#160;</a>separates&#160;the&#160;key-value&#160;storage&#160;from&#160;the&#160;Merkle<br/>tree&#160;structure,&#160;and&#160;batches&#160;Merkle&#160;tree&#160;nodes&#160;in&#160;chunks&#160;to&#160;reduce&#160;the&#160;number&#160;of&#160;lookups<br/>during&#160;Merkle&#160;operations.&#160;This&#160;has&#160;the&#160;effect&#160;of&#160;greatly&#160;improving&#160;performance&#160;without<br/>changing&#160;the&#160;structure&#160;of&#160;the&#160;hash&#160;tree&#160;itself.&#160;Sparse&#160;Merkle-trees&#160;<a href="opodis2022s.html#18">[19]&#160;</a>have&#160;been&#160;adopted<br/>by&#160;other&#160;blockchain&#160;projects&#160;<a href="opodis2022s.html#18">[11].&#160;</a>Recent&#160;advances&#160;in&#160;cryptography&#160;have&#160;even&#160;offered&#160;a<br/>glimpse&#160;into&#160;generalizations&#160;of&#160;Merkle&#160;trees&#160;called&#160;accumulators,&#160;which&#160;enable&#160;O(1)&#160;proofs&#160;of<br/>set-membership&#160;and&#160;state-less&#160;blockchain&#160;clients&#160;<a href="opodis2022s.html#18">[14].&#160;</a>While&#160;there&#160;has&#160;been&#160;a&#160;wide&#160;diversity<br/>of&#160;proposed&#160;and&#160;implemented&#160;tree&#160;designs,&#160;the&#160;AVL*&#160;is&#160;the&#160;only&#160;known&#160;tree&#160;to&#160;target&#160;both<br/>the&#160;light&#160;client&#160;and&#160;state&#160;synchronization&#160;use&#160;cases&#160;found&#160;in&#160;blockchain&#160;systems.<br/>
+<b>7</b><br/>
+<b>Conclusion</b><br/>
+State&#160;synchronization&#160;is&#160;a&#160;significant&#160;bottleneck&#160;for&#160;blockchain-based&#160;systems.&#160;In&#160;this&#160;paper,<br/>
+we&#160;have&#160;presented&#160;a&#160;novel&#160;extension&#160;to&#160;Merkle-ized&#160;AVL+&#160;trees&#160;that&#160;incorporates&#160;chunks.&#160;This<br/>
+extension&#160;allows&#160;peers&#160;to&#160;download&#160;portions&#160;of&#160;the&#160;state&#160;in&#160;parallel,&#160;and&#160;validate&#160;each&#160;chunk<br/>independently.&#160;We&#160;have&#160;also&#160;described&#160;an&#160;algorithm&#160;for&#160;deterministic&#160;tree&#160;reconstruction,<br/>ensuring&#160;that&#160;all&#160;peers&#160;have&#160;the&#160;same&#160;state.&#160;We&#160;have&#160;extensively&#160;tested&#160;our&#160;algorithms&#160;in<br/>a&#160;geo-distributed&#160;environment&#160;that&#160;show&#160;the&#160;benefits&#160;when&#160;reconstructing&#160;the&#160;state&#160;from<br/>snapshots&#160;and&#160;gracefully&#160;coping&#160;with&#160;byzantine&#160;failures.<br/>
+<b>O&#160;P&#160;O&#160;D&#160;I&#160;S&#160;2&#160;0&#160;2&#160;2</b><br/>
+<hr/>
+<a name=18></a><b>8:18</b><br/>
+<b>Robust&#160;and&#160;Fast&#160;Blockchain&#160;State&#160;Synchronization</b><br/>
+<b>References</b><br/>
+<b>1</b><br/>
+Adr&#160;053:&#160;State&#160;sync&#160;prototype.&#160;<a href="https://github.com/tendermint/tendermint/blob/master/docs/architecture/adr-053-state-sync-prototype.md">https://github.com/tendermint/tendermint/blob/master/</a><br/>
+<a href="https://github.com/tendermint/tendermint/blob/master/docs/architecture/adr-053-state-sync-prototype.md">docs/architecture/adr-053-state-sync-prototype.md.</a><br/>
+<b>2</b><br/>
+Cosmos&#160;network.&#160;<a href="https://cosmos.network/">https://cosmos.network/.</a><br/>
+<b>3</b><br/>
+Cosmos&#160;sdk.&#160;<a href="https://github.com/cosmos/cosmos-sdk">https://github.com/cosmos/cosmos-sdk.</a><br/>
+<b>4</b><br/>
+Go&#160;ethereum&#160;faq.&#160;<a href="https://geth.ethereum.org/docs/faq">https://geth.ethereum.org/docs/faq.</a><br/>
+<b>5</b><br/>
+Iavl+&#160;implementation.&#160;<a href="https://github.com/tendermint/iavl">https://github.com/tendermint/iavl.</a><br/>
+<b>6</b><br/>
+The&#160;interblockchain&#160;communication&#160;protocol.<br/>
+<a href="https://github.com/cosmos/ics/blob/master/spec.pdf">https://github.com/cosmos/ics/blob/</a><br/>
+<a href="https://github.com/cosmos/ics/blob/master/spec.pdf">master/spec.pdf.</a><br/>
+<b>7</b><br/>
+Official&#160;go&#160;implementation&#160;of&#160;the&#160;ethereum&#160;protocol.<br/>
+<a href="https://github.com/ethereum/go-ethereum">https://github.com/ethereum/</a><br/>
+<a href="https://github.com/ethereum/go-ethereum">go-ethereum.</a><br/>
+<b>8</b><br/>
+Openethereum&#160;warpsync.&#160;<a href="https://openethereum.github.io/wiki/Warp-Sync">https://openethereum.github.io/wiki/Warp-Sync.</a><br/>
+<b>9</b><br/>
+Snapshot&#160;sync&#160;proposal.&#160;<a href="https://research.codechain.io/t/snapshot-sync-proposal/21">https://research.codechain.io/t/snapshot-sync-proposal/21.</a><br/>
+<b>10</b><br/>
+Turbo-geth&#160;programmer’s&#160;guide.<br/>
+<a href="https://github.com/ledgerwatch/turbo-geth/blob/master/docs/programmers_guide/guide.md">https://github.com/ledgerwatch/turbo-geth/blob/</a><br/>
+<a href="https://github.com/ledgerwatch/turbo-geth/blob/master/docs/programmers_guide/guide.md">master/docs/programmers_guide/guide.md.</a><br/>
+<b>11</b><br/>
+Urkel&#160;tree&#160;implementation.&#160;<a href="https://github.com/handshake-org/urkel">https://github.com/handshake-org/urkel.</a><br/>
+<b>12</b><br/>
+George&#160;M&#160;Adel’son-Vel’skii&#160;and&#160;Evgenii&#160;Mikhailovich&#160;Landis.&#160;An&#160;algorithm&#160;for&#160;organization<br/>
+of&#160;information.&#160;In&#160;<i>Doklady&#160;Akademii&#160;Nauk</i>,&#160;volume&#160;146,&#160;pages&#160;263–266.&#160;Russian&#160;Academy&#160;of<br/>
+Sciences,&#160;1962.<br/>
+<b>13</b><br/>
+Alysson&#160;Bessani,&#160;Marcel&#160;Santos,&#160;João&#160;Felix,&#160;Nuno&#160;Neves,&#160;and&#160;Miguel&#160;Correia.&#160;On&#160;the&#160;efficiency<br/>
+of&#160;durable&#160;state&#160;machine&#160;replication.&#160;In&#160;<i>Presented&#160;as&#160;part&#160;of&#160;the&#160;2013&#160;USENIX&#160;Annual</i><br/>
+<i>Technical&#160;Conference&#160;(USENIX&#160;ATC&#160;13)</i>,&#160;pages&#160;169–180,&#160;2013.<br/>
+<b>14</b><br/>
+Dan&#160;Boneh,&#160;Benedikt&#160;Bünz,&#160;and&#160;Ben&#160;Fisch.&#160;Batching&#160;techniques&#160;for&#160;accumulators&#160;with<br/>
+applications&#160;to&#160;iops&#160;and&#160;stateless&#160;blockchains.&#160;In&#160;<i>Annual&#160;International&#160;Cryptology&#160;Conference</i>,<br/>
+pages&#160;561–586.&#160;Springer,&#160;2019.<br/>
+<b>15</b><br/>
+Ethan&#160;Buchman,&#160;Jae&#160;Kwon,&#160;and&#160;Zarko&#160;Milosevic.&#160;The&#160;latest&#160;gossip&#160;on&#160;BFT&#160;consensus.&#160;<i>CoRR</i>,<br/>
+abs/1807.04938,&#160;2018.&#160;<a href="http://arxiv.org/abs/1807.04938">arXiv:1807.04938.</a><br/>
+<b>16</b><br/>
+Miguel&#160;Castro&#160;and&#160;Barbara&#160;Liskov.&#160;Practical&#160;byzantine&#160;fault&#160;tolerance&#160;and&#160;proactive&#160;recovery.<br/>
+<i>ACM&#160;Trans.&#160;Comput.&#160;Syst.</i>,&#160;20(4):398–461,&#160;November&#160;2002.&#160;<a href="https://doi.org/10.1145/571637.571640">doi:10.1145/571637.571640.</a><br/>
+<b>17</b><br/>
+Miguel&#160;Castro&#160;and&#160;Barbara&#160;Liskov.&#160;Practical&#160;byzantine&#160;fault&#160;tolerance&#160;and&#160;proactive&#160;recovery.<br/>
+<i>ACM&#160;Transactions&#160;on&#160;Computer&#160;Systems&#160;(TOCS)</i>,&#160;20(4):398–461,&#160;2002.<br/>
+<b>18</b><br/>
+Allen&#160;Clement,&#160;Manos&#160;Kapritsos,&#160;Sangmin&#160;Lee,&#160;Yang&#160;Wang,&#160;Lorenzo&#160;Alvisi,&#160;Mike&#160;Dahlin,&#160;and<br/>
+Taylor&#160;Riche.&#160;Upright&#160;cluster&#160;services.&#160;In&#160;<i>Proceedings&#160;of&#160;the&#160;ACM&#160;SIGOPS&#160;22nd&#160;symposium</i><br/>
+<i>on&#160;Operating&#160;systems&#160;principles</i>,&#160;pages&#160;277–290,&#160;2009.<br/>
+<b>19</b><br/>
+Rasmus&#160;Dahlberg,&#160;Tobias&#160;Pulls,&#160;and&#160;Roel&#160;Peeters.&#160;Efficient&#160;sparse&#160;merkle&#160;trees.&#160;In&#160;<i>Nordic</i><br/>
+<i>Conference&#160;on&#160;Secure&#160;IT&#160;Systems</i>,&#160;pages&#160;199–215.&#160;Springer,&#160;2016.<br/>
+<b>20</b><br/>
+Ittay&#160;Eyal&#160;and&#160;Emin&#160;Gün&#160;Sirer.&#160;Majority&#160;is&#160;not&#160;enough:&#160;bitcoin&#160;mining&#160;is&#160;vulnerable.&#160;<i>Commun.</i><br/>
+<i>ACM</i>,&#160;61(7):95–102,&#160;2018.<br/>
+<b>21</b><br/>
+Ramakrishna&#160;Kotla,&#160;Lorenzo&#160;Alvisi,&#160;Mike&#160;Dahlin,&#160;Allen&#160;Clement,&#160;and&#160;Edmund&#160;Wong.&#160;Zyzzyva:<br/>
+Speculative&#160;byzantine&#160;fault&#160;tolerance.&#160;In&#160;<i>Proceedings&#160;of&#160;Twenty-First&#160;ACM&#160;SIGOPS&#160;Symposium</i><br/>
+<i>on&#160;Operating&#160;Systems&#160;Principles</i>,&#160;pages&#160;45–58,&#160;2007.&#160;<a href="https://doi.org/10.1145/1294261.1294267">doi:10.1145/1294261.1294267.</a><br/>
+<b>22</b><br/>
+L.&#160;Lamport.&#160;Time,&#160;clocks,&#160;and&#160;the&#160;ordering&#160;of&#160;events&#160;in&#160;a&#160;distributed&#160;system.&#160;<i>Communications</i><br/>
+<i>of&#160;the&#160;ACM</i>,&#160;21(7):558–565,&#160;July&#160;1978.<br/>
+<b>23</b><br/>
+Ralph&#160;C.&#160;Merkle.&#160;A&#160;digital&#160;signature&#160;based&#160;on&#160;a&#160;conventional&#160;encryption&#160;function.&#160;In&#160;Carl<br/>
+Pomerance,&#160;editor,&#160;<i>Advances&#160;in&#160;Cryptology&#160;-&#160;CRYPTO&#160;’87,&#160;A&#160;Conference&#160;on&#160;the&#160;Theory&#160;and</i><br/>
+<i>Applications&#160;of&#160;Cryptographic&#160;Techniques,&#160;Santa&#160;Barbara,&#160;California,&#160;USA,&#160;August&#160;16-20,</i><br/>
+<i>1987,&#160;Proceedings</i>,&#160;volume&#160;293&#160;of&#160;<i>Lecture&#160;Notes&#160;in&#160;Computer&#160;Science</i>,&#160;pages&#160;369–378,&#160;1987.<br/>
+<a href="https://doi.org/10.1007/3-540-48184-2_32">doi:10.1007/3-540-48184-2_32.</a><br/>
+<b>24</b><br/>
+Satoshi&#160;Nakamoto.&#160;Bitcoin:&#160;A&#160;peer-to-peer&#160;electronic&#160;cash&#160;system.&#160;Technical&#160;report,&#160;bitcoin,<br/>
+2008.<br/>
+<b>25</b><br/>
+Michael&#160;Szydlo.&#160;Merkle&#160;tree&#160;traversal&#160;in&#160;log&#160;space&#160;and&#160;time.&#160;In&#160;<i>International&#160;Conference&#160;on</i><br/>
+<i>the&#160;Theory&#160;and&#160;Applications&#160;of&#160;Cryptographic&#160;Techniques</i>,&#160;pages&#160;541–554.&#160;Springer,&#160;2004.<br/>
+<b>26</b><br/>
+Gavin&#160;Wood&#160;et&#160;al.&#160;Ethereum:&#160;A&#160;secure&#160;decentralised&#160;generalised&#160;transaction&#160;ledger.&#160;<i>Ethereum</i><br/>
+<i>project&#160;yellow&#160;paper</i>,&#160;151(2014):1–32,&#160;2014.<br/>
+<hr/>
+<a name=19></a><b>E.&#160;Fynn,&#160;E.&#160;Buchman,&#160;Z.&#160;Milosevic,&#160;R.&#160;Soulé,&#160;and&#160;F.&#160;Pedone</b><br/>
+<b>8:19</b><br/>
+<b>A</b><br/>
+<b>Appendix:&#160;Algorithms</b><br/>
+<b>Algorithm&#160;1&#160;</b>Insert.<br/>
+1:&#160;next_cid&#160;:=&#160;0<br/>
+<i>▷&#160;</i>next&#160;chunk&#160;identifier<br/>
+2:&#160;<b>procedure&#160;</b>insert(node,&#160;key,&#160;val)<br/>
+<i>▷&#160;</i>node&#160;is&#160;a&#160;pointer&#160;to&#160;root<br/>
+3:<br/>
+<b>return&#160;</b>insert_aux(node,&#160;key,&#160;val,&#160;<i>ϵ</i>)<br/>
+<i>▷&#160;</i>return&#160;ptr&#160;to&#160;new&#160;node<br/>
+4:&#160;<b>procedure&#160;</b>insert_aux(node,&#160;key,&#160;val,&#160;last_chunk)<br/>5:<br/>
+<b>if&#160;</b>node&#160;=&#160;<i>ϵ&#160;</i><b>then</b><br/>
+<i>▷&#160;</i>if&#160;the&#160;tree&#160;is&#160;empty:<br/>
+6:<br/>
+chunk&#160;:=&#160;new_chunk(next_cid)<br/>
+<i>▷&#160;</i>first&#160;chunk<br/>
+7:<br/>
+node&#160;:=&#160;insert_in_chunk(chunk,&#160;key,&#160;val)<br/>
+8:<br/>
+node→chunk&#160;:=&#160;chunk<br/>
+<i>▷&#160;</i>node&#160;becomes&#160;chunk&#160;root<br/>
+9:<br/>
+chunk→root&#160;:=node<br/>
+<i>▷&#160;</i>ditto<br/>
+10:<br/>
+<b>return&#160;</b>node<br/>
+11:<br/>
+<b>if&#160;</b>node→chunk&#160;̸=&#160;<i>ϵ&#160;</i><b>then</b><br/>
+<i>▷&#160;</i>if&#160;node&#160;is&#160;the&#160;chunk&#160;root:<br/>
+12:<br/>
+c&#160;:=&#160;node→chunk<br/>
+<i>▷&#160;</i>let&#160;c&#160;be&#160;this&#160;chunk<br/>
+13:<br/>
+<b>if&#160;</b><i>c&#160;</i>→size&#160;=&#160;<i>Cp&#160;</i><b>then</b><br/>
+<i>▷&#160;</i>if&#160;c&#160;is&#160;a&#160;full&#160;chunk:<br/>
+14:<br/>
+split_chunk(node)<br/>
+<i>▷&#160;</i>split&#160;node&#160;(i.e.,&#160;c’s&#160;root)<br/>
+15:<br/>
+<b>else</b><br/>
+16:<br/>
+c&#160;:=&#160;last_chunk<br/>
+<i>▷&#160;</i>chunk&#160;root&#160;is&#160;a&#160;higher&#160;node<br/>
+17:<br/>
+<b>if&#160;</b>node→is_leaf&#160;<b>then</b><br/>
+<i>▷&#160;</i>if&#160;node&#160;is&#160;a&#160;leaf:<br/>
+18:<br/>
+node_chunk&#160;:=&#160;node→chunk<br/>
+<i>▷&#160;</i>keep&#160;its&#160;chunk,&#160;if&#160;any<br/>
+19:<br/>
+node→chunk&#160;:=&#160;<i>ϵ</i><br/>
+<i>▷&#160;</i>node&#160;can’t&#160;be&#160;chunk&#160;root<br/>
+20:<br/>
+<b>if&#160;</b>key&#160;<i>&lt;&#160;</i>node→key&#160;<b>then</b><br/>
+<i>▷&#160;</i>normal&#160;AVL&#160;left&#160;insert<br/>
+21:<br/>
+left&#160;:=&#160;insert_in_chunk(c,&#160;key,&#160;val)<br/>
+22:<br/>
+node&#160;:=&#160;new_inner(node→key,&#160;left,&#160;node,&#160;1)<br/>
+23:<br/>
+<b>else</b><br/>
+<i>▷&#160;</i>normal&#160;AVL&#160;right&#160;insert<br/>
+24:<br/>
+right&#160;:=&#160;insert_in_chunk(c,&#160;key,&#160;val)<br/>
+25:<br/>
+node&#160;:=&#160;new_inner(key,&#160;node,&#160;right,&#160;1)<br/>
+26:<br/>
+node→right→inner_node&#160;:=&#160;node<br/>
+<i>▷&#160;</i>leaf&#160;points&#160;to&#160;its&#160;inner<br/>
+27:<br/>
+node→chunk&#160;:=&#160;node_chunk<br/>
+<i>▷&#160;</i>inner&#160;gets&#160;kept&#160;chunk<br/>
+28:<br/>
+<b>if&#160;</b>node→chunk&#160;̸=&#160;<i>ϵ&#160;</i><b>then</b><br/>
+29:<br/>
+c→root&#160;:=&#160;node<br/>
+30:<br/>
+<b>else</b><br/>
+<i>▷&#160;</i>if&#160;node&#160;is&#160;an&#160;inner&#160;node:<br/>
+31:<br/>
+<b>if&#160;</b>key&#160;<i>&lt;&#160;</i>node→key&#160;<b>then</b><br/>
+<i>▷&#160;</i>go&#160;down&#160;left&#160;or...<br/>
+32:<br/>
+node→left&#160;:=&#160;insert_aux(node→left,&#160;key,&#160;val,&#160;c)<br/>
+33:<br/>
+<b>else</b><br/>
+<i>▷&#160;</i>...go&#160;down&#160;right...<br/>
+34:<br/>
+node→right&#160;:=&#160;insert_aux(node→right,key,val,c)<br/>
+35:<br/>
+update_height(node)<br/>
+<i>▷&#160;</i>new&#160;height&#160;from&#160;children&#160;heights<br/>
+36:<br/>
+<b>return&#160;</b>balance(node)<br/>
+<i>▷&#160;</i>if&#160;needed,&#160;rotate&#160;to&#160;keep&#160;balance<br/>
+37:&#160;<b>procedure&#160;</b>update_height(node)<br/>38:<br/>
+node→height&#160;:=<br/>
+<i>▷&#160;</i>height&#160;gets&#160;max&#160;children&#160;height&#160;plus&#160;one<br/>
+39:<br/>
+max(node→left→height,node→right→height)&#160;+&#160;1<br/>
+40:&#160;<b>procedure&#160;</b>balance(node)<br/>41:<br/>
+h&#160;:=&#160;node→left→height&#160;-&#160;node→right→height<br/>
+42:<br/>
+<b>if&#160;</b>h&#160;<i>&lt;&#160;</i>-1&#160;<b>then</b><br/>
+<i>▷&#160;</i>if&#160;right&#160;branch&#160;is&#160;bigger&#160;than&#160;left&#160;branch:<br/>
+43:<br/>
+<b>return&#160;</b>rotate_rl(node)<br/>
+<i>▷&#160;</i>rotate&#160;[right]&#160;left<br/>
+44:<br/>
+<b>if&#160;</b>h&#160;<i>&gt;&#160;</i>1&#160;<b>then</b><br/>
+<i>▷&#160;</i>if&#160;left&#160;branch&#160;is&#160;bigger&#160;than&#160;right&#160;branch:<br/>
+45:<br/>
+<b>return&#160;</b>rotate_lr(node)<br/>
+<i>▷&#160;</i>rotate&#160;[left]&#160;right<br/>
+46:<br/>
+<b>return&#160;</b>node<br/>
+<b>O&#160;P&#160;O&#160;D&#160;I&#160;S&#160;2&#160;0&#160;2&#160;2</b><br/>
+<hr/>
+<a name=20></a><b>8:20</b><br/>
+<b>Robust&#160;and&#160;Fast&#160;Blockchain&#160;State&#160;Synchronization</b><br/>
+<b>Algorithm&#160;2&#160;</b>Auxiliary&#160;procedures.<br/>
+1:&#160;<b>procedure&#160;</b>new_inner(key,&#160;ln,&#160;rn,&#160;ht)<br/>
+<i>▷&#160;</i>create&#160;inner&#160;node<br/>
+2:<br/>
+new_inode&#160;:=&#160;allocate&#160;new&#160;inner&#160;node<br/>
+3:<br/>
+new_inode→key&#160;:=&#160;key<br/>
+4:<br/>
+new_inode→left&#160;:=&#160;ln<br/>
+5:<br/>
+new_inode→right&#160;:=&#160;rn<br/>
+6:<br/>
+new_inode→height&#160;:=&#160;ht<br/>
+7:<br/>
+<b>return&#160;</b>new_inode<br/>
+8:&#160;<b>procedure&#160;</b>new_chunk(cid)<br/>
+<i>▷&#160;</i>create&#160;chunk<br/>
+9:<br/>
+new_c&#160;:=&#160;allocate&#160;new&#160;chunk<br/>
+10:<br/>
+new_c→cid&#160;:=&#160;cid<br/>
+11:<br/>
+new_c→size&#160;:=&#160;0<br/>
+12:<br/>
+new_c→root&#160;:=&#160;<i>ϵ</i><br/>
+13:<br/>
+<b>return&#160;</b>new_c<br/>
+14:&#160;<b>procedure&#160;</b>insert_in_chunk(c,&#160;key,&#160;val)<br/>
+<i>▷&#160;</i>insert&#160;key,val<br/>
+15:<br/>
+c→leaf[c→size].key&#160;:=&#160;key<br/>
+16:<br/>
+c→leaf[c→size].value&#160;:=&#160;val<br/>
+17:<br/>
+node_addr&#160;:=&#160;pointer&#160;to&#160;c→leaf[c→size]<br/>
+18:<br/>
+c→size&#160;:=&#160;c→size&#160;+&#160;1<br/>
+19:<br/>
+<b>return&#160;</b>node_addr<br/>
+20:&#160;<b>procedure&#160;</b>delete_from_chunk(c,&#160;key)<br/>21:<br/>
+<b>for&#160;</b>node&#160;in&#160;c→leaf&#160;<b>do</b><br/>
+22:<br/>
+<b>if&#160;</b>node.key&#160;=&#160;key&#160;<b>then</b><br/>
+<i>▷&#160;</i>found&#160;leaf<br/>
+23:<br/>
+swap(node,&#160;c→leaf[c→size])<br/>
+<i>▷&#160;</i>swap&#160;with&#160;the&#160;last<br/>
+24:<br/>
+deallocate&#160;c→leaf[c→size]<br/>
+<i>▷&#160;</i>free&#160;last&#160;leaf<br/>
+25:<br/>
+c→size&#160;:=&#160;c→size&#160;-&#160;1<br/>
+<i>▷&#160;</i>decrement&#160;number&#160;of&#160;leaves<br/>
+26:<br/>
+<b>if&#160;</b>c→size&#160;=&#160;0&#160;<b>then</b><br/>
+<i>▷&#160;</i>chunk&#160;is&#160;empty<br/>
+27:<br/>
+next_cid&#160;:=&#160;next_cid&#160;-&#160;1<br/>
+<i>▷&#160;</i>decrement&#160;number&#160;of&#160;chunks<br/>
+28:<br/>
+last_chunk&#160;:=&#160;get_chunk(next_cid)<br/>
+<i>▷&#160;</i>get&#160;chunk&#160;with&#160;highest&#160;id<br/>
+29:<br/>
+last_chunk→cid&#160;:=&#160;c→cid<br/>
+<i>▷&#160;</i>replace&#160;chunk’s&#160;id<br/>
+30:<br/>
+deallocate&#160;c<br/>
+<i>▷&#160;</i>free&#160;empty&#160;chunk<br/>
+31:&#160;<b>procedure&#160;</b>split_chunk(node)<br/>
+<i>▷&#160;</i>split&#160;chunk&#160;rooted&#160;at&#160;node<br/>
+32:<br/>
+new_c&#160;:=&#160;new_chunk(node→chunk→cid)<br/>
+33:<br/>
+DFS(node→left,&#160;node,&#160;new_c)<br/>
+34:<br/>
+node→left→chunk&#160;:=&#160;new_c<br/>
+35:<br/>
+new_c→root&#160;:=&#160;node→left<br/>
+<i>▷&#160;</i>assign&#160;left&#160;chunk<br/>
+36:<br/>
+next_cid&#160;:=&#160;next_cid&#160;+&#160;1<br/>
+37:<br/>
+new_c&#160;:=&#160;new_chunk(next_cid)<br/>
+38:<br/>
+DFS(node→right,&#160;node,&#160;new_c)<br/>
+39:<br/>
+new_c→root&#160;:=&#160;node→right<br/>
+<i>▷&#160;</i>assign&#160;right&#160;chunk<br/>
+40:<br/>
+node→right→chunk&#160;:=&#160;new_c<br/>
+41:<br/>
+deallocate&#160;node→chunk<br/>
+42:<br/>
+node→chunk&#160;:=&#160;<i>ϵ</i><br/>
+<i>▷&#160;</i>x&#160;is&#160;no&#160;longer&#160;chunk&#160;root<br/>
+43:<br/>
+<b>return</b><br/>
+44:&#160;<b>procedure&#160;</b>DFS(ptr,&#160;pnt,&#160;c)<br/>45:<br/>
+<b>if&#160;</b>ptr→is_leaf&#160;<b>then</b><br/>
+46:<br/>
+c→leaf[c→size].key&#160;:=&#160;ptr→key<br/>
+47:<br/>
+c→leaf[c→size].value&#160;:=&#160;ptr→value<br/>
+48:<br/>
+c→leaf[c→size].i_node&#160;:=&#160;ptr→i_node<br/>
+49:<br/>
+<b>if&#160;</b>ptr→key&#160;&lt;&#160;pnt→key&#160;<b>then</b><br/>
+<i>▷&#160;</i>assign&#160;parent<br/>
+50:<br/>
+pnt→left&#160;:=&#160;pointer&#160;to&#160;chunk→leaf[c→size]<br/>
+51:<br/>
+<b>else</b><br/>
+52:<br/>
+pnt→right&#160;:=&#160;pointer&#160;to&#160;chunk→leaf[c→size]<br/>
+53:<br/>
+c→size&#160;:=&#160;c→size&#160;+&#160;1<br/>
+<i>▷&#160;</i>one&#160;more&#160;leaf&#160;in&#160;chunk<br/>
+54:<br/>
+<b>else</b><br/>
+55:<br/>
+DFS(ptr→left,&#160;ptr,&#160;c)<br/>
+56:<br/>
+DFS(ptr→right,&#160;ptr,&#160;c)<br/>
+57:<br/>
+<b>return</b><br/>
+<hr/>
+<a name=21></a><b>E.&#160;Fynn,&#160;E.&#160;Buchman,&#160;Z.&#160;Milosevic,&#160;R.&#160;Soulé,&#160;and&#160;F.&#160;Pedone</b><br/>
+<b>8:21</b><br/>
+<b>Algorithm&#160;3&#160;</b>Delete.<br/>
+1:&#160;<b>procedure&#160;</b>delete(node,&#160;key)<br/>2:<br/>
+<b>if&#160;</b>node.key&#160;=&#160;key&#160;<b>and&#160;</b>node.is_leaf&#160;<b>then</b><br/>
+<i>▷&#160;</i>only&#160;one&#160;node<br/>
+3:<br/>
+delete_from_chunk(node.chunk,&#160;key)<br/>
+4:<br/>
+<b>return&#160;</b><i>ϵ</i><br/>
+5:<br/>
+<b>return&#160;</b>delete_aux(<i>ϵ</i>,&#160;node,&#160;key,&#160;<i>ϵ</i>)<br/>
+<i>▷&#160;</i>return&#160;ptr&#160;to&#160;new&#160;node<br/>
+6:&#160;<b>procedure&#160;</b>delete_aux(node,&#160;key,&#160;last_chunk)<br/>7:<br/>
+<b>if&#160;</b>node→chunk&#160;̸=&#160;<i>ϵ&#160;</i><b>then</b><br/>
+<i>▷&#160;</i>if&#160;node&#160;is&#160;the&#160;chunk&#160;root:<br/>
+8:<br/>
+c&#160;:=&#160;node→chunk<br/>
+<i>▷&#160;</i>let&#160;c&#160;be&#160;this&#160;chunk<br/>
+9:<br/>
+<b>else</b><br/>
+10:<br/>
+c&#160;:=&#160;last_chunk<br/>
+<i>▷&#160;</i>chunk&#160;root&#160;is&#160;a&#160;higher&#160;node<br/>
+11:<br/>
+<b>if&#160;</b>node→left→key&#160;=&#160;key&#160;<b>and&#160;</b>node→left→is_leaf&#160;<b>then</b><br/>
+12:<br/>
+<b>if&#160;</b>c&#160;=&#160;<i>ϵ&#160;</i><b>then</b><br/>
+<i>▷&#160;</i>chunk&#160;is&#160;necessarily&#160;on&#160;the&#160;left<br/>
+13:<br/>
+c&#160;:=&#160;node→left→chunk<br/>
+14:<br/>
+delete_from_chunk(c,&#160;key)<br/>
+15:<br/>
+promoted&#160;:=&#160;node→right<br/>
+16:<br/>
+<b>if&#160;</b>node→chunk&#160;̸=&#160;<i>ϵ&#160;</i><b>then</b><br/>
+17:<br/>
+promoted→chunk&#160;:=&#160;node→chunk<br/>
+<i>▷&#160;</i>node&#160;is&#160;a&#160;chunk&#160;root<br/>
+18:<br/>
+deallocate&#160;node<br/>
+<i>▷&#160;</i>no&#160;need&#160;for&#160;inner-node<br/>
+19:<br/>
+<b>return&#160;</b>promoted<br/>
+20:<br/>
+<b>if&#160;</b>node→key&#160;=&#160;key&#160;<b>and&#160;</b>node→right→is_leaf&#160;<b>then</b><br/>
+21:<br/>
+<b>if&#160;</b>c&#160;=&#160;<i>ϵ&#160;</i><b>then</b><br/>
+<i>▷&#160;</i>chunk&#160;is&#160;necessarily&#160;on&#160;the&#160;right<br/>
+22:<br/>
+c&#160;:=&#160;node→right→chunk<br/>
+23:<br/>
+delete_from_chunk(c,&#160;key)<br/>
+24:<br/>
+promoted&#160;:=&#160;node→left<br/>
+25:<br/>
+<b>if&#160;</b>node→chunk&#160;̸=&#160;<i>ϵ&#160;</i><b>then</b><br/>
+26:<br/>
+promoted→chunk&#160;:=&#160;node→chunk<br/>
+<i>▷&#160;</i>node&#160;is&#160;a&#160;chunk&#160;root<br/>
+27:<br/>
+deallocate&#160;node<br/>
+<i>▷&#160;</i>no&#160;need&#160;for&#160;inner-node<br/>
+28:<br/>
+<b>return&#160;</b>promoted<br/>
+29:<br/>
+<b>if&#160;</b>node→key&#160;=&#160;key&#160;<b>and&#160;</b>node→right→left→is_leaf&#160;<b>then</b><br/>
+30:<br/>
+<b>if&#160;</b>c&#160;=&#160;<i>ϵ&#160;</i><b>then</b><br/>
+<i>▷&#160;</i>chunk&#160;is&#160;lower<br/>
+31:<br/>
+<b>if&#160;</b>node→right→chunk&#160;̸=&#160;<i>ϵ&#160;</i><b>then</b><br/>
+<i>▷&#160;</i>chunk&#160;on&#160;right<br/>
+32:<br/>
+c&#160;:=&#160;node→right→chunk<br/>
+33:<br/>
+node→rightNode→rightNode→chunk&#160;=&#160;c<br/>
+34:<br/>
+node→chunk&#160;=&#160;<i>ϵ</i><br/>
+35:<br/>
+<b>else</b><br/>
+36:<br/>
+c&#160;:=&#160;node→right→left→chunk<br/>
+<i>▷&#160;</i>chunk&#160;on&#160;the&#160;left<br/>
+37:<br/>
+delete_from_chunk(c,&#160;key)<br/>
+38:<br/>
+aux&#160;:=&#160;node→right<br/>
+39:<br/>
+node→key&#160;:=&#160;aux→key<br/>
+40:<br/>
+node→right&#160;:=&#160;aux→right<br/>
+41:<br/>
+deallocate&#160;aux<br/>
+42:<br/>
+<b>return&#160;</b>node<br/>
+43:<br/>
+<b>if&#160;</b>node→key&#160;=&#160;key&#160;<b>then</b><br/>
+44:<br/>
+n,&#160;p&#160;:=&#160;delete_leaf(node→right,&#160;c)<br/>
+45:<br/>
+node→key&#160;=&#160;n→key<br/>
+46:<br/>
+node→right&#160;:=&#160;p<br/>
+47:<br/>
+deallocate&#160;n<br/>
+48:<br/>
+<b>else</b><br/>
+49:<br/>
+<b>if&#160;</b>key&#160;&lt;&#160;node→key&#160;<b>then</b><br/>
+50:<br/>
+node→left&#160;:=&#160;delete_aux(node→left,&#160;key,&#160;c)<br/>
+51:<br/>
+<b>else</b><br/>
+52:<br/>
+node→right&#160;:=&#160;delete_aux(node→right,&#160;key,&#160;c)<br/>
+53:<br/>
+update_height(node)<br/>
+<i>▷&#160;</i>new&#160;height&#160;from&#160;children&#160;heights<br/>
+54:<br/>
+<b>return&#160;</b>balance(node)<br/>
+<i>▷&#160;</i>if&#160;needed,&#160;rotate&#160;to&#160;keep&#160;balance<br/>
+<b>O&#160;P&#160;O&#160;D&#160;I&#160;S&#160;2&#160;0&#160;2&#160;2</b><br/>
+<hr/>
+<a name=22></a><b>8:22</b><br/>
+<b>Robust&#160;and&#160;Fast&#160;Blockchain&#160;State&#160;Synchronization</b><br/>
+<b>Algorithm&#160;4&#160;</b>Rotations.<br/>
+1:&#160;<b>procedure&#160;</b>rotate_rl(node)<br/>
+<i>▷&#160;</i>normal&#160;AVL&#160;[right]&#160;left&#160;rotation<br/>
+2:<br/>
+rl_height&#160;:=&#160;node→right→left→height<br/>
+3:<br/>
+rr_height&#160;:=&#160;node→right→right→height<br/>
+4:<br/>
+<b>if&#160;</b>rl_height&#160;<i>&gt;&#160;</i>rr_height&#160;<b>then</b><br/>
+5:<br/>
+node→right&#160;:=&#160;rotate_r(node→right)<br/>
+6:<br/>
+update_height(node)<br/>
+7:<br/>
+<b>return&#160;</b>rotate_l(node)<br/>
+8:&#160;<b>procedure&#160;</b>rotate_lr(node)<br/>
+<i>▷&#160;</i>normal&#160;AVL&#160;[left]&#160;right&#160;rotation<br/>
+9:<br/>
+ll_height&#160;:=&#160;node→left→left→height<br/>
+10:<br/>
+lr_height&#160;:=&#160;node→left→right→height<br/>
+11:<br/>
+<b>if&#160;</b>ll_height&#160;<i>&lt;&#160;</i>lr_height&#160;<b>then</b><br/>
+12:<br/>
+node→left&#160;:=&#160;rotate_l(node→left)<br/>
+13:<br/>
+update_height(node)<br/>
+14:<br/>
+<b>return&#160;</b>rotate_r(node)<br/>
+15:&#160;<b>procedure&#160;</b>rotate_l(node)<br/>
+<i>▷&#160;</i>node&#160;is&#160;the&#160;pivot<br/>
+16:<br/>
+<b>if&#160;</b>node→chunk&#160;̸=&#160;<i>ϵ&#160;</i><b>then</b><br/>
+<i>▷&#160;</i>if&#160;subtree&#160;rooted&#160;at&#160;node&#160;in&#160;a&#160;chunk:<br/>
+17:<br/>
+node→chunk→root&#160;:=&#160;node→right<br/>
+18:<br/>
+node→right→chunk&#160;:=&#160;node→chunk<br/>
+<i>▷&#160;</i>node’s&#160;right&#160;child...<br/>
+19:<br/>
+node→chunk&#160;:=&#160;<i>ϵ</i><br/>
+<i>▷&#160;</i>...becomes&#160;new&#160;chunk&#160;root<br/>
+20:<br/>
+<b>else</b><br/>
+<i>▷&#160;</i>else,&#160;rotation&#160;may&#160;involve&#160;two&#160;chunks<br/>
+21:<br/>
+<b>if&#160;</b>node→right→chunk&#160;̸=&#160;<i>ϵ&#160;</i><b>then</b><br/>
+<i>▷&#160;</i>if&#160;r&#160;child&#160;is&#160;chunk&#160;root:<br/>
+22:<br/>
+split_chunk(node→right)<br/>
+23:<br/>
+new_pivot&#160;:=&#160;node→right<br/>
+<i>▷&#160;</i>rotation&#160;in&#160;three&#160;steps:&#160;one,&#160;...<br/>
+24:<br/>
+node→right&#160;:=&#160;new_pivot→left<br/>
+<i>▷&#160;</i>...two,&#160;and...<br/>
+25:<br/>
+new_pivot→left&#160;:=&#160;node<br/>
+<i>▷&#160;</i>...three!<br/>
+26:<br/>
+update_height(node)<br/>
+<i>▷&#160;</i>update&#160;moved&#160;node&#160;height<br/>
+27:<br/>
+update_height(new_pivot)<br/>
+<i>▷&#160;</i>update&#160;moved&#160;node&#160;height<br/>
+28:<br/>
+<b>return&#160;</b>new_pivot<br/>
+29:&#160;<b>procedure&#160;</b>rotate_r(node)<br/>
+<i>▷&#160;</i>node&#160;is&#160;the&#160;pivot<br/>
+30:<br/>
+<b>if&#160;</b>node→chunk&#160;̸=&#160;<i>ϵ&#160;</i><b>then</b><br/>
+<i>▷&#160;</i>if&#160;subtree&#160;rooted&#160;at&#160;node&#160;in&#160;a&#160;chunk:<br/>
+31:<br/>
+node→left→chunk&#160;:=&#160;node→chunk<br/>
+<i>▷&#160;</i>node’s&#160;left&#160;child...<br/>
+32:<br/>
+node→chunk&#160;:=&#160;<i>ϵ</i><br/>
+<i>▷&#160;</i>...becomes&#160;new&#160;chunk&#160;root<br/>
+33:<br/>
+<b>else</b><br/>
+<i>▷&#160;</i>else,&#160;rotation&#160;may&#160;involve&#160;two&#160;chunks<br/>
+34:<br/>
+<b>if&#160;</b>node→left→chunk&#160;̸=&#160;<i>ϵ&#160;</i><b>then</b><br/>
+<i>▷&#160;</i>if&#160;l&#160;child&#160;is&#160;chunk&#160;root:<br/>
+35:<br/>
+split_chunk(node→left)<br/>
+36:<br/>
+new_pivot&#160;:=&#160;node→left<br/>
+<i>▷&#160;</i>rotation&#160;in&#160;three&#160;steps:&#160;one,&#160;...<br/>
+37:<br/>
+node→left&#160;:=&#160;new_pivot→right<br/>
+<i>▷&#160;</i>...two,&#160;and...<br/>
+38:<br/>
+new_pivot→right&#160;:=&#160;node<br/>
+<i>▷&#160;</i>...three!<br/>
+39:<br/>
+update_height(node)<br/>
+<i>▷&#160;</i>update&#160;moved&#160;node&#160;height<br/>
+40:<br/>
+update_height(new_pivot)<br/>
+<i>▷&#160;</i>update&#160;moved&#160;node&#160;height<br/>
+41:<br/>
+<b>return&#160;</b>new_pivot<br/>
+<hr/>
+<a name="outline"></a><h1>Document Outline</h1>
+<ul>
+<li><a href="opodis2022s.html#1">1 Introduction</a></li>
+<li><a href="opodis2022s.html#3">2 Background</a>
+<ul>
+<li><a href="opodis2022s.html#3">2.1 Blockchain</a></li>
+<li><a href="opodis2022s.html#3">2.2 Merkle trees</a></li>
+<li><a href="opodis2022s.html#4">2.3 State synchronization problem</a></li>
+</ul>
+</li>
+<li><a href="opodis2022s.html#5">3 The AVL* chunked tree</a>
+<ul>
+<li><a href="opodis2022s.html#5">3.1 AVL+ trees</a></li>
+<li><a href="opodis2022s.html#6">3.2 Chunks</a></li>
+<li><a href="opodis2022s.html#6">3.3 Data structures</a></li>
+<li><a href="opodis2022s.html#7">3.4 Search</a></li>
+<li><a href="opodis2022s.html#7">3.5 Insertion</a></li>
+<li><a href="opodis2022s.html#8">3.6 Deletion</a></li>
+<li><a href="opodis2022s.html#8">3.7 Re-balancing</a></li>
+<li><a href="opodis2022s.html#9">3.8 Multi-versioning</a></li>
+<li><a href="opodis2022s.html#9">3.9 Correctness of tree operations</a></li>
+</ul>
+</li>
+<li><a href="opodis2022s.html#10">4 Robust state synchronization</a>
+<ul>
+<li><a href="opodis2022s.html#11">4.1 Correctness state synchronization</a></li>
+</ul>
+</li>
+<li><a href="opodis2022s.html#11">5 Evaluation</a>
+<ul>
+<li><a href="opodis2022s.html#11">5.1 Implementation and environment</a></li>
+<li><a href="opodis2022s.html#12">5.2 State synchronization</a></li>
+<li><a href="opodis2022s.html#13">5.3 Steady-state operation</a>
+<ul>
+<li><a href="opodis2022s.html#14">5.3.1 Steady-state performance</a></li>
+<li><a href="opodis2022s.html#15">5.3.2 Time for a snapshot</a></li>
+<li><a href="opodis2022s.html#15">5.3.3 Space efficiency</a></li>
+</ul>
+</li>
+<li><a href="opodis2022s.html#15">5.4 State synchronization under attack</a></li>
+</ul>
+</li>
+<li><a href="opodis2022s.html#16">6 Related work</a></li>
+<li><a href="opodis2022s.html#17">7 Conclusion</a></li>
+<li><a href="opodis2022s.html#19">A Appendix: Algorithms</a></li>
+</ul>
+<hr/>
+</body>
+</html>

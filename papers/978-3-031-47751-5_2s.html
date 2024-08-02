@@ -1,0 +1,713 @@
+<!DOCTYPE html><html>
+<head>
+<title></title>
+<style type="text/css">
+<!--
+.xflip {
+    -moz-transform: scaleX(-1);
+    -webkit-transform: scaleX(-1);
+    -o-transform: scaleX(-1);
+    transform: scaleX(-1);
+    filter: fliph;
+}
+.yflip {
+    -moz-transform: scaleY(-1);
+    -webkit-transform: scaleY(-1);
+    -o-transform: scaleY(-1);
+    transform: scaleY(-1);
+    filter: flipv;
+}
+.xyflip {
+    -moz-transform: scaleX(-1) scaleY(-1);
+    -webkit-transform: scaleX(-1) scaleY(-1);
+    -o-transform: scaleX(-1) scaleY(-1);
+    transform: scaleX(-1) scaleY(-1);
+    filter: fliph + flipv;
+}
+-->
+</style>
+</head>
+<body>
+<a name=1></a><img src="978-3-031-47751-5_2-1_1.jpg"/><br/>
+<b>Proof&#160;of&#160;Necessary&#160;Work:&#160;Succinct&#160;State</b><br/>
+<b>Verification&#160;with&#160;Fairness&#160;Guarantees</b><br/>
+Assimakis&#160;Kattis(B<a href="http://orcid.org/0009-0007-5042-9023">)</a><br/>
+and&#160;Joseph&#160;<a href="http://orcid.org/0000-0002-6349-0145">Bonneau</a><br/>
+New&#160;York&#160;University,&#160;New&#160;York,&#160;NY&#160;10012,&#160;USA<br/>
+<i>{</i>kattis,jcb<i>}</i>@cs.nyu.edu<br/>
+<b>Abstract.&#160;</b>Blockchain-based&#160;payment&#160;systems&#160;utilize&#160;an&#160;append-only<br/>log&#160;of&#160;transactions&#160;whose&#160;correctness&#160;can&#160;be&#160;veriﬁed&#160;by&#160;any&#160;observer.<br/>Classically,&#160;veriﬁcation&#160;costs&#160;grow&#160;linearly&#160;in&#160;either&#160;the&#160;number&#160;of&#160;trans-<br/>actions&#160;or&#160;blocks&#160;in&#160;the&#160;blockchain&#160;(often&#160;both).&#160;Incrementally&#160;Veriﬁable<br/>Computation&#160;(IVC)&#160;can&#160;be&#160;used&#160;to&#160;enable&#160;constant-time&#160;veriﬁcation,&#160;but<br/>generating&#160;the&#160;necessary&#160;proofs&#160;is&#160;expensive.&#160;We&#160;introduce&#160;the&#160;notion&#160;of<br/>Proof&#160;of&#160;Necessary&#160;Work&#160;(PoNW),&#160;in&#160;which&#160;proof&#160;generation&#160;is&#160;an&#160;inte-<br/>gral&#160;part&#160;of&#160;the&#160;proof-of-work&#160;used&#160;in&#160;Nakamoto&#160;consensus,&#160;producing<br/>proofs&#160;using&#160;energy&#160;that&#160;would&#160;otherwise&#160;be&#160;wasted.&#160;We&#160;implement&#160;and<br/>benchmark&#160;a&#160;prototype&#160;of&#160;our&#160;system,&#160;enabling&#160;stateless&#160;clients&#160;to&#160;verify<br/>the&#160;entire&#160;blockchain&#160;history&#160;in&#160;about&#160;40&#160;milliseconds.<br/>
+<b>Keywords:&#160;</b>proof-of-work&#160;<i>·&#160;</i>zero-knowledge&#160;proofs&#160;<i>·&#160;</i>consensus<br/>algorithms<br/>
+<b>1</b><br/>
+<b>Introduction</b><br/>
+Balancing&#160;throughput&#160;with&#160;decentralization&#160;is&#160;a&#160;major&#160;challenge&#160;in&#160;modern&#160;cryp-<br/>tocurrencies.&#160;Current&#160;systems&#160;such&#160;as&#160;Bitcoin&#160;require&#160;participants&#160;to&#160;process&#160;the<br/>entire&#160;system&#160;history&#160;to&#160;verify&#160;that&#160;the&#160;current&#160;state&#160;(the&#160;most&#160;recent&#160;block&#160;in<br/>the&#160;chain)&#160;is&#160;correct.&#160;Despite&#160;strict&#160;limits&#160;on&#160;blockchain&#160;growth&#160;which&#160;cap&#160;total<br/>system&#160;throughput,&#160;veriﬁcation&#160;costs&#160;are&#160;prohibitive&#160;for&#160;many&#160;clients.&#160;Joining<br/>the&#160;system&#160;requires&#160;downloading&#160;and&#160;verifying&#160;over&#160;450&#160;GB&#160;of&#160;blockchain&#160;history<br/>(as&#160;of&#160;2022)&#160;which&#160;takes&#160;days&#160;on&#160;a&#160;typical&#160;laptop.&#160;In&#160;practice,&#160;most&#160;clients&#160;don’t<br/>perform&#160;independent&#160;veriﬁcation&#160;and&#160;rely&#160;on&#160;a&#160;trusted&#160;third&#160;party&#160;instead.<br/>
+<i>Succinct&#160;blockchains&#160;</i>aim&#160;to&#160;support&#160;eﬃcient&#160;veriﬁcation&#160;of&#160;the&#160;system’s<br/>
+entire&#160;history&#160;by&#160;any&#160;participant&#160;without&#160;trusting&#160;any&#160;third&#160;parties.&#160;Participants<br/>only&#160;need&#160;to&#160;obtain&#160;some&#160;ﬁxed&#160;public&#160;parameters&#160;from&#160;a&#160;trusted&#160;source&#160;(e.g.&#160;the<br/>genesis&#160;block&#160;and&#160;the&#160;system’s&#160;rules).&#160;Participants&#160;can&#160;then&#160;join&#160;the&#160;system&#160;at<br/>any&#160;time&#160;and&#160;receive&#160;a&#160;succinct&#160;validity&#160;proof&#160;for&#160;the&#160;most&#160;recent&#160;block&#160;in&#160;the<br/>system&#160;using&#160;minimal&#160;bandwidth&#160;and&#160;time.&#160;These&#160;proofs&#160;demonstrate&#160;both&#160;that<br/>there&#160;exists&#160;a&#160;sequence&#160;of&#160;valid&#160;transactions&#160;from&#160;the&#160;genesis&#160;state&#160;<i>S</i>0&#160;to&#160;the<br/>state&#160;committed&#160;in&#160;the&#160;current&#160;block,&#160;and&#160;that&#160;the&#160;block’s&#160;<i>branch&#160;</i>(the&#160;sequence<br/>of&#160;predecessor&#160;blocks)&#160;is&#160;of&#160;quality&#160;<i>q&#160;</i>according&#160;to&#160;the&#160;consensus&#160;protocol.&#160;In&#160;this<br/>work&#160;we&#160;focus&#160;on&#160;aggregate&#160;proof-of-work&#160;(PoW)&#160;diﬃculty&#160;as&#160;the&#160;measure&#160;of<br/>
+c<br/>
+<i>&#160;</i>The&#160;Author(s)&#160;2024<br/>F.&#160;Baldimtsi&#160;and&#160;C.&#160;Cachin&#160;(Eds.):&#160;FC&#160;2023,&#160;LNCS&#160;13951,&#160;pp.&#160;18–35,&#160;2024.<br/><a href="https://doi.org/10.1007/978-3-031-47751-5_2">https://doi.org/10.1007/978-3-031-47751-5_2</a><br/>
+<hr/>
+<a name=2></a>Proof&#160;of&#160;Necessary&#160;Work<br/>
+19<br/>
+branch&#160;quality,&#160;as&#160;used&#160;in&#160;Bitcoin&#160;consensus.&#160;Currently,&#160;systems&#160;such&#160;as&#160;Bitcoin<br/>require&#160;<i>O</i>(<i>t&#160;</i>+&#160;<i>h</i>)&#160;work&#160;to&#160;completely&#160;verify&#160;a&#160;branch&#160;containing&#160;<i>t&#160;</i>transactions<br/>and&#160;<i>h&#160;</i>blocks.&#160;Succinct&#160;proofs&#160;enable&#160;optimal&#160;asymptotic&#160;performance&#160;of&#160;<i>O</i>(1)<br/>veriﬁcation&#160;costs&#160;for&#160;a&#160;client&#160;joining&#160;the&#160;system&#160;at&#160;any&#160;point&#160;in&#160;its&#160;history.<br/>
+A&#160;key&#160;challenge&#160;for&#160;succinct&#160;blockchains&#160;is&#160;incentivizing&#160;the&#160;expensive&#160;costs&#160;of<br/>
+computing&#160;a&#160;validity&#160;proof&#160;for&#160;each&#160;block.&#160;Meanwhile,&#160;Bitcoin&#160;employs&#160;proof-of-<br/>work&#160;(PoW),&#160;which&#160;provides&#160;system&#160;security&#160;by&#160;verifying&#160;energy&#160;consumption.<br/>This&#160;energy,&#160;while&#160;necessary&#160;for&#160;the&#160;consensus&#160;protocol,&#160;is&#160;not&#160;used&#160;for&#160;anything<br/>else&#160;and&#160;hence&#160;is&#160;often&#160;described&#160;as&#160;‘wasted.’&#160;We&#160;propose&#160;a&#160;new&#160;approach&#160;to<br/>useful&#160;PoW&#160;in&#160;which&#160;the&#160;work&#160;aids&#160;in&#160;the&#160;veriﬁcation&#160;of&#160;the&#160;system&#160;itself.&#160;We<br/>denote&#160;this&#160;as&#160;<i>proof&#160;of&#160;necessary&#160;work&#160;</i>(PoNW)&#160;and&#160;show&#160;how&#160;it&#160;can&#160;be&#160;used<br/>within&#160;a&#160;succinct&#160;blockchain&#160;architecture&#160;as&#160;a&#160;suitable&#160;PoW&#160;puzzle.<br/>
+A&#160;synergistic&#160;beneﬁt&#160;is&#160;directly&#160;incentivizing&#160;hardware&#160;acceleration&#160;of&#160;zero-<br/>
+knowledge&#160;proofs.&#160;This&#160;is&#160;relevant&#160;for&#160;many&#160;distributed&#160;payment&#160;systems&#160;in<br/>which&#160;proof&#160;generation&#160;time&#160;is&#160;a&#160;critical&#160;bottleneck&#160;limiting&#160;transaction&#160;through-<br/>put&#160;and/or&#160;latency&#160;<a href="978-3-031-47751-5_2s.html#17">[6</a>,&#160;<a href="978-3-031-47751-5_2s.html#17">7</a>,&#160;<a href="978-3-031-47751-5_2s.html#17">15,&#160;20].&#160;</a>Indeed,&#160;recent&#160;industry&#160;developments&#160;<a href="978-3-031-47751-5_2s.html#16">[2]&#160;</a>based<br/>on&#160;our&#160;work&#160;have&#160;yielded&#160;interest&#160;in&#160;dedicating&#160;resources&#160;toward&#160;an&#160;industry-<br/>wide&#160;eﬀort&#160;to&#160;maximize&#160;the&#160;performance&#160;of&#160;zero-knowledge&#160;proof&#160;systems.&#160;We<br/>believe&#160;this&#160;to&#160;be&#160;beneﬁcial&#160;not&#160;only&#160;for&#160;distributed&#160;payments,&#160;but&#160;also&#160;for&#160;any<br/>application&#160;where&#160;high-throughput,&#160;low-latency&#160;and&#160;low-energy&#160;zero-knowledge<br/>proof&#160;generation&#160;is&#160;required.<br/>
+Building&#160;a&#160;consensus&#160;algorithm&#160;which&#160;produces&#160;validity&#160;proofs&#160;for&#160;each&#160;block<br/>
+as&#160;a&#160;useful&#160;byproduct&#160;requires&#160;carefully&#160;designing&#160;the&#160;PoW&#160;process&#160;to&#160;repli-<br/>cate&#160;the&#160;security&#160;properties&#160;of&#160;Bitcoin’s&#160;non-useful&#160;puzzle.&#160;Our&#160;main&#160;technical<br/>contribution&#160;is&#160;a&#160;method&#160;to&#160;deeply&#160;embed&#160;a&#160;nonce&#160;into&#160;the&#160;proof&#160;computation<br/>process,&#160;making&#160;it&#160;suitable&#160;as&#160;a&#160;<i>progress-free&#160;</i>PoW&#160;puzzle.&#160;We&#160;formalize&#160;this<br/>intuition&#160;by&#160;introducing&#160;the&#160;notion&#160;of&#160;<i></i>-amortization&#160;resistance&#160;and&#160;propose&#160;a<br/>protocol&#160;which&#160;achieves&#160;this.&#160;Our&#160;results&#160;are&#160;based&#160;on&#160;the&#160;average-case&#160;hard-<br/>ness&#160;of&#160;multiexponentiation&#160;in&#160;the&#160;Generic&#160;Group&#160;Model&#160;(GGM)&#160;<a href="978-3-031-47751-5_2s.html#18">[32</a>].&#160;We&#160;build<br/>a&#160;prototype&#160;allowing&#160;a&#160;stateless&#160;client&#160;to&#160;rapidly&#160;verify&#160;a&#160;block&#160;(and&#160;thus&#160;its<br/>complete&#160;history)&#160;in&#160;milliseconds&#160;with&#160;500&#160;bytes&#160;of&#160;data&#160;downloaded.&#160;This&#160;also<br/>assists&#160;miners&#160;in&#160;quickly&#160;validating&#160;new&#160;blocks&#160;broadcast&#160;on&#160;the&#160;network,&#160;which<br/>may&#160;reduce&#160;the&#160;risk&#160;of&#160;block&#160;collisions&#160;and&#160;enable&#160;faster&#160;block&#160;frequency.<br/>
+<b>2</b><br/>
+<b>Proof&#160;of&#160;Necessary&#160;Work</b><br/>
+To&#160;allow&#160;proof&#160;generation&#160;to&#160;serve&#160;as&#160;a&#160;PoW&#160;puzzle,&#160;we&#160;require&#160;(a)&#160;a&#160;proof&#160;<i>πi<br/></i>whose&#160;generation&#160;algorithm&#160;<i>P&#160;</i>is&#160;moderately&#160;diﬃcult&#160;to&#160;compute&#160;and&#160;(b)&#160;a&#160;PoW<br/>puzzle&#160;P<i>H,d&#160;</i>that&#160;requires&#160;the&#160;miner&#160;to&#160;fully&#160;recompute&#160;<i>P&#160;</i>to&#160;test&#160;a&#160;potential<br/>
+<i>V</i><br/>
+solution.&#160;The&#160;second&#160;property&#160;is&#160;necessary&#160;for&#160;the&#160;puzzle&#160;to&#160;be&#160;progress-free&#160;for<br/>fairness&#160;to&#160;miners&#160;of&#160;diﬀering&#160;size.&#160;Indeed,&#160;if&#160;generating&#160;unique&#160;proofs&#160;<i>πi&#160;</i>based<br/>on&#160;randomly&#160;sampled&#160;nonces&#160;<i>ni&#160;</i>is&#160;suﬃciently&#160;‘hard’,&#160;then&#160;using&#160;P<i>H,d&#160;</i>instead<br/>
+<i>V</i><br/>
+of&#160;a&#160;generic&#160;puzzle&#160;(such&#160;as&#160;computing&#160;the&#160;double&#160;SHA256&#160;digest&#160;in&#160;Bitcoin)<br/>would&#160;allow&#160;us&#160;to&#160;not&#160;only&#160;perform&#160;PoW&#160;with&#160;the&#160;same&#160;theoretical&#160;guarantees,<br/>but&#160;also&#160;compute&#160;a&#160;valid&#160;proof&#160;<i>πi&#160;</i>in&#160;the&#160;process.<br/>
+<hr/>
+<a name=3></a>20<br/>
+A.&#160;Kattis&#160;and&#160;J.&#160;Bonneau<br/>
+We&#160;do&#160;not&#160;formally&#160;analyze&#160;any&#160;consensus&#160;properties,&#160;since&#160;our&#160;goal&#160;is&#160;not<br/>
+to&#160;design&#160;a&#160;new&#160;consensus&#160;protocol&#160;but&#160;to&#160;retain&#160;that&#160;used&#160;by&#160;Bitcoin&#160;(and<br/>similar&#160;systems)&#160;and&#160;inherit&#160;its&#160;properties.&#160;However,&#160;we&#160;would&#160;like&#160;the&#160;work<br/>done&#160;to&#160;be&#160;useful&#160;by&#160;producing&#160;proofs&#160;of&#160;each&#160;block’s&#160;validity.&#160;We&#160;introduce<br/>the&#160;notion&#160;of&#160;performing&#160;PoW&#160;by&#160;proving&#160;the&#160;validity&#160;system&#160;state,&#160;denoted&#160;by<br/><i>Proof&#160;of&#160;Necessary&#160;Work&#160;</i>(PoNW).<br/>
+<b>Deﬁnition&#160;1.&#160;<i>(Proof&#160;of&#160;Necessary&#160;Work).&#160;</b>Given&#160;a&#160;pseudorandom&#160;function<br/>H&#160;and&#160;a&#160;proof&#160;πi&#160;∈&#160;Z&#160;in&#160;some&#160;RSM&#160;with&#160;transition&#160;tuple&#160;</i>(<i>NewState,&#160;VerifyState</i>)<i>,<br/>we&#160;deﬁne&#160;the&#160;veriﬁcation&#160;puzzle&#160;</i>P<i>H,d&#160;</i>:&#160;<i>S&#160;×&#160;S&#160;×&#160;Z&#160;→&#160;{</i>0<i>,&#160;</i>1<i>}&#160;with&#160;diﬃculty&#160;d&#160;as</i><br/>
+<i>V</i><br/>
+<i>the&#160;solution&#160;to&#160;the&#160;following&#160;function:</i><br/>
+<br/>
+<br/>
+<i>VerifyState</i>(<i>S</i><br/>
+P<i>H</i>(<i>S</i><br/>
+<i>i,&#160;Si</i>+1<i>,&#160;πi</i>+1)&#160;=&#160;1<br/>
+<i>,</i><br/>
+<i>V</i><br/>
+<i>i,&#160;Si</i>+1<i>,&#160;πi</i>+1)&#160;=&#160;<b>1</b><br/>
+<i>H</i>(<i>πi</i>+1)&#160;<i>&lt;&#160;d</i><br/>
+<i>where&#160;</i><b>1</b>[<i>·</i>]&#160;<i>is&#160;the&#160;indicator&#160;function.</i><br/>
+By&#160;having&#160;access&#160;to&#160;a&#160;proof&#160;generating&#160;algorithm&#160;<i>P</i>(<b>t</b><i>,&#160;Si,&#160;Si</i>+1<i>,&#160;ni</i>)&#160;<i>→&#160;πi</i>+1<br/>
+that&#160;generates&#160;unique&#160;(yet&#160;valid)&#160;<i>πi</i>+1&#160;for&#160;each&#160;<i>ni</i>,&#160;we&#160;can&#160;generate&#160;<i>πi</i>+1&#160;for<br/>
+<i>Si</i>+1&#160;=&#160;NewState(<b>t</b><i>,&#160;Si,&#160;πi</i>)&#160;using&#160;a&#160;uniformly&#160;randomly&#160;sampled&#160;<i>ni&#160;</i>until&#160;the<br/>puzzle&#160;condition&#160;is&#160;satisﬁed:<br/>
+P<i>H</i>(<i>S</i><br/>
+<i>V</i><br/>
+<i>i,&#160;Si</i>+1<i>,&#160;P&#160;</i>(<b>t</b><i>,&#160;Si,&#160;Si</i>+1<i>,&#160;ni</i>))&#160;=&#160;1<i>.</i><br/>
+Then&#160;<i>πi</i>+1&#160;suﬃces&#160;for&#160;public&#160;veriﬁcation&#160;that&#160;PoW&#160;has&#160;been&#160;performed.&#160;This&#160;is<br/>because&#160;our&#160;prover&#160;will&#160;always&#160;fail&#160;with&#160;constant&#160;probability&#160;(when&#160;<i>H</i>(<i>πi</i>+1)&#160;<i>≥<br/>d</i>),&#160;so&#160;iteratively&#160;sampling&#160;new&#160;proofs&#160;(by&#160;sampling&#160;new&#160;<i>ni</i>)&#160;until&#160;a&#160;valid&#160;one&#160;is<br/>found&#160;can&#160;be&#160;shown,&#160;under&#160;the&#160;assumption&#160;that&#160;<i>P&#160;</i>is&#160;the&#160;most&#160;eﬃcient&#160;way&#160;to&#160;ﬁnd<br/>such&#160;an&#160;<i>ni</i>,&#160;to&#160;be&#160;a&#160;memoryless&#160;exponential&#160;process&#160;and&#160;hence&#160;<i>fair</i>.&#160;Note&#160;that,<br/>by&#160;construction,&#160;we&#160;also&#160;guarantee&#160;that&#160;<i>πi</i>+1&#160;is&#160;a&#160;valid&#160;witness&#160;for&#160;the&#160;RSM.<br/>The&#160;number&#160;of&#160;transactions&#160;veriﬁed&#160;is&#160;always&#160;<i>ﬁxed&#160;</i>(with&#160;empty&#160;transactions<br/>still&#160;‘added’)&#160;as&#160;otherwise&#160;miners&#160;would&#160;be&#160;incentivized&#160;to&#160;mine&#160;puzzles&#160;with&#160;the<br/>smallest&#160;blocks.<br/>
+Like&#160;Nakamoto&#160;consensus,&#160;our&#160;puzzle&#160;needs&#160;the&#160;property&#160;that&#160;solutions&#160;are<br/>
+equally&#160;hard&#160;to&#160;test&#160;even&#160;after&#160;testing&#160;an&#160;arbitrary&#160;number&#160;of&#160;previous&#160;solutions.<br/>In&#160;other&#160;words,&#160;a&#160;miner&#160;should&#160;not&#160;be&#160;able&#160;to&#160;<i>amortize&#160;</i>costs&#160;while&#160;testing&#160;mul-<br/>tiple&#160;potential&#160;solutions.&#160;This&#160;property&#160;is&#160;deﬁned&#160;more&#160;formally&#160;below&#160;based&#160;on<br/>the&#160;<i>μ</i>-Incompressibility&#160;of&#160;<a href="978-3-031-47751-5_2s.html#18">[26</a>],&#160;although&#160;we&#160;work&#160;in&#160;the&#160;bounded-size&#160;precom-<br/>putation&#160;model.&#160;We&#160;model&#160;PoNW&#160;as&#160;a&#160;function&#160;<i>f&#160;O&#160;</i>with&#160;limited&#160;access&#160;to&#160;some<br/>oracle&#160;<i>O&#160;</i>that&#160;performs&#160;a&#160;hard&#160;computation&#160;in&#160;an&#160;encoding&#160;of&#160;some&#160;group&#160;G.<br/>
+<b>Deﬁnition&#160;2.&#160;<i>(</b><b>-Amortization&#160;Resistance).&#160;</b>For&#160;inputs&#160;of&#160;length&#160;λ&#160;and<br/>ouputs&#160;q&#160;∈&#160;poly</i>(<i>λ</i>)<i>,&#160;function&#160;f&#160;O&#160;</i>=&#160;<i>{f&#160;O</i>(<i>n</i>)<i>}n∈N&#160;is&#160;-amortization&#160;resistant&#160;on<br/>average&#160;with&#160;respect&#160;to&#160;a&#160;sampler&#160;</i>S&#160;<i>if&#160;for&#160;all&#160;adversaries&#160;A&#160;</i>=&#160;(<i>AO,&#160;AO</i>)&#160;<i>with</i><br/>
+1<br/>
+2<br/>
+<i>A&#160;performing&#160;less&#160;than&#160;</i>(1&#160;<i>−&#160;</i>)<i>qN&#160;queries&#160;to&#160;the&#160;oracle&#160;O&#160;on&#160;average,&#160;where&#160;N<br/>number&#160;of&#160;queries&#160;required&#160;for&#160;one&#160;evaluation&#160;of&#160;f&#160;O</i>(<i>n</i>)&#160;<i>on&#160;average,&#160;the&#160;following<br/>is&#160;negligible&#160;in&#160;λ:</i><br/>
+<hr/>
+<a name=4></a>Proof&#160;of&#160;Necessary&#160;Work<br/>
+21<br/>
+⎡<br/>
+⎤<br/>
+<i>{ni}q&#160;←&#160;n,&#160;</i>(<i>n,&#160;</i>aux)&#160;<i>←&#160;</i>S(1<i>λ</i>)<br/>
+<i>i</i>=1<br/>
+Pr&#160;⎣&#160;<i>∀i&#160;∈&#160;</i>[<i>q</i>]<i>,&#160;π</i><br/>
+⎦<br/>
+<i>i&#160;</i>=&#160;<i>f&#160;O</i>(<i>ni</i>)<br/>
+precomp&#160;<i>←&#160;AO</i>(1<i>λ,&#160;</i>aux)<br/>
+1<br/>
+<i>.</i><br/>
+<i>{πi}q&#160;←&#160;AO</i>(1<i>λ,&#160;n,&#160;</i>precomp)<br/>
+<i>i</i>=1<br/>
+2<br/>
+This&#160;deﬁnition&#160;captures&#160;the&#160;fact&#160;that&#160;computing&#160;multiple&#160;proofs&#160;does&#160;not<br/>
+come&#160;with&#160;marginal&#160;gains:&#160;indeed,&#160;provers&#160;cannot&#160;use&#160;larger&#160;computational<br/>resources&#160;to&#160;batch&#160;process&#160;proofs&#160;and&#160;achieve&#160;disproportionate&#160;performance<br/>improvements.&#160;By&#160;preventing&#160;large&#160;miners&#160;from&#160;achieving&#160;algorithmic&#160;returns-<br/>to-scale,&#160;this&#160;property&#160;is&#160;crucial&#160;in&#160;ensuring&#160;fairness.&#160;With&#160;the&#160;above&#160;objectives<br/>in&#160;mind,&#160;we&#160;now&#160;look&#160;at&#160;how&#160;to&#160;adapt&#160;our&#160;implementation&#160;to&#160;realize&#160;such&#160;a<br/>system.<br/>
+Before&#160;we&#160;look&#160;at&#160;designing&#160;an&#160;amortization&#160;resistant&#160;PoNW&#160;system,&#160;we<br/>
+summarize&#160;the&#160;computationally&#160;expensive&#160;components&#160;of&#160;proof&#160;generation&#160;in<br/>the&#160;Quadratic&#160;Arithmetic&#160;Program&#160;(QAP)&#160;Non-Interactive&#160;Proof&#160;(NIPs)&#160;of&#160;<a href="978-3-031-47751-5_2s.html#18">[27]<br/></a>compiled&#160;with&#160;<a href="978-3-031-47751-5_2s.html#17">[21</a>].&#160;For&#160;an&#160;<i></i>-size&#160;statement&#160;with&#160;<i>m&#160;</i>internal&#160;variables&#160;and&#160;<i>n&#160;</i>con-<br/>straints,&#160;the&#160;prover&#160;<i>P&#160;</i>needs&#160;to&#160;(1)&#160;update&#160;inputs&#160;and&#160;witnesses,&#160;and&#160;(2)&#160;perform<br/>9<i>m&#160;</i>+&#160;<i>n&#160;</i>exponentiations&#160;in&#160;G&#160;using&#160;elements&#160;from&#160;the&#160;proving&#160;key&#160;as&#160;bases.<br/>Since&#160;updating&#160;variable&#160;assignments&#160;is&#160;orders-of-magnitude&#160;faster,&#160;amortization<br/>resistance&#160;requires&#160;<i>P&#160;</i>to&#160;recompute&#160;(almost)&#160;all&#160;exponentiations&#160;for&#160;each&#160;new<br/>nonce.<br/>
+<b>Amortization&#160;of&#160;Multiexponentiation.&#160;</b>Multiexponentiation&#160;is&#160;inherently<br/>amortizable&#160;<a href="978-3-031-47751-5_2s.html#17">[16,&#160;19</a>]&#160;given&#160;enough&#160;memory,&#160;although&#160;space&#160;requirements&#160;scale<br/>exponentially&#160;with&#160;the&#160;number&#160;of&#160;computed&#160;elements.&#160;This&#160;is&#160;because&#160;we&#160;can<br/>precompute&#160;the&#160;exponents&#160;of&#160;speciﬁc&#160;basis&#160;elements&#160;and&#160;perform&#160;look-ups&#160;that<br/>can&#160;be&#160;used&#160;by&#160;multiple&#160;evaluations&#160;at&#160;once.&#160;We&#160;make&#160;precise&#160;the&#160;relationship<br/>between&#160;size&#160;and&#160;amortization&#160;gain&#160;to&#160;demonstrate&#160;that&#160;non-negligible&#160;amorti-<br/>zation&#160;gains&#160;require&#160;an&#160;infeasibly&#160;large&#160;amount&#160;of&#160;space.&#160;Since&#160;we&#160;are&#160;interested<br/>in&#160;average-case&#160;guarantees,&#160;all&#160;input&#160;elements&#160;to&#160;the&#160;multiexponentiation&#160;algo-<br/>rithm&#160;(i.e.&#160;the&#160;enumerated&#160;exponents,&#160;or&#160;puzzle&#160;instances)&#160;are&#160;sampled&#160;uniformly<br/>randomly&#160;from&#160;some&#160;S.<br/>
+We&#160;consider&#160;amortization&#160;in&#160;Shoup’s&#160;Generic&#160;Group&#160;Model&#160;(GGM)&#160;<a href="978-3-031-47751-5_2s.html#18">[32],</a><a href="978-3-031-47751-5_2s.html#4">1&#160;</a>in<br/>
+which&#160;the&#160;adversary&#160;can&#160;only&#160;compute&#160;products&#160;based&#160;on&#160;existing&#160;group&#160;elements<br/>(with&#160;non-negligible&#160;probability),&#160;or&#160;directly&#160;query&#160;the&#160;exponentiation&#160;of&#160;some<br/>index.&#160;The&#160;adversary&#160;has&#160;access&#160;to&#160;a&#160;multiplication&#160;oracle&#160;<i>O&#160;</i>:&#160;G<i>×</i>G&#160;<i>→&#160;</i>G,&#160;which<br/>returns&#160;the&#160;multiplication&#160;of&#160;the&#160;input&#160;elements&#160;over&#160;some&#160;random&#160;encoding<br/><i>σ&#160;</i>:&#160;Z<i>p&#160;→&#160;</i>G<i>.&#160;</i>This&#160;oracle&#160;computes&#160;<i>O</i>(<i>σ</i>(<i>i</i>)<i>,&#160;σ</i>(<i>j</i>))&#160;=&#160;<i>σ</i>(<i>i&#160;</i>+&#160;<i>j</i>)<i>.&#160;</i>The&#160;adversary<br/>may&#160;also&#160;use&#160;a&#160;polynomially-sized&#160;precomputation&#160;string.&#160;Since&#160;they&#160;don’t&#160;have<br/>access&#160;to&#160;the&#160;exponents&#160;of&#160;the&#160;bases&#160;that&#160;are&#160;being&#160;multiplied&#160;together&#160;(so&#160;as&#160;to<br/>perform&#160;a&#160;direct&#160;look-up),&#160;computing&#160;some&#160;<i>σ</i>(<i>k</i>)&#160;requires&#160;the&#160;generation&#160;of&#160;an<br/>addition&#160;chain&#160;ending&#160;with&#160;<i>σ</i>(<i>k</i>).<br/>
+However,&#160;this&#160;is&#160;the&#160;only&#160;assumption&#160;underlying&#160;the&#160;lower-bound&#160;results<br/>
+which&#160;prove&#160;the&#160;optimality&#160;of&#160;(the&#160;generalized)&#160;Pippenger’s&#160;algorithm&#160;<a href="978-3-031-47751-5_2s.html#17">[19</a>],&#160;as<br/>they&#160;obtain&#160;lower-bounds&#160;on&#160;the&#160;length&#160;of&#160;the&#160;minimal&#160;addition&#160;chain&#160;needed&#160;to<br/>
+1&#160;Maurer&#160;proposed&#160;a&#160;slightly&#160;diﬀerent&#160;GGM&#160;deﬁnition&#160;<a href="978-3-031-47751-5_2s.html#18">[25</a>],&#160;for&#160;a&#160;comparison&#160;see&#160;<a href="978-3-031-47751-5_2s.html#18">[35</a>].<br/>
+<hr/>
+<a name=5></a>22<br/>
+A.&#160;Kattis&#160;and&#160;J.&#160;Bonneau<br/>
+compute&#160;some&#160;element.&#160;In&#160;short,&#160;our&#160;main&#160;formal&#160;contribution&#160;relies&#160;on&#160;adapting<br/>the&#160;packing&#160;lower-bound&#160;ideas&#160;of&#160;<a href="978-3-031-47751-5_2s.html#17">[14,&#160;</a><a href="978-3-031-47751-5_2s.html#18">28]&#160;</a>to&#160;formalize&#160;the&#160;relationship&#160;between<br/>amortization&#160;of&#160;multiexponentiation&#160;of&#160;random&#160;indices&#160;and&#160;the&#160;amount&#160;of&#160;space<br/>available&#160;to&#160;the&#160;adversary.&#160;We&#160;do&#160;this&#160;by&#160;making&#160;explicit&#160;the&#160;average-case&#160;lower<br/>bounds&#160;for&#160;multiexponentiation,&#160;which&#160;were&#160;only&#160;stated&#160;(but&#160;not&#160;proven)&#160;in<br/><a href="978-3-031-47751-5_2s.html#17">[14</a><a href="978-3-031-47751-5_2s.html#18">,&#160;28]&#160;</a>to&#160;be&#160;a&#160;constant&#160;term&#160;away&#160;from&#160;the&#160;worst-case&#160;lower&#160;bounds.<br/>
+Note&#160;that&#160;the&#160;notion&#160;of&#160;average-case&#160;hardness&#160;requires&#160;an&#160;underlying&#160;prob-<br/>
+ability&#160;distribution&#160;over&#160;which&#160;the&#160;input&#160;indices&#160;are&#160;sampled.&#160;Obviously,&#160;the<br/>distribution&#160;of&#160;the&#160;sampled&#160;puzzle&#160;instances&#160;can&#160;aﬀect&#160;the&#160;average-case&#160;bounds<br/>if,&#160;for&#160;example,&#160;the&#160;sampler&#160;provides&#160;structured&#160;output&#160;with&#160;high&#160;probability.<br/>Therefore,&#160;all&#160;results&#160;have&#160;to&#160;be&#160;taken&#160;with&#160;respect&#160;to&#160;the&#160;underlying&#160;distribution<br/>of&#160;the&#160;inputs,&#160;which&#160;is&#160;in&#160;turn&#160;speciﬁed&#160;by&#160;the&#160;choice&#160;of&#160;sampling&#160;algorithm&#160;S.<br/>Where&#160;this&#160;S&#160;is&#160;taken&#160;to&#160;be&#160;uniform&#160;(as&#160;in&#160;this&#160;work),&#160;the&#160;notion&#160;of&#160;average-case<br/>hardness&#160;defaults&#160;to&#160;the&#160;traditional&#160;average-case&#160;lower&#160;bound&#160;results.<br/>
+In&#160;order&#160;to&#160;make&#160;formal&#160;statements&#160;about&#160;the&#160;amortization&#160;resistance&#160;of&#160;com-<br/>
+puting&#160;multiple&#160;NIPs,&#160;we&#160;need&#160;to&#160;show&#160;that&#160;there&#160;exists&#160;some&#160;sampling&#160;algorithm<br/>S<i>NIP&#160;</i>outputting&#160;instance-witness&#160;pairs&#160;(<i>φ,&#160;w</i>)&#160;so&#160;that,&#160;on&#160;average&#160;over&#160;its&#160;public<br/>coins,&#160;these&#160;output&#160;puzzle&#160;instances&#160;require&#160;a&#160;minimum&#160;number&#160;of&#160;oracle&#160;calls<br/>each&#160;for&#160;computation&#160;of&#160;their&#160;corresponding&#160;proof&#160;<i>π</i>.&#160;Firstly,&#160;we&#160;construct&#160;the<br/>equivalent&#160;multiexponentiation&#160;problem&#160;that&#160;the&#160;above&#160;will&#160;reduce&#160;to.&#160;In&#160;the<br/>following,&#160;we&#160;restrict&#160;ourselves&#160;to&#160;the&#160;NIP&#160;of&#160;<a href="978-3-031-47751-5_2s.html#18">[27],&#160;</a>in&#160;which&#160;the&#160;valid&#160;output<br/>
+<br/>
+proof&#160;consists&#160;of&#160;9&#160;group&#160;elements&#160;of&#160;the&#160;form<br/>
+<i>κ</i><br/>
+<i>w</i><br/>
+for&#160;<i>i&#160;∈&#160;</i>[9]<i>,&#160;w</i><br/>
+<br/>
+<i>k</i>=1<br/>
+<i>kGik</i><br/>
+<i>k&#160;∈&#160;</i>[<i>N&#160;</i>]<br/>
+and&#160;an&#160;additional&#160;element<br/>
+<i>μ</i><br/>
+<i>g</i>(<i>w</i><br/>
+<i>m</i>=1<br/>
+1<i>,&#160;...,&#160;wκ</i>)<i>mHm</i>,&#160;where&#160;<i>g&#160;</i>an&#160;<i>m</i>-dimensional<br/>
+<i>n</i>-variable&#160;polynomial&#160;encoding&#160;the&#160;instance’s&#160;witness&#160;and&#160;<i>Gi,&#160;Hm&#160;∈&#160;</i>G.<br/>
+Since&#160;the&#160;hardness&#160;of&#160;the&#160;above&#160;computation&#160;depends&#160;on&#160;the&#160;structure&#160;of<br/>
+<i>w&#160;</i>and&#160;<i>g</i>,&#160;it&#160;becomes&#160;apparent&#160;that&#160;we&#160;need&#160;to&#160;restrict&#160;the&#160;types&#160;of&#160;<i>predicates<br/></i>that&#160;we&#160;are&#160;looking&#160;at.&#160;In&#160;subsequent&#160;sections,&#160;we&#160;make&#160;precise&#160;the&#160;following<br/>construction:&#160;a&#160;circuit&#160;with&#160;an&#160;eﬃcient&#160;sampler&#160;S&#160;such&#160;that&#160;(1)&#160;accepting&#160;witness<br/>elements&#160;<i>w</i>1<i>,&#160;...,&#160;wκ&#160;∈&#160;</i>[<i>N</i>]&#160;are&#160;randomly&#160;distributed,&#160;(2)&#160;for&#160;each&#160;valid&#160;instance<br/><i>φ&#160;</i>there&#160;exists&#160;only&#160;one&#160;valid&#160;<i>w</i>,&#160;and&#160;(3)&#160;for&#160;each&#160;valid&#160;<i>w</i>,&#160;there&#160;exists&#160;a&#160;unique<br/>valid&#160;<i>g</i>.&#160;Note&#160;that&#160;(1)&#160;and&#160;(2)&#160;are&#160;properties&#160;of&#160;the&#160;predicate,&#160;while&#160;(3)&#160;requires&#160;a<br/>stronger&#160;result&#160;on&#160;the&#160;NIP’s&#160;knowledge&#160;guarantees.&#160;We&#160;will&#160;show&#160;that&#160;predicates<br/>satisfying&#160;(1)&#160;and&#160;(2)&#160;are&#160;enough&#160;to&#160;reduce&#160;the&#160;computation&#160;of&#160;a&#160;NIP&#160;from<br/><a href="978-3-031-47751-5_2s.html#18">[27</a>]&#160;(which&#160;satisﬁes&#160;(3))&#160;to&#160;a&#160;multiexponentiation&#160;problem&#160;(Deﬁnition&#160;<a href="978-3-031-47751-5_2s.html#5">3)&#160;</a>whose<br/>amortization&#160;we&#160;can&#160;bound.<br/>
+<b>Deﬁnition&#160;3.&#160;</b><i>The&#160;</i>(<i>κ,&#160;μ</i>)<i>-length&#160;MultiExp&#160;function&#160;f&#160;</i>:&#160;[<i>N&#160;</i>]<i>κ&#160;→&#160;</i>G<i>ν&#160;of&#160;dimension<br/>ν&#160;for&#160;{G</i>(1)<i>,&#160;...,&#160;G</i>(<i>ν−</i>1)<i>}κ&#160;,&#160;{G</i>(<i>ν</i>)<i>}μ&#160;,&#160;and&#160;function&#160;g&#160;</i>:&#160;[<i>N&#160;</i>]<i>κ&#160;→&#160;K&#160;⊆&#160;</i>[<i>N&#160;</i>]<i>μ&#160;is</i><br/>
+<i>i</i><br/>
+<i>i</i><br/>
+<i>i</i>=1<br/>
+<i>i</i><br/>
+<i>i</i>=1<br/>
+&#160;<br/>
+<br/>
+<i>κ</i><br/>
+<br/>
+<i>κ</i><br/>
+<br/>
+<i>μ</i><br/>
+<br/>
+<i>f&#160;</i>(<i>x</i>1<i>,&#160;...,&#160;xκ</i>)&#160;:=<br/>
+<i>xiG</i>(1)<i>,&#160;...,</i><br/>
+<i>x</i><br/>
+<i>,</i><br/>
+<i>g</i>(<i>x</i>)<br/>
+<i>,</i><br/>
+<i>i</i><br/>
+<i>iG</i>(<i>ν−</i>1)<br/>
+<i>i</i><br/>
+<i>iG</i>(<i>ν</i>)<br/>
+<i>i</i><br/>
+<i>i</i>=1<br/>
+<i>i</i>=1<br/>
+<i>i</i>=1<br/>
+<i>where&#160;the&#160;xi&#160;are&#160;given&#160;by&#160;sampler&#160;</i>S<i>,&#160;based&#160;on&#160;its&#160;random&#160;coins.</i><br/>
+In&#160;order&#160;to&#160;provide&#160;a&#160;reduction&#160;that&#160;exactly&#160;captures&#160;the&#160;average-case&#160;hard-<br/>
+ness&#160;of&#160;the&#160;above&#160;problem,&#160;the&#160;structure&#160;of&#160;<i>g&#160;</i>becomes&#160;important.&#160;This&#160;requires<br/>
+<hr/>
+<a name=6></a>Proof&#160;of&#160;Necessary&#160;Work<br/>
+23<br/>
+a&#160;more&#160;technical&#160;treatment,&#160;so&#160;here&#160;we&#160;work&#160;in&#160;the&#160;case&#160;where&#160;<i>g&#160;</i>is&#160;a&#160;weakly<br/>collision-resistant&#160;map&#160;from&#160;the&#160;witness&#160;elements&#160;<i>x&#160;</i>=&#160;(<i>x</i>1<i>,&#160;...,&#160;xκ</i>)&#160;to&#160;the&#160;values<br/>(<i>g</i>(<i>x</i>)1<i>,&#160;...,&#160;g</i>(<i>x</i>)<i>μ</i>)&#160;<i>∈&#160;K&#160;⊆&#160;</i>[<i>N</i>]<i>μ</i>.&#160;This&#160;deﬁnes&#160;a&#160;computationally&#160;unique&#160;correspon-<br/>dence&#160;between&#160;witness&#160;elements&#160;and&#160;representations&#160;of&#160;<i>μ</i>-degree&#160;polynomials<br/>with&#160;coeﬃcients&#160;in&#160;[<i>N&#160;</i>].&#160;We&#160;speciﬁcally&#160;require&#160;the&#160;mapping&#160;<i>g&#160;</i>:&#160;[<i>N&#160;</i>]<i>κ&#160;→&#160;K&#160;⊆<br/></i>[<i>N&#160;</i>]<i>μ&#160;</i>to&#160;be&#160;collision-resistant&#160;in&#160;each&#160;of&#160;its&#160;output&#160;coordinates,&#160;or&#160;that&#160;the&#160;fol-<br/>lowing&#160;probability&#160;is&#160;negligible&#160;for&#160;all&#160;PPT&#160;adversaries&#160;<i>A</i>:<br/>
+Pr&#160;[<i>∃i&#160;</i>s.t.&#160;<i>g</i>(<i>A</i>(<i>z</i>))<i>i&#160;</i>=&#160;<i>zi</i>;&#160;<i>z&#160;←&#160;g</i>(<i>x</i>)<i>,&#160;x&#160;←R&#160;</i>[<i>N</i>]<i>κ</i>]&#160;<i>≈&#160;</i>0<i>,</i><br/>
+where&#160;<i>zi&#160;</i>denotes&#160;the&#160;<i>i</i>-th&#160;coordinate&#160;of&#160;<i>z.&#160;</i>This&#160;is&#160;enough&#160;to&#160;provide&#160;multiexpo-<br/>nentiation&#160;amortization&#160;bounds,&#160;which&#160;are&#160;given&#160;below&#160;for&#160;the&#160;case&#160;when&#160;<i>κ&#160;</i>=&#160;<i>μ</i>.<br/>Note&#160;that&#160;the&#160;general&#160;case&#160;for&#160;<i>μ&#160;&gt;&#160;κ&#160;</i>can&#160;also&#160;be&#160;calculated&#160;in&#160;the&#160;exact&#160;same<br/>way,&#160;but&#160;has&#160;been&#160;omitted&#160;for&#160;simplicity.<br/>
+<b>Theorem&#160;1.&#160;</b><i>The&#160;</i>(<i>κ,&#160;κ</i>)<i>-length&#160;MultiExp&#160;function&#160;(c.f.&#160;Deﬁnition&#160;<a href="978-3-031-47751-5_2s.html#5">3)&#160;</a></i><i>of&#160;dimen-<br/>sion&#160;ν&#160;over&#160;index&#160;size&#160;λ&#160;</i>:=&#160;log&#160;(<i>N&#160;</i>)<i>,&#160;group&#160;</i>G&#160;<i>with&#160;|</i>G<i>|&#160;</i>=&#160;2<i>λ,&#160;and&#160;storage&#160;size&#160;q<br/>is&#160;-amortization&#160;resistant&#160;with&#160;respect&#160;to&#160;the&#160;uniform&#160;sampler&#160;for&#160;all&#160;collision-<br/>resistant&#160;g,&#160;and&#160;for&#160;large&#160;enough&#160;κ,&#160;λ,&#160;ν,&#160;q&#160;satisﬁes:</i><br/>
+<i>&#160;≤</i><br/>
+log&#160;(<i>q</i>)&#160;+&#160;<i>o</i>(1)<br/>
+<i>.</i><br/>
+log&#160;(<i>q</i>)&#160;+&#160;log&#160;(<i>κ</i>)&#160;+&#160;log&#160;(<i>ν</i>)&#160;+&#160;log&#160;(<i>λ</i>)<br/>
+We&#160;prove&#160;Theorem&#160;<a href="978-3-031-47751-5_2s.html#6">1&#160;</a>in&#160;Appendix&#160;<a href="978-3-031-47751-5_2s.html#13">A.&#160;</a>This&#160;amortization&#160;gain&#160;is&#160;unavoidable&#160;for<br/>NIPs&#160;that&#160;reduce&#160;to&#160;multiexponentiation;&#160;such&#160;as&#160;by&#160;compilation&#160;with&#160;<a href="978-3-031-47751-5_2s.html#17">[21].</a><br/>
+<b>2.1</b><br/>
+<b>Amortization&#160;Resistance&#160;and&#160;Eﬃciency</b><br/>
+We&#160;modify&#160;the&#160;DPS&#160;predicate&#160;<i>Π&#160;</i>to&#160;ensure&#160;that&#160;most&#160;of&#160;the&#160;proof&#160;variables<br/>change&#160;unpredictably&#160;with&#160;modiﬁcations&#160;of&#160;the&#160;nonce&#160;or&#160;state.&#160;This&#160;gives&#160;amor-<br/>tization&#160;resistance&#160;in&#160;exchange&#160;for&#160;increasing&#160;the&#160;number&#160;of&#160;variables&#160;and&#160;con-<br/>straints&#160;in&#160;the&#160;predicate.&#160;The&#160;performance&#160;overhead&#160;originates&#160;from&#160;the&#160;need&#160;to<br/>commit&#160;to&#160;state&#160;and&#160;‘mask’&#160;the&#160;computation,&#160;which&#160;can&#160;be&#160;expensive&#160;for&#160;large<br/>predicates.<br/>
+The&#160;naive&#160;approach&#160;would&#160;be&#160;to&#160;isolate&#160;each&#160;of&#160;the&#160;diﬀerent&#160;circuits&#160;in&#160;the<br/>
+system&#160;and&#160;show&#160;that&#160;they&#160;can&#160;be&#160;modiﬁed&#160;to&#160;change&#160;unpredictably&#160;based&#160;on<br/>some&#160;seed.&#160;The&#160;design&#160;challenge&#160;here&#160;is&#160;how&#160;to&#160;make&#160;this&#160;happen&#160;while&#160;conserv-<br/>ing&#160;the&#160;proof’s&#160;correctness&#160;guarantees.&#160;For&#160;this,&#160;we&#160;ideally&#160;want&#160;to&#160;leverage&#160;a<br/>property&#160;speciﬁc&#160;to&#160;our&#160;predicate&#160;in&#160;order&#160;to&#160;‘mask’&#160;the&#160;computations&#160;and&#160;treat<br/>the&#160;proving&#160;system&#160;as&#160;a&#160;black&#160;box.&#160;We&#160;leverage&#160;the&#160;Pedersen&#160;hash&#160;function&#160;to<br/>transform&#160;our&#160;predicate&#160;<i>Π&#160;</i>to&#160;an&#160;amortization&#160;resistant&#160;version&#160;in&#160;Sect.&#160;<a href="978-3-031-47751-5_2s.html#8">4.</a><br/>
+Given&#160;some&#160;nonce&#160;<i>n</i>,&#160;the&#160;prover&#160;might&#160;only&#160;change&#160;a&#160;part&#160;of&#160;the&#160;input&#160;in&#160;order<br/>
+to&#160;(re)check&#160;diﬃculty.&#160;This&#160;is&#160;an&#160;issue&#160;if&#160;the&#160;same&#160;nonce&#160;can&#160;be&#160;used&#160;with&#160;many<br/>inputs&#160;(in&#160;our&#160;case,&#160;transactions),&#160;as&#160;an&#160;adversarial&#160;prover&#160;would&#160;compute&#160;a&#160;proof<br/>and&#160;then&#160;only&#160;switch&#160;out&#160;a&#160;single&#160;transaction&#160;(or&#160;bit!),&#160;rechecking&#160;diﬃculty&#160;with<br/>no&#160;expensive&#160;recomputation.&#160;Deﬁne&#160;<i>ρ&#160;</i>:=&#160;PRF<i>n</i>(state)&#160;that&#160;commits&#160;to&#160;state<br/>where&#160;PRF&#160;a&#160;pseudorandom&#160;function&#160;family.&#160;We&#160;need&#160;to&#160;commit&#160;to&#160;all&#160;block<br/>
+<hr/>
+<a name=7></a>24<br/>
+A.&#160;Kattis&#160;and&#160;J.&#160;Bonneau<br/>
+transactions,&#160;ensuring&#160;that&#160;changing&#160;one&#160;transaction&#160;changes&#160;<i>ρ</i>.&#160;This&#160;can&#160;be<br/>expensive&#160;if&#160;we&#160;exploit&#160;no&#160;information&#160;about&#160;the&#160;underlying&#160;predicate,&#160;since<br/>PRF&#160;would&#160;have&#160;to&#160;commit&#160;to&#160;every&#160;single&#160;original&#160;variable.<br/>
+Fortunately,&#160;for&#160;our&#160;predicate&#160;the&#160;input&#160;to&#160;PRF&#160;is&#160;small:&#160;we&#160;use&#160;<i>ρ&#160;</i>=&#160;PRF<i>n</i>(<i>rt</i>)<br/>
+where&#160;<i>rt&#160;</i>the&#160;root&#160;of&#160;the&#160;new&#160;state&#160;and&#160;<i>n&#160;</i>the&#160;given&#160;nonce.&#160;Since&#160;this&#160;input<br/>will&#160;anyways&#160;be&#160;computed&#160;as&#160;part&#160;of&#160;the&#160;protocol,&#160;we&#160;don’t&#160;actually&#160;suﬀer&#160;any<br/>overhead&#160;apart&#160;from&#160;having&#160;to&#160;verify&#160;the&#160;above&#160;computation.&#160;Note&#160;that&#160;this&#160;is<br/>actually&#160;<i>constant&#160;</i>in&#160;predicate&#160;size.&#160;In&#160;the&#160;GGM,&#160;we&#160;can&#160;replace&#160;the&#160;PRF&#160;by&#160;a<br/>collision&#160;resistant&#160;hash&#160;function&#160;CRT&#160;instead,&#160;since&#160;the&#160;randomness&#160;of&#160;the&#160;group<br/>encoding&#160;is&#160;suﬃcient&#160;for&#160;the&#160;witness&#160;elements&#160;to&#160;look&#160;random&#160;to&#160;an&#160;adversary.<br/>
+We&#160;can&#160;force&#160;unique&#160;changes&#160;to&#160;the&#160;Merkle&#160;path&#160;updating&#160;the&#160;account&#160;if&#160;we<br/>
+require&#160;<i>n&#160;</i>to&#160;be&#160;part&#160;of&#160;the&#160;leaf:&#160;since&#160;a&#160;change&#160;in&#160;the&#160;block&#160;(or&#160;nonce)&#160;would<br/>lead&#160;to&#160;a&#160;new&#160;<i>n</i>,&#160;all&#160;update&#160;paths&#160;need&#160;to&#160;be&#160;recomputed&#160;if&#160;any&#160;transaction<br/>is&#160;changed.&#160;However,&#160;we&#160;also&#160;need&#160;to&#160;enforce&#160;change&#160;to&#160;the&#160;<i>old&#160;</i>Merkle&#160;path<br/>checking&#160;account&#160;existence.&#160;This&#160;technique&#160;is&#160;thus&#160;not&#160;ideal,&#160;since&#160;these&#160;paths<br/>do&#160;not&#160;depend&#160;on&#160;the&#160;current&#160;nonce&#160;(or&#160;state)&#160;at&#160;all,&#160;meaning&#160;that&#160;around&#160;half<br/>our&#160;variables&#160;will&#160;remain&#160;the&#160;same,&#160;giving&#160;<i>&#160;≈&#160;</i>1<i>/</i>2.<br/>
+To&#160;get&#160;around&#160;this,&#160;we&#160;opt&#160;for&#160;a&#160;diﬀerent&#160;approach.&#160;We&#160;‘mask’&#160;the&#160;input<br/>
+variables&#160;to&#160;<i>H&#160;</i>by&#160;interaction&#160;with&#160;<i>ρ&#160;</i>(which&#160;also&#160;commits&#160;to&#160;<i>n</i>)&#160;and&#160;transform&#160;the<br/>constraints&#160;of&#160;the&#160;hash&#160;function&#160;subcircuit&#160;<i>CH&#160;</i>into&#160;a&#160;new&#160;circuit&#160;that&#160;retains&#160;the<br/>original&#160;Proof&#160;of&#160;Knowledge&#160;(PoK)&#160;guarantees&#160;by&#160;verifying&#160;the&#160;same&#160;underlying<br/>computation.&#160;By&#160;the&#160;unpredictability&#160;of&#160;<i>ρ&#160;</i>and&#160;randomness&#160;of&#160;<i>n</i>,&#160;we&#160;hope&#160;to<br/>achieve&#160;upper&#160;bounds&#160;for&#160;amortization&#160;resistance&#160;based&#160;on&#160;the&#160;security&#160;of&#160;the<br/>CRT.&#160;In&#160;this&#160;case,&#160;the&#160;sampler&#160;would&#160;need&#160;to&#160;provide&#160;valid&#160;witnesses&#160;for&#160;<i>CH&#160;</i>of<br/>the&#160;form&#160;<i>w&#160;</i>=&#160;(<i>w</i>1<i>,&#160;...,&#160;wm</i>)&#160;whose&#160;encodings&#160;are&#160;indistinguishable&#160;from&#160;random,<br/>given&#160;<i>n&#160;</i>sampled&#160;uniformly&#160;randomly&#160;and&#160;access&#160;to&#160;a&#160;multiplication&#160;oracle&#160;<i>O&#160;</i>for<br/>a&#160;randomized&#160;encoding&#160;of&#160;some&#160;G.<br/>
+<b>3</b><br/>
+<b>Implications&#160;for&#160;Nakamoto&#160;Consensus</b><br/>
+PoNW&#160;introduces&#160;two&#160;novel&#160;eﬀects&#160;on&#160;the&#160;consensus&#160;protocol&#160;due&#160;to&#160;the&#160;fact<br/>that&#160;checking&#160;a&#160;nonce&#160;(on&#160;the&#160;order&#160;of&#160;seconds&#160;to&#160;minutes)&#160;can&#160;now&#160;take&#160;a<br/>signiﬁcant&#160;fraction&#160;of&#160;the&#160;average&#160;block&#160;frequency&#160;(ten&#160;minutes&#160;in&#160;the&#160;case&#160;of<br/>Bitcoin),&#160;whereas&#160;it&#160;was&#160;negligible&#160;for&#160;traditional&#160;PoW&#160;puzzles.&#160;We&#160;can&#160;evaluate<br/>these&#160;eﬀects&#160;assuming&#160;a&#160;single&#160;puzzle&#160;solution&#160;takes&#160;time&#160;<i>τ&#160;</i>to&#160;check&#160;(with&#160;the<br/>mean&#160;block&#160;arrival&#160;time&#160;normalized&#160;to&#160;1).&#160;When&#160;<i>τ&#160;</i>becomes&#160;a&#160;signiﬁcant&#160;fraction<br/>of&#160;the&#160;average&#160;block&#160;generation&#160;time&#160;(<i>τ&#160;∼&#160;</i>1),&#160;miners&#160;face&#160;a&#160;loss&#160;of&#160;eﬃciency&#160;as<br/>they&#160;will&#160;often&#160;be&#160;forced&#160;to&#160;discard&#160;a&#160;partially-checked&#160;puzzle&#160;solution&#160;when&#160;a<br/>block&#160;is&#160;broadcast&#160;while&#160;checking&#160;previous&#160;solutions.&#160;We&#160;prove&#160;the&#160;scale&#160;of&#160;this<br/>eﬃciency&#160;loss&#160;in&#160;a&#160;short&#160;theorem:<br/>
+<b>Theorem&#160;2.&#160;</b><i>A&#160;miner&#160;in&#160;a&#160;PoW&#160;protocol&#160;with&#160;puzzle&#160;checking&#160;time&#160;τ&#160;will&#160;discard<br/>a&#160;fraction&#160;</i>1&#160;<i>−&#160;τ</i><br/>
+<i>of&#160;their&#160;work&#160;due&#160;to&#160;newly&#160;broadcast&#160;solutions.</i><br/>
+<i>eτ&#160;−</i>1<br/>
+Note&#160;that&#160;as&#160;<i>τ&#160;→&#160;</i>0&#160;(fast&#160;puzzle&#160;checking&#160;time&#160;relative&#160;to&#160;block&#160;interval),<br/>
+the&#160;fraction&#160;of&#160;wasted&#160;work&#160;drops&#160;to&#160;0.&#160;This&#160;is&#160;why&#160;this&#160;eﬀect&#160;has&#160;never&#160;been<br/>
+<hr/>
+<a name=8></a>Proof&#160;of&#160;Necessary&#160;Work<br/>
+25<br/>
+considered&#160;in&#160;prior&#160;work.&#160;In&#160;the&#160;reverse&#160;direction,&#160;as&#160;<i>τ&#160;→&#160;∞&#160;</i>the&#160;fraction&#160;of<br/>wasted&#160;work&#160;approaches&#160;1.&#160;For&#160;<i>τ&#160;</i>=&#160;1&#160;(solutions&#160;take&#160;as&#160;long&#160;to&#160;check&#160;as&#160;the<br/>mean&#160;block&#160;interval),&#160;the&#160;fraction&#160;of&#160;wasted&#160;work&#160;is&#160;<i>e−</i>2&#160;<i>≈&#160;</i>0<i>.</i>42,&#160;suggesting<br/>
+<i>e−</i>1<br/>
+that&#160;we&#160;should&#160;aim&#160;to&#160;keep&#160;the&#160;time&#160;(even&#160;for&#160;slow&#160;miners)&#160;to&#160;get&#160;a&#160;solution<br/>signiﬁcantly&#160;shorter&#160;than&#160;the&#160;mean&#160;block&#160;time.<br/>
+Slow&#160;puzzle&#160;checking&#160;time&#160;also&#160;introduces&#160;a&#160;concern&#160;that&#160;miners&#160;might&#160;refuse<br/>
+to&#160;stop&#160;working&#160;on&#160;a&#160;partially-checked&#160;solution&#160;(and&#160;hence&#160;discard&#160;partial&#160;work)<br/>even&#160;if&#160;a&#160;valid&#160;solution&#160;is&#160;found&#160;and&#160;broadcast.&#160;These&#160;<i>stubborn&#160;</i>miners&#160;might<br/>cause&#160;collisions&#160;in&#160;the&#160;blockchain&#160;(two&#160;blocks&#160;being&#160;found&#160;at&#160;the&#160;same&#160;height&#160;in<br/>the&#160;chain).&#160;We&#160;can&#160;analyse&#160;a&#160;worst-case&#160;scenario&#160;in&#160;which&#160;all&#160;miners&#160;are&#160;syn-<br/>chronized&#160;with&#160;identical&#160;proving&#160;time,&#160;in&#160;eﬀect&#160;making&#160;all&#160;miners&#160;stubborn&#160;and<br/>maximizing&#160;the&#160;probability&#160;of&#160;simultaneous&#160;solutions.&#160;If&#160;miners&#160;aren’t&#160;synchro-<br/>nized,&#160;they&#160;may&#160;opt&#160;to&#160;ﬁnish&#160;their&#160;current&#160;eﬀort&#160;after&#160;a&#160;block&#160;is&#160;found,&#160;but&#160;even<br/>if&#160;all&#160;miners&#160;do&#160;so&#160;this&#160;reduces&#160;to&#160;the&#160;above&#160;case&#160;where&#160;all&#160;miners&#160;ﬁnish&#160;checking<br/>a&#160;solution&#160;simultaneously.&#160;We&#160;call&#160;each&#160;synchronized&#160;period&#160;in&#160;which&#160;all&#160;miners<br/>check&#160;a&#160;solution&#160;a&#160;<i>round</i>.<br/>
+<b>Theorem&#160;3.&#160;</b><i>The&#160;expected&#160;number&#160;of&#160;solutions&#160;in&#160;a&#160;synchronized&#160;mining&#160;round<br/>is&#160;deﬁned&#160;by&#160;a&#160;Poisson&#160;distribution&#160;with&#160;λ&#160;</i>=&#160;<i>τ&#160;.&#160;The&#160;proportion&#160;of&#160;rounds&#160;with<br/>multiple&#160;solutions&#160;(of&#160;rounds&#160;with&#160;any&#160;solution)&#160;is&#160;upper&#160;bounded&#160;by&#160;τ&#160;/</i>2<i>.</i><br/>
+By&#160;Theorem&#160;<a href="978-3-031-47751-5_2s.html#8">3,&#160;</a>our&#160;prototype&#160;unoptimized&#160;100&#160;s&#160;proving&#160;time&#160;(and&#160;10&#160;min&#160;block<br/>time)&#160;leads&#160;to&#160;less&#160;than&#160;1&#160;worst&#160;case&#160;collisions.<br/>
+12<br/>
+<b>4</b><br/>
+<b>Design&#160;and&#160;Instantiation</b><br/>
+We&#160;prototype&#160;our&#160;system&#160;using&#160;libsnark&#160;<a href="978-3-031-47751-5_2s.html#18">[31],&#160;</a>a&#160;C++&#160;library&#160;implementing&#160;the<br/>IVC&#160;system&#160;in&#160;<a href="978-3-031-47751-5_2s.html#17">[4</a>]&#160;using&#160;the&#160;construction&#160;from&#160;<a href="978-3-031-47751-5_2s.html#18">[27</a>].&#160;This&#160;is&#160;done&#160;using&#160;Succinct<br/>Non-Interactive&#160;Arguments&#160;of&#160;Knowledge&#160;(SNARKs)&#160;<a href="978-3-031-47751-5_2s.html#17">[3</a>],&#160;non-interactive&#160;proofs<br/>of&#160;knowledge&#160;with&#160;the&#160;additional&#160;property&#160;of&#160;<i>succinctness</i>:&#160;producing&#160;constant-<br/>sized&#160;proofs&#160;that&#160;can&#160;be&#160;instantly&#160;veriﬁed.&#160;We&#160;can&#160;equivalently&#160;consider&#160;<i>ΠS&#160;</i>as<br/>an&#160;arithmetic&#160;circuit&#160;<i>CΠ</i>,&#160;evaluating&#160;to&#160;1&#160;on&#160;some&#160;input&#160;<i>Bi&#160;</i>if&#160;and&#160;only&#160;if&#160;<i>Bi&#160;</i>is<br/>a&#160;valid&#160;commitment&#160;to&#160;the&#160;output&#160;of&#160;UpdateState&#160;given&#160;some&#160;transaction&#160;set&#160;<b>t<br/></b>and&#160;<i>Si−</i>1.&#160;In&#160;our&#160;implementation,&#160;<i>CΠ&#160;</i>is&#160;a&#160;QAP.&#160;Since&#160;this&#160;construction&#160;depends<br/>on&#160;SNARKs&#160;over&#160;pairs&#160;of&#160;elliptic&#160;curves&#160;that&#160;form&#160;<i>IVC-friendly&#160;cycles</i>,&#160;we&#160;use<br/>the&#160;same&#160;pair&#160;of&#160;non-supersingular&#160;curves&#160;of&#160;prime&#160;order&#160;as&#160;<a href="978-3-031-47751-5_2s.html#17">[4</a>]&#160;with&#160;80&#160;bits&#160;of<br/>security&#160;and&#160;ﬁeld&#160;size&#160;log&#160;<i>p&#160;≈&#160;</i>298.<br/>
+A&#160;tree&#160;depth&#160;of&#160;32&#160;for&#160;our&#160;implementation&#160;allows&#160;for&#160;4<i>.</i>2&#160;billion&#160;accounts.&#160;We<br/>
+compare&#160;this&#160;to&#160;32&#160;million&#160;unique&#160;used&#160;wallets&#160;on&#160;the&#160;Bitcoin&#160;blockchain&#160;after<br/>10&#160;years&#160;of&#160;operation.&#160;This&#160;requires&#160;32&#160;<i>·</i>4&#160;=&#160;128&#160;hash&#160;checks&#160;for&#160;each&#160;transaction.<br/>We&#160;use&#160;the&#160;circuits&#160;in&#160;libsnark&#160;to&#160;verify&#160;such&#160;proofs&#160;of&#160;inclusion&#160;and&#160;modiﬁcation.<br/>
+<br/>
+We&#160;modify&#160;the&#160;Pedersen&#160;hash&#160;<a href="978-3-031-47751-5_2s.html#17">[13]&#160;</a>to&#160;compute<br/>
+<i>D</i><br/>
+<i>G</i>1<i>−</i>2<i>xi&#160;</i>where&#160;<i>{x</i><br/>
+is&#160;the<br/>
+<i>i</i>=1<br/>
+<i>i</i><br/>
+<i>i}D</i><br/>
+<i>i</i>=1<br/>
+bit&#160;representation&#160;of&#160;the&#160;input&#160;<i>x&#160;</i>and&#160;<i>{Gi}D&#160;</i>is&#160;a&#160;set&#160;of&#160;primitive&#160;roots&#160;for&#160;an<br/>
+<i>i</i>=1<br/>
+elliptic&#160;curve&#160;group&#160;<i>E</i>(F<i>p</i>).&#160;We&#160;use&#160;Schnorr&#160;signatures&#160;<a href="978-3-031-47751-5_2s.html#18">[30]&#160;</a>over&#160;the&#160;same&#160;elliptic<br/>curve&#160;(EC),&#160;based&#160;on&#160;the&#160;hardness&#160;of&#160;DLP.<br/>
+<hr/>
+<a name=9></a>26<br/>
+A.&#160;Kattis&#160;and&#160;J.&#160;Bonneau<br/>
+In&#160;addition&#160;to&#160;some&#160;input&#160;<i>x&#160;</i>of&#160;length&#160;<i>n&#160;</i>bits,&#160;our&#160;evaluation&#160;requires&#160;a&#160;pseu-<br/>
+dorandom&#160;seed&#160;<i>ρ&#160;∈&#160;{</i>0<i>,&#160;</i>1<i>}n</i>.&#160;Consider&#160;the&#160;following&#160;modiﬁcation,&#160;which&#160;can&#160;be<br/>thought&#160;of&#160;as&#160;masking&#160;the&#160;underlying&#160;evaluation&#160;by&#160;using&#160;two&#160;sets&#160;of&#160;input&#160;vari-<br/>ables:&#160;<i>HG</i>(<i>ρ</i>)2&#160;<i>·&#160;HH</i>(<i>ρ</i>)&#160;and&#160;<i>xi&#160;</i>for&#160;<i>i&#160;∈&#160;</i>[<i>n</i>],&#160;where&#160;<i>HG</i>(<i>·</i>)&#160;the&#160;evaluation&#160;of&#160;the<br/>
+<br/>
+Pedersen&#160;function&#160;<i>H</i><br/>
+<i>n</i><br/>
+<i>G</i>(<i>x</i>)&#160;=<br/>
+<i>G</i>1<i>−</i>2<i>xi&#160;</i>.<br/>
+<i>i</i>=1<br/>
+<i>i</i><br/>
+The&#160;variable&#160;<i>h</i>0&#160;=&#160;<i>HG</i>(<i>ρ</i>)2&#160;<i>·&#160;HH</i>(<i>ρ</i>)&#160;forms&#160;the&#160;‘starting&#160;point’&#160;of&#160;the&#160;eval-<br/>
+uation.&#160;In&#160;the&#160;beginning,&#160;the&#160;prover&#160;will&#160;have&#160;access&#160;to&#160;generator&#160;constants<br/><i>{Hi,&#160;H−</i>1<i>,&#160;G−</i>2<i>H−</i>1<i>,&#160;G</i>2<i>H</i><br/>
+<i>i</i><br/>
+<i>i</i><br/>
+<i>i</i><br/>
+<i>i</i><br/>
+<i>i}&#160;</i>for&#160;the&#160;speciﬁc&#160;instance&#160;of&#160;the&#160;problem.&#160;It&#160;would<br/>
+then&#160;perform&#160;a&#160;2-bit&#160;lookup&#160;based&#160;on&#160;<i>xi&#160;</i>and&#160;<i>ρi</i>,&#160;multiplying&#160;the&#160;intermediate<br/>variable&#160;<i>ci&#160;</i>by&#160;one&#160;of&#160;the&#160;above.&#160;By&#160;carefully&#160;choosing&#160;these&#160;<i>qi</i>,&#160;we&#160;can&#160;design<br/>the&#160;circuit&#160;in&#160;such&#160;a&#160;way&#160;that&#160;unpredictability&#160;based&#160;on&#160;the&#160;seed&#160;is&#160;retained&#160;by<br/>all&#160;intermediate&#160;variables&#160;except&#160;the&#160;output&#160;<i>y</i>,&#160;which&#160;we&#160;ensure&#160;equals&#160;<i>HG</i>(<i>x</i>).<br/>
+<b>Algorithm&#160;1.&#160;</b>MaskedPedersen<br/>
+<b>Require:&#160;</b><i>x,&#160;ρ&#160;∈&#160;{</i>0<i>,&#160;</i>1<i>}n,&#160;G,&#160;H&#160;∈&#160;</i>G<i>n<br/></i><b>Ensure:&#160;</b><i>y&#160;∈&#160;</i>G<br/>
+1:&#160;<b>procedure&#160;</b>CacheGenerators(<i>ρ,&#160;G,&#160;H</i>)<br/>2:<br/>
+Parse&#160;<i>{ρi}ni</i>=1&#160;<i>←&#160;ρ</i><br/>
+3:<br/>
+Compute&#160;<i>h&#160;←&#160;H</i>(<i>ρ,&#160;G</i>),&#160;<i>h</i>2&#160;<i>←&#160;H</i>(<i>ρ,&#160;H</i>),&#160;<i>h</i>0&#160;=&#160;<i>h</i>2&#160;<i>·&#160;h</i>2<br/>
+4:<br/>
+<b>return&#160;</b><i>h</i>0<i>,&#160;h</i><br/>
+5:&#160;<b>end&#160;procedure<br/></b>6:&#160;<b>procedure&#160;</b>MaskedHash(<i>x,&#160;ρ,&#160;h</i>0<i>,&#160;h</i>)<br/>7:<br/>
+Parse&#160;<i>{xi}ni</i>=1&#160;<i>←&#160;x</i>,&#160;<i>{ρi}ni</i>=1&#160;<i>←&#160;ρ</i><br/>
+8:<br/>
+Deﬁne&#160;<i>q&#160;</i>=&#160;<i>{qi}ni</i>=1<i>,&#160;c&#160;</i>=&#160;<i>{ci}ni</i>=0&#160;and&#160;set&#160;<i>c</i>0&#160;=&#160;<i>h</i>0<br/>
+9:<br/>
+<b>for&#160;</b><i>i&#160;≤&#160;n&#160;</i><b>do</b><br/>
+10:<br/>
+<b>if&#160;</b><i>ρi&#160;</i>=&#160;0<i>,&#160;xi&#160;</i>=&#160;0&#160;<b>then&#160;</b><i>qi&#160;</i>=&#160;<i>H−</i>1<br/>
+<i>i</i><br/>
+11:<br/>
+<b>else&#160;if&#160;</b><i>ρi&#160;</i>=&#160;0<i>,&#160;xi&#160;</i>=&#160;1&#160;<b>then&#160;</b><i>qi&#160;</i>=&#160;<i>G−</i>2<br/>
+<i>i</i><br/>
+<i>·&#160;H−</i>1<br/>
+<i>i</i><br/>
+12:<br/>
+<b>else&#160;if&#160;</b><i>ρi&#160;</i>=&#160;1<i>,&#160;xi&#160;</i>=&#160;0&#160;<b>then&#160;</b><i>qi&#160;</i>=&#160;<i>G</i>2<i>i&#160;·&#160;Hi</i><br/>
+13:<br/>
+<b>else&#160;if&#160;</b><i>ρi&#160;</i>=&#160;1<i>,&#160;xi&#160;</i>=&#160;1&#160;<b>then&#160;</b><i>qi&#160;</i>=&#160;<i>Hi</i><br/>
+14:<br/>
+<b>end&#160;if</b><br/>
+15:<br/>
+<i>ci&#160;</i>=&#160;<i>ci−</i>1&#160;<i>·&#160;qi</i><br/>
+16:<br/>
+<b>end&#160;for</b><br/>
+17:<br/>
+<i>y&#160;</i>=&#160;<i>cn&#160;·&#160;h−</i>1<br/>
+18:<br/>
+<b>return&#160;</b><i>y</i><br/>
+19:&#160;<b>end&#160;procedure</b><br/>
+Correctness&#160;follows&#160;from&#160;the&#160;following&#160;observation:&#160;at&#160;step&#160;0,&#160;the&#160;vari-<br/>
+<br/>
+able&#160;<i>c</i><br/>
+<i>n</i><br/>
+0&#160;=&#160;<i>HH&#160;</i>(<i>ρ</i>)&#160;<i>·&#160;HG</i>(<i>ρ</i>)2&#160;=&#160;<i>HG</i>(<i>ρ</i>)&#160;<i>·</i><br/>
+<i>G</i>1<i>−</i>2<i>ρi&#160;·&#160;H</i>1<i>−</i>2<i>ρi&#160;</i>is&#160;initialized&#160;as<br/>
+<i>i</i>=1<br/>
+<i>i</i><br/>
+<i>i</i><br/>
+the&#160;hash&#160;of&#160;the&#160;seed.&#160;For&#160;all&#160;intermediate&#160;steps&#160;<i>j&#160;&lt;&#160;n</i>,&#160;we&#160;have&#160;that&#160;<i>cj&#160;</i>=<br/>
+<br/>
+&#160;<br/>
+<br/>
+<i>H</i><br/>
+<i>j</i><br/>
+<i>n</i><br/>
+<i>G</i>(<i>ρ</i>)&#160;<i>·</i><br/>
+<i>G</i>1<i>−</i>2<i>xi</i><br/>
+<i>·</i><br/>
+<i>G</i>1<i>−</i>2<i>ρi&#160;H</i>1<i>−</i>2<i>ρi&#160;</i>.&#160;Finally,&#160;after&#160;the&#160;<i>n</i>-th&#160;bit<br/>
+<i>i</i>=1<br/>
+<i>i</i><br/>
+<i>i</i>=<i>j</i>+1<br/>
+<i>i</i><br/>
+<i>i</i><br/>
+has&#160;been&#160;processed&#160;the&#160;ﬁnal&#160;intermediate&#160;variable&#160;<i>cn&#160;</i>is&#160;equal&#160;to&#160;the&#160;Peder-<br/>sen&#160;hash&#160;of&#160;the&#160;original&#160;input&#160;<i>x&#160;</i>multiplied&#160;by&#160;(the&#160;unpredictable)&#160;<i>HG</i>(<i>ρ</i>).&#160;By<br/>multiplying&#160;with&#160;<i>HG</i>(<i>ρ</i>)<i>−</i>1,&#160;we&#160;get&#160;<i>HG</i>(<i>x</i>).&#160;This&#160;follows&#160;easily&#160;from&#160;the&#160;fact&#160;that<br/>at&#160;every&#160;step&#160;we&#160;are&#160;performing&#160;the&#160;following&#160;operation:&#160;<i>ci&#160;</i>=&#160;<i>ci−</i>1&#160;<i>·</i>(<i>Hi&#160;·</i><b>1</b>[<i>ρi,&#160;xi&#160;</i>=<br/>1]&#160;+&#160;<i>H−</i>1&#160;<i>·&#160;</i><b>1</b>[<i>ρ</i><br/>
+<i>H−</i>1&#160;<i>·&#160;</i><b>1</b>[<i>ρ</i><br/>
+<i>H</i><br/>
+<i>i</i><br/>
+<i>i,&#160;xi&#160;</i>=&#160;0]&#160;+&#160;<i>G−</i>2<br/>
+<i>i</i><br/>
+<i>i</i><br/>
+<i>i&#160;</i>=&#160;0<i>,&#160;xi&#160;</i>=&#160;1]&#160;+&#160;<i>G</i>2<br/>
+<i>i</i><br/>
+<i>i&#160;·&#160;</i><b>1</b>[<i>ρi&#160;</i>=&#160;1<i>,&#160;xi&#160;</i>=&#160;0]).<br/>
+<hr/>
+<a name=10></a>Proof&#160;of&#160;Necessary&#160;Work<br/>
+27<br/>
+It&#160;can&#160;be&#160;quickly&#160;checked&#160;that&#160;this&#160;computation&#160;ensures&#160;the&#160;previous&#160;recursive<br/>property&#160;when&#160;initialized&#160;with&#160;<i>c</i>0&#160;=&#160;<i>HH</i>(<i>ρ</i>)&#160;<i>·&#160;HG</i>(<i>ρ</i>)2.&#160;By&#160;induction,&#160;this&#160;implies<br/>that&#160;after&#160;the&#160;<i>n</i>-th&#160;bit,&#160;only&#160;<i>HG</i>(<i>ρ</i>)&#160;and&#160;the&#160;exponentiations&#160;due&#160;to&#160;the&#160;bits&#160;of&#160;<i>x</i><br/>
+<br/>
+remain&#160;in&#160;the&#160;output&#160;variable&#160;i.e.&#160;<i>c</i><br/>
+<i>n</i><br/>
+<i>n&#160;</i>=&#160;<i>HG</i>(<i>ρ</i>)&#160;<i>·</i><br/>
+<i>G</i>1<i>−</i>2<i>xi&#160;</i>.<br/>
+<i>i</i>=1<br/>
+<i>i</i><br/>
+Where&#160;we&#160;know&#160;that&#160;the&#160;variable&#160;<i>ai&#160;</i>has&#160;small&#160;support&#160;(when,&#160;for&#160;example,<br/>
+it&#160;is&#160;boolean&#160;<i>ai&#160;∈&#160;{</i>0<i>,&#160;</i>1<i>}</i>),&#160;the&#160;prover&#160;can&#160;always&#160;precompute&#160;once&#160;and&#160;use&#160;the<br/>same&#160;answers&#160;without&#160;performing&#160;exponentiations.&#160;This&#160;is&#160;not&#160;a&#160;problem&#160;since&#160;all<br/>miners&#160;would&#160;know&#160;what&#160;the&#160;precomputed&#160;answers&#160;are&#160;from&#160;the&#160;very&#160;beginning<br/>and&#160;can&#160;incorporate&#160;them&#160;with&#160;a&#160;small&#160;memory&#160;cost.&#160;The&#160;problem&#160;with&#160;creating<br/>variables&#160;that&#160;become&#160;more&#160;and&#160;more&#160;‘deterministic’&#160;is&#160;that&#160;at&#160;some&#160;point&#160;their<br/>support&#160;becomes&#160;so&#160;small&#160;that&#160;an&#160;adversary&#160;will&#160;be&#160;able&#160;to&#160;precompute&#160;some<br/>oracle&#160;queries.&#160;However,&#160;since&#160;the&#160;end&#160;value&#160;of&#160;the&#160;sequence&#160;of&#160;variables&#160;<i>{ci}ni</i>=1<br/>
+is&#160;<i>h&#160;·&#160;HG</i>(<i>x</i>)&#160;which&#160;is&#160;also&#160;unpredictable&#160;due&#160;to&#160;<i>h</i>,&#160;it&#160;is&#160;not&#160;feasible&#160;to&#160;predict&#160;any<br/>index&#160;<i>i&#160;∈&#160;</i>[<i>n</i>]&#160;without&#160;violating&#160;the&#160;security&#160;of&#160;the&#160;operation&#160;<i>HG</i>(<i>ρ</i>)&#160;=&#160;<i>h&#160;</i>even<br/>if&#160;<i>HG</i>(<i>x</i>)&#160;is&#160;previously&#160;known.&#160;Note&#160;that&#160;<i>h&#160;</i>can&#160;be&#160;‘oﬀset’&#160;by&#160;a&#160;random&#160;element<br/>
+<i></i><br/>
+<i>I&#160;</i>as&#160;<i>h&#160;</i>=&#160;<i>h&#160;</i>+&#160;<i>I</i><br/>
+<i>i</i><br/>
+<i>i&#160;</i>for&#160;each&#160;path&#160;<i>i&#160;∈&#160;</i>[<i>N&#160;</i>].&#160;This&#160;provides&#160;independence&#160;between<br/>
+authentication&#160;paths&#160;using&#160;the&#160;same&#160;nonce.<br/>
+We&#160;must&#160;restrict&#160;the&#160;proof&#160;systems&#160;used&#160;because&#160;certain&#160;constructions&#160;are<br/>
+inherently&#160;insecure:&#160;Groth16&#160;<a href="978-3-031-47751-5_2s.html#17">[17]&#160;</a>can&#160;easily&#160;be&#160;re-randomized,&#160;for&#160;example,&#160;with<br/>only&#160;a&#160;few&#160;additional&#160;group&#160;multiplications.&#160;We&#160;thus&#160;need&#160;a&#160;notion&#160;akin&#160;to&#160;non-<br/>malleability,&#160;ensuring&#160;that&#160;we&#160;cannot&#160;construct&#160;proofs&#160;given&#160;access&#160;to&#160;previous<br/>valid&#160;proofs.&#160;To&#160;achieve&#160;this,&#160;we&#160;show&#160;that&#160;Pinocchio&#160;<a href="978-3-031-47751-5_2s.html#18">[27]&#160;</a>satisﬁes&#160;<i>unique&#160;witness<br/>extractability</i>.&#160;This&#160;property&#160;requires&#160;the&#160;proof&#160;system&#160;to&#160;output&#160;proofs&#160;with<br/>unique&#160;encodings&#160;for&#160;each&#160;distinct&#160;statement-witness&#160;pair,&#160;and&#160;hence&#160;rules&#160;out<br/>malleability.<br/>
+<b>Deﬁnition&#160;4.&#160;</b><i>Let&#160;</i>NIP&#160;:=&#160;(Setup<i>,&#160;</i>Prove<i>,&#160;</i>Verify<i>,&#160;</i>Simulate)&#160;<i>denote&#160;a&#160;NIP&#160;for&#160;rela-<br/>tion&#160;R.&#160;Deﬁne&#160;the&#160;PPT&#160;algorithm&#160;A&#160;with&#160;extractor&#160;χA,&#160;</i><b>Adv</b><i>uwe</i><br/>
+<i>BG</i><br/>
+(<i>λ</i>)&#160;=<br/>
+<i>,R,A,χA</i><br/>
+Pr[<i>Guwe</i><br/>
+<i>BG</i><br/>
+(<i>λ</i>)]<i>,&#160;and&#160;Guwe</i><br/>
+(<i>λ</i>)&#160;<i>as:</i><br/>
+<i>,R,A,χA</i><br/>
+<i>BG,R,A,χA</i><br/>
+Main&#160;<i>Guwe</i><br/>
+<i>BG</i><br/>
+(<i>λ</i>)<br/>
+<i>,R,A,χA</i><br/>
+(<i>p,&#160;</i>G1<i>,&#160;</i>G2<i>,&#160;</i>G<i>T&#160;,&#160;e,&#160;g</i>)&#160;<i>←&#160;BG</i>(1<i>λ</i>)<br/>(<b>crs</b><i>,&#160;τ&#160;</i>)&#160;<i>←&#160;</i>Setup(<i>R</i>)<br/>(<i>φ,&#160;π</i>1<i>,&#160;π</i>2)&#160;<i>←&#160;AO</i>(<b>crs</b>)<br/>(<i>w</i>1<i>,&#160;w</i>2)&#160;<i>←&#160;χA</i>(tr<i>A</i>)<br/><i>b</i>1&#160;<i>←&#160;</i>(<i>w</i>1&#160;=&#160;<i>w</i>2)&#160;<i>∪&#160;</i>(<i>R</i>(<i>φ,&#160;w</i>1)&#160;<i></i>=&#160;1)&#160;<i>∪&#160;</i>(<i>R</i>(<i>φ,&#160;w</i>2)&#160;<i></i>=&#160;1)<br/><i>b</i>2&#160;<i>←&#160;</i>Verify(<b>crs</b><i>,&#160;φ,&#160;π</i>1)&#160;<i>∩&#160;</i>Verify(<b>crs</b><i>,&#160;φ,&#160;π</i>2)&#160;<i>∩&#160;</i>((<i>φ,&#160;π</i>1)&#160;<i>∈&#160;Q</i>)&#160;<i>∩&#160;</i>((<i>φ,&#160;π</i>1)&#160;<i>∈&#160;Q</i>)&#160;<i>∩&#160;</i>(<i>π</i>1&#160;<i></i>=&#160;<i>π</i>2)<br/>Return&#160;<i>b</i>1&#160;<i>∩&#160;b</i>2<br/>
+<i>O</i>(<i>φ</i>)<br/><i>π&#160;←&#160;</i>Simulate(<b>crs</b><i>,&#160;τ,&#160;φ</i>)<br/><i>Q&#160;</i>=&#160;(<i>φ,&#160;π</i>)&#160;<i>∪&#160;Q<br/></i>Return&#160;<i>π</i><br/>
+NIP&#160;<i>is&#160;unique&#160;witness&#160;extractable&#160;if&#160;∀&#160;A&#160;∃χA&#160;s.t.&#160;</i><b>Adv</b><i>uwe</i><br/>
+<i>BG</i><br/>
+(<i>λ</i>)&#160;<i>∈&#160;negl</i>(<i>λ</i>)<i>.</i><br/>
+<i>,R,A,χA</i><br/>
+<b>Theorem&#160;4.&#160;</b><i>Assume&#160;the&#160;q-PDH,&#160;</i>2<i>q-SDH&#160;and&#160;d-PKE&#160;assumptions&#160;hold&#160;for&#160;q&#160;≥<br/></i>max&#160;(2<i>d&#160;−&#160;</i>1<i>,&#160;d&#160;</i>+&#160;2)<i>.&#160;<a href="978-3-031-47751-5_2s.html#18">[27</a></i><i>]&#160;satisﬁes&#160;unique&#160;witness&#160;extractability.</i><br/>
+<hr/>
+<a name=11></a>28<br/>
+A.&#160;Kattis&#160;and&#160;J.&#160;Bonneau<br/>
+The&#160;ability&#160;to&#160;resample&#160;witnesses&#160;for&#160;a&#160;statement-witness&#160;pair&#160;is&#160;advanta-<br/>
+geous&#160;to&#160;an&#160;adversary,&#160;since&#160;an&#160;‘easy’&#160;witness&#160;could&#160;be&#160;found&#160;by&#160;repeated&#160;sam-<br/>pling.&#160;We&#160;follow&#160;the&#160;deﬁnition&#160;of&#160;2-hard&#160;instances&#160;in&#160;<a href="978-3-031-47751-5_2s.html#17">[12</a>]&#160;and&#160;deﬁne&#160;<i>single&#160;witness<br/>hard&#160;</i>languages,&#160;for&#160;which&#160;it&#160;is&#160;hard&#160;to&#160;ﬁnd&#160;a&#160;new&#160;witness&#160;given&#160;an&#160;existing&#160;one.<br/>
+<b>Deﬁnition&#160;5.&#160;</b><i>Let&#160;RL&#160;be&#160;a&#160;relation,&#160;and&#160;L&#160;</i>=&#160;<i>{φ|∃w&#160;s.t.&#160;RL</i>(<i>φ,&#160;w</i>)&#160;=&#160;1<i>}&#160;an&#160;NP<br/>language.&#160;L&#160;is&#160;a&#160;hard&#160;single-witness&#160;language&#160;if:</i><br/>
+<i>1.&#160;<b>Eﬃcient&#160;Sampling:&#160;</b>There&#160;exists&#160;a&#160;PPT&#160;sampler&#160;</i>S(1<i>λ</i>)&#160;<i>outputting&#160;a</i><br/>
+<i>statement-witness&#160;pair&#160;</i>S<i>x,&#160;</i>S<i>w&#160;with&#160;</i>S<i>x&#160;∈&#160;{</i>0<i>,&#160;</i>1<i>}λ&#160;and&#160;</i>(S<i>x,&#160;</i>S<i>w</i>)&#160;<i>∈&#160;RL.</i><br/>
+<i>2.&#160;<b>Witness&#160;Intractability:&#160;</b>For&#160;every&#160;PPT&#160;A&#160;there&#160;exists&#160;a&#160;negligible&#160;function</i><br/>
+<i>μ</i>(<i>·</i>)&#160;<i>such&#160;that:</i><br/>
+<br/>
+<br/>
+<br/>
+Pr<br/>
+S<i>x</i>(1<i>λ</i>)<i>,&#160;A</i>(S(1<i>λ</i>)<i>,&#160;</i>1<i>λ</i>)&#160;<i>∈&#160;RL,&#160;A</i>(S(1<i>λ</i>)<i>,&#160;</i>1<i>λ</i>)&#160;<i></i>=&#160;S<i>w</i>(1<i>λ</i>)&#160;<i>≤&#160;μ</i>(<i>λ</i>)<i>.</i><br/>
+A&#160;relation&#160;whose&#160;statements&#160;are&#160;outputs&#160;of&#160;a&#160;CRT&#160;hash&#160;function&#160;<i>H&#160;</i>deﬁnes&#160;a&#160;hard<br/>single-witness&#160;language.&#160;We&#160;show&#160;this&#160;for&#160;<i>L</i>(<i>HP&#160;</i>)&#160;=&#160;<i>{φ&#160;</i>:&#160;<i>∃w&#160;</i>s.t.&#160;<i>HG</i><br/>
+<i>P,|w|</i>(<i>w</i>)&#160;=&#160;<i>φ}</i><br/>
+where&#160;<i>HG&#160;</i>a&#160;weakly&#160;collision-resistant&#160;hash&#160;function.<br/>
+<i>P,n</i><br/>
+We&#160;show&#160;that&#160;computing&#160;a&#160;<a href="978-3-031-47751-5_2s.html#18">[27</a>]&#160;proof&#160;for&#160;the&#160;evaluation&#160;of&#160;MaskedHash&#160;(and<br/>
+our&#160;DPS&#160;predicate)&#160;will&#160;take&#160;on&#160;average&#160;a&#160;similar&#160;number&#160;of&#160;queries&#160;as&#160;a&#160;suit-<br/>ably&#160;parametrized&#160;MultiExp&#160;instance.&#160;We&#160;restrict&#160;to&#160;the&#160;case&#160;of&#160;outputs&#160;from&#160;a<br/>sampler&#160;S&#160;which&#160;samples&#160;a&#160;<i>ρ&#160;</i>randomly&#160;and&#160;generates&#160;valid&#160;witnesses.&#160;Since&#160;we<br/>are&#160;working&#160;in&#160;the&#160;GGM,&#160;the&#160;witness&#160;variables&#160;of&#160;the&#160;MaskedHash&#160;instance&#160;have<br/>an&#160;encoding&#160;that&#160;is&#160;indistinguishable&#160;from&#160;random.&#160;Therefore,&#160;the&#160;amortization<br/>bounds&#160;of&#160;Theorem&#160;<a href="978-3-031-47751-5_2s.html#6">1&#160;</a>apply.<br/>
+<b>Theorem&#160;5.&#160;</b><i>There&#160;exists&#160;a&#160;sampler&#160;</i>S&#160;<i>and&#160;QAP&#160;R&#160;evaluating&#160;N&#160;parallel<br/>instances&#160;of&#160;k-bit&#160;inputs&#160;of&#160;</i>MaskedHash&#160;<i>for&#160;which&#160;the&#160;<a href="978-3-031-47751-5_2s.html#18">[27</a></i><i>]&#160;prover&#160;and&#160;the<br/></i>(4<i>N&#160;</i>(<i>k&#160;</i>+&#160;1)<i>,&#160;</i>8<i>N&#160;</i>(<i>k&#160;</i>+&#160;1)&#160;+&#160;2<i>k</i>)<i>-length&#160;MultiExp&#160;problem&#160;of&#160;dimension&#160;</i>10&#160;<i>are&#160;equiv-<br/>alent&#160;up&#160;to&#160;constant&#160;terms&#160;with&#160;respect&#160;to&#160;multiplicative&#160;hardness.</i><br/>
+The&#160;vast&#160;majority&#160;of&#160;the&#160;constraints&#160;and&#160;variables&#160;in&#160;the&#160;predicate&#160;of&#160;the<br/>
+designed&#160;system&#160;are&#160;hash&#160;evaluations,&#160;so&#160;Theorem&#160;<a href="978-3-031-47751-5_2s.html#11">5&#160;</a>can&#160;be&#160;used&#160;to&#160;show&#160;that<br/>there&#160;exists&#160;a&#160;proof&#160;system&#160;verifying&#160;state&#160;transitions&#160;for&#160;the&#160;DPS&#160;with&#160;bounded<br/>amortization-resistance&#160;guarantees.&#160;This&#160;is&#160;because&#160;the&#160;DPS&#160;predicate&#160;spends<br/>the&#160;vast&#160;majority&#160;of&#160;its&#160;time&#160;computing&#160;a&#160;proof&#160;whose&#160;hardness&#160;can&#160;be&#160;bounded<br/>by&#160;Theorem&#160;<a href="978-3-031-47751-5_2s.html#11">5,&#160;</a>since&#160;it&#160;is&#160;a&#160;sequence&#160;of&#160;iterated&#160;Pedersen&#160;hashes&#160;over&#160;a&#160;unique<br/>simulation&#160;extractable&#160;NIP.<br/>
+<b>Corollary&#160;1.&#160;</b><i>There&#160;exists&#160;a&#160;DPS&#160;with&#160;block&#160;size&#160;T&#160;,&#160;state&#160;tree&#160;depth&#160;d,&#160;and&#160;index<br/>size&#160;λ&#160;that&#160;admits&#160;a&#160;Proof&#160;of&#160;Necessary&#160;Work&#160;that&#160;is&#160;-amortization&#160;resistant<br/>w.r.t.&#160;a&#160;multiplication&#160;oracle&#160;and&#160;for&#160;which:</i><br/>
+<i>&#160;</i><br/>
+log&#160;(<i>q</i>)<br/>
+<i>,</i><br/>
+log&#160;(<i>q</i>)&#160;+&#160;log&#160;(<i>dT&#160;λ</i>)&#160;+&#160;log&#160;(<i>λ</i>)<br/>
+<i>where&#160;q&#160;is&#160;memory&#160;size&#160;measured&#160;in&#160;proof&#160;elements.</i><br/>
+<hr/>
+<a name=12></a>Proof&#160;of&#160;Necessary&#160;Work<br/>
+29<br/>
+<b>Table&#160;1.&#160;</b>Prototype&#160;Times&#160;and&#160;Key&#160;Sizes&#160;for&#160;Predicates&#160;verifying&#160;diﬀerent&#160;numbers<br/>of&#160;transactions:&#160;Average&#160;running&#160;times&#160;for&#160;setup&#160;<i>G</i>,&#160;prover&#160;<i>P&#160;</i>and&#160;veriﬁer&#160;<i>V&#160;</i>over&#160;10<br/>iterations&#160;are&#160;shown&#160;alongside&#160;proving/veriﬁcation&#160;key&#160;and&#160;proof&#160;sizes.<br/>
+Txs&#160;Constraints&#160;Generator&#160;Prover<br/>
+Veriﬁer<br/>
+Size<br/>
+#<br/>
+#<br/>
+Avg&#160;(s)<br/>
+Avg&#160;(s)&#160;Avg&#160;(ms)&#160;<i>pk&#160;</i>(GB)&#160;<i>vk&#160;</i>(kB)&#160;<i>π&#160;</i>(B)<br/>
+3<br/>
+3658281<br/>
+53.99<br/>
+24.57<br/>
+16.0<br/>
+0.74<br/>
+0.76<br/>
+373<br/>
+10<br/>
+10071527<br/>
+161.24<br/>
+88.14<br/>
+1.96<br/>
+20<br/>
+19233307<br/>
+268.93<br/>
+185.10<br/>
+3.74<br/>
+30<br/>
+28395087<br/>
+354.83<br/>
+198.61<br/>
+5.61<br/>
+40<br/>
+37556867<br/>
+485.52<br/>
+286.50<br/>
+7.15<br/>
+50<br/>
+46718647<br/>
+570.09<br/>
+358.95<br/>
+9.01<br/>
+We&#160;construct&#160;the&#160;DPS&#160;based&#160;on&#160;the&#160;above&#160;speciﬁcations&#160;and&#160;investigate&#160;its<br/>
+running&#160;time&#160;and&#160;memory&#160;consumption.&#160;Results&#160;are&#160;displayed&#160;in&#160;Table&#160;<a href="978-3-031-47751-5_2s.html#12">1.&#160;</a>Our<br/>benchmark&#160;machine&#160;was&#160;an&#160;Amazon&#160;Web&#160;Services&#160;(AWS)&#160;c5.24xlarge&#160;instance,<br/>with&#160;96&#160;vCPUs&#160;and&#160;192GiB&#160;of&#160;RAM.&#160;The&#160;security&#160;properties&#160;of&#160;the&#160;DPS&#160;are<br/>based&#160;on&#160;the&#160;guarantee&#160;of&#160;<i>Π</i>-compliance&#160;provided&#160;by&#160;IVC.&#160;It&#160;is&#160;apparent&#160;that<br/>setup&#160;and&#160;proving&#160;times&#160;dominate&#160;both&#160;the&#160;running&#160;time&#160;and&#160;memory&#160;consump-<br/>tion&#160;in&#160;the&#160;protocol.&#160;Setup&#160;takes&#160;place&#160;once&#160;by&#160;a&#160;trusted&#160;third-party&#160;and&#160;hence<br/>is&#160;less&#160;critical&#160;for&#160;day-to-day&#160;system&#160;performance.<br/>
+The&#160;prover&#160;is&#160;run&#160;by&#160;the&#160;miners,&#160;or&#160;full&#160;nodes.&#160;These&#160;generate&#160;PoW&#160;solutions<br/>
+repeatedly&#160;and&#160;would&#160;compute&#160;proof&#160;instances&#160;for&#160;many&#160;input&#160;nonces.&#160;Thus,<br/>larger&#160;storage&#160;requirements&#160;(<i>∼&#160;</i>5<i>.</i>42GB&#160;key&#160;sizes)&#160;could&#160;be&#160;easily&#160;met&#160;by&#160;these<br/>nodes,&#160;as&#160;could&#160;the&#160;need&#160;for&#160;more&#160;parallelism&#160;and&#160;better&#160;computing&#160;power&#160;to<br/>bring&#160;down&#160;the&#160;proving&#160;rate.&#160;We&#160;normalize&#160;the&#160;block&#160;time&#160;to&#160;achieve&#160;<i>τ&#160;</i>=&#160;1<i>/</i>3<br/>in&#160;the&#160;sense&#160;of&#160;Theorem&#160;<a href="978-3-031-47751-5_2s.html#7">2&#160;</a>for&#160;a&#160;proof&#160;including&#160;30&#160;transactions.&#160;This&#160;gives&#160;us<br/>that&#160;a&#160;miner&#160;will&#160;discard&#160;in&#160;expectation&#160;15<i>.</i>59%&#160;of&#160;their&#160;work&#160;for&#160;an&#160;eﬃciency&#160;of<br/><i>∼&#160;</i>84%&#160;if&#160;all&#160;miners&#160;operated&#160;based&#160;on&#160;the&#160;above&#160;benchmarks.&#160;Theorem&#160;<a href="978-3-031-47751-5_2s.html#8">3&#160;</a>then<br/>gives&#160;an&#160;upper&#160;bound&#160;on&#160;the&#160;block&#160;orphan&#160;rate&#160;(or&#160;likelihood&#160;of&#160;block&#160;collisions)<br/>of&#160;16<i>.</i>65%<i>.&#160;</i>Since&#160;we&#160;are&#160;keeping&#160;block&#160;times&#160;constant&#160;at&#160;10&#160;minutes,&#160;we&#160;note<br/>that&#160;any&#160;improvements&#160;in&#160;SNARK&#160;proof&#160;generation&#160;times&#160;will&#160;correspondingly<br/>decrease&#160;the&#160;amount&#160;of&#160;wasted&#160;work&#160;and&#160;orphan&#160;rate.&#160;Moreover,&#160;this&#160;does&#160;not<br/>depend&#160;on&#160;the&#160;way&#160;that&#160;the&#160;proofs&#160;are&#160;generated:&#160;distributed&#160;techniques&#160;among<br/>many&#160;participants&#160;(such&#160;as&#160;<a href="978-3-031-47751-5_2s.html#18">[34</a>])&#160;would&#160;also&#160;beneﬁt&#160;eﬃciency&#160;through&#160;the&#160;corre-<br/>sponding&#160;decrease&#160;of&#160;average&#160;proof&#160;time.<br/>
+<b>5</b><br/>
+<b>Related&#160;Work</b><br/>
+Several&#160;proposals&#160;have&#160;aimed&#160;to&#160;reduce&#160;veriﬁcation&#160;costs&#160;for&#160;light&#160;clients;&#160;Chatzi-<br/>giannis&#160;et&#160;al.&#160;provide&#160;a&#160;survey&#160;<a href="978-3-031-47751-5_2s.html#17">[9].&#160;</a>Most&#160;relevant&#160;to&#160;our&#160;work&#160;are&#160;Vault&#160;<a href="978-3-031-47751-5_2s.html#17">[24</a>]&#160;and<br/>MimbleWimble&#160;<a href="978-3-031-47751-5_2s.html#18">[29</a>]&#160;which&#160;speed&#160;up&#160;verifying&#160;transaction&#160;history&#160;and&#160;NIPoPoW<br/><a href="978-3-031-47751-5_2s.html#17">[22</a>]&#160;and&#160;FlyClient&#160;<a href="978-3-031-47751-5_2s.html#17">[8]&#160;</a>which&#160;speed&#160;up&#160;verifying&#160;consensus.&#160;None&#160;of&#160;these&#160;propos-<br/>als&#160;achieve&#160;constant-time&#160;veriﬁcation,&#160;though&#160;they&#160;require&#160;signiﬁcantly&#160;less&#160;work<br/>
+<hr/>
+<a name=13></a>30<br/>
+A.&#160;Kattis&#160;and&#160;J.&#160;Bonneau<br/>
+from&#160;provers.&#160;Succinct&#160;blockchains,&#160;which&#160;provide&#160;optimal&#160;<i>O</i>(1)&#160;bandwidth&#160;and<br/>computation&#160;costs&#160;to&#160;verify&#160;both&#160;history&#160;and&#160;consensus,&#160;were&#160;proposed&#160;in&#160;2020,<br/>simultaneously&#160;by&#160;this&#160;work&#160;and&#160;the&#160;Mina&#160;project&#160;<a href="978-3-031-47751-5_2s.html#17">[5</a>]&#160;(formerly&#160;Coda).&#160;Mina<br/>takes&#160;a&#160;similar&#160;high-level&#160;approach,&#160;encoding&#160;state&#160;transitions&#160;in&#160;a&#160;recursive<br/>proof&#160;system&#160;for&#160;asymptotically&#160;optimal&#160;veriﬁcation&#160;time.&#160;The&#160;two&#160;proposals<br/>vary&#160;in&#160;a&#160;number&#160;of&#160;technical&#160;details,&#160;but&#160;the&#160;main&#160;conceptual&#160;diﬀerences&#160;lie<br/>in&#160;our&#160;choice&#160;of&#160;consensus&#160;protocol.&#160;Mina&#160;implements&#160;proof-of-stake&#160;consensus,<br/>speciﬁcally&#160;a&#160;variant&#160;of&#160;Ouroboros&#160;<a href="978-3-031-47751-5_2s.html#17">[23]&#160;</a>designed&#160;for&#160;succinct&#160;proofs,&#160;but&#160;does&#160;not<br/>incentivize&#160;eﬃcient&#160;proof&#160;generation.&#160;By&#160;contrast,&#160;we&#160;implement&#160;a&#160;PoW&#160;variant<br/>speciﬁcally&#160;designed&#160;to&#160;incentivize&#160;proving&#160;eﬃciency.<br/>
+Subsequent&#160;work&#160;has&#160;provided&#160;novel&#160;and&#160;eﬃcient&#160;constructions&#160;for&#160;succinct<br/>
+blockchains,&#160;though&#160;not&#160;focused&#160;directly&#160;on&#160;prover&#160;incentivization.&#160;Chen&#160;et<br/>al.&#160;<a href="978-3-031-47751-5_2s.html#17">[10]&#160;</a>propose&#160;a&#160;general&#160;framework&#160;for&#160;succinct&#160;blockchains&#160;over&#160;arbitrary&#160;tran-<br/>sition&#160;functions,&#160;alongside&#160;benchmarks&#160;using&#160;the&#160;Marlin&#160;<a href="978-3-031-47751-5_2s.html#17">[11]&#160;</a>proof&#160;system.&#160;Hegde<br/>et&#160;al.&#160;<a href="978-3-031-47751-5_2s.html#17">[18]&#160;</a>tackle&#160;a&#160;related&#160;but&#160;critical&#160;problem:&#160;that&#160;of&#160;minimizing&#160;the&#160;total&#160;mem-<br/>ory&#160;requirements&#160;of&#160;<i>full&#160;nodes</i>.&#160;Vesely&#160;et&#160;al.&#160;<a href="978-3-031-47751-5_2s.html#18">[33]&#160;</a>propose&#160;Plumo,&#160;which&#160;leverages<br/>oﬄine&#160;signature&#160;aggregation&#160;to&#160;design&#160;a&#160;cost&#160;and&#160;latency&#160;optimized&#160;light&#160;client<br/>for&#160;the&#160;Celo&#160;<a href="978-3-031-47751-5_2s.html#18">[33</a>]&#160;blockchain.&#160;Abusalah&#160;et&#160;al.&#160;<a href="978-3-031-47751-5_2s.html#16">[1</a>]&#160;propose&#160;SNACKS,&#160;a&#160;formal<br/>framework&#160;that&#160;adds&#160;knowledge&#160;extraction&#160;guarantees&#160;to&#160;Proofs&#160;of&#160;Sequential<br/>Work.&#160;We&#160;note&#160;that&#160;these&#160;contributions&#160;are&#160;orthogonal&#160;to&#160;our&#160;main&#160;focus&#160;of<br/>incentivizing&#160;eﬃcient&#160;proving,&#160;and&#160;all&#160;could&#160;be&#160;incorporated&#160;in&#160;a&#160;practical&#160;PoNW<br/>implementation.<br/>
+<b>A</b><br/>
+<b>Security&#160;Proofs</b><br/>
+<i>Proof.&#160;(Proof&#160;of&#160;Theorem&#160;</i><a href="978-3-031-47751-5_2s.html#7">2<i>).&#160;</i></a>Assume&#160;that&#160;a&#160;blocks&#160;are&#160;found&#160;in&#160;a&#160;Poisson&#160;process<br/>with&#160;a&#160;mean&#160;of&#160;<i>λ&#160;</i>=&#160;1&#160;and&#160;an&#160;individual&#160;miner&#160;can&#160;check&#160;one&#160;puzzle&#160;solution<br/>in&#160;time&#160;<i>τ&#160;</i>.&#160;Consider&#160;the&#160;expected&#160;number&#160;of&#160;blocks&#160;this&#160;individual&#160;miner&#160;is&#160;able<br/>to&#160;check&#160;before&#160;the&#160;network&#160;broadcasts&#160;a&#160;solution.&#160;A&#160;block&#160;will&#160;be&#160;found&#160;by&#160;the<br/>
+<br/>
+network&#160;in&#160;less&#160;than&#160;time&#160;<i>τ&#160;</i>with&#160;probability<br/>
+<i>τ&#160;e−xdx&#160;</i>=&#160;1&#160;<i>−&#160;eτ.&#160;</i>In&#160;this&#160;case,<br/>
+0<br/>
+the&#160;miner&#160;will&#160;not&#160;even&#160;ﬁnish&#160;checking&#160;a&#160;single&#160;block.&#160;If&#160;the&#160;network&#160;does&#160;not<br/>broadcast&#160;a&#160;block&#160;within&#160;time&#160;<i>τ&#160;</i>,&#160;the&#160;miner&#160;will&#160;check&#160;at&#160;least&#160;one&#160;block.&#160;The<br/>Poisson&#160;process&#160;then&#160;repeats,&#160;since&#160;it&#160;is&#160;memoryless.&#160;So&#160;the&#160;expected&#160;number&#160;of<br/>blocks&#160;checked&#160;is&#160;E<i>blocks&#160;</i>=&#160;(1&#160;<i>−&#160;eτ&#160;</i>)&#160;<i>·&#160;</i>0&#160;+&#160;<i>e−τ&#160;·&#160;</i>(1&#160;+&#160;E<i>blocks</i>)&#160;or:<br/>
+1<br/>
+<i>eτ&#160;·&#160;</i>E<i>blocks&#160;</i>=&#160;1&#160;+&#160;E<i>blocks</i>E<i>blocks&#160;</i>=<br/>
+<i>.</i><br/>
+<i>eτ&#160;−&#160;</i>1<br/>
+If&#160;no&#160;partially-checked&#160;solutions&#160;were&#160;wasted,&#160;the&#160;miner&#160;would&#160;always&#160;expect<br/>
+to&#160;check&#160;1&#160;solutions.&#160;Thus,&#160;the&#160;fraction&#160;of&#160;wasted&#160;work&#160;is:<br/>
+<i>τ</i><br/>
+1<br/>
+1&#160;<i>−&#160;eτ&#160;−</i>1&#160;=&#160;1&#160;<i>−</i><br/>
+<i>τ</i><br/>
+<i>.</i><br/>
+1<br/>
+<i>eτ&#160;−&#160;</i>1<br/>
+<i>τ</i><br/>
+<i>Proof.&#160;(Proof&#160;of&#160;Theorem&#160;</i><a href="978-3-031-47751-5_2s.html#8">3<i>).&#160;</i></a>Since&#160;solutions&#160;are&#160;Poisson&#160;random&#160;variables:<br/>
+Pr&#160;[collision]&#160;=&#160;[1&#160;<i>−&#160;</i>Po(1<i>,&#160;τ&#160;</i>)<i>/</i>(1&#160;<i>−&#160;</i>Po(0<i>,&#160;τ&#160;</i>))]&#160;<i>≤&#160;τ&#160;/</i>2<i>.</i><br/>
+<hr/>
+<a name=14></a>Proof&#160;of&#160;Necessary&#160;Work<br/>
+31<br/>
+We&#160;borrow&#160;notation&#160;from&#160;<a href="978-3-031-47751-5_2s.html#18">[28]&#160;</a>and&#160;parametrize&#160;with&#160;<i>q&#160;</i>input&#160;indices,&#160;<i>p&#160;</i>outputs<br/>
+and&#160;maximum&#160;index&#160;size&#160;2<i>λ</i>.&#160;Where&#160;not&#160;speciﬁed,&#160;<i>H&#160;</i>=&#160;<i>pqλ.&#160;</i>Let&#160;<i>L</i>(<b>y</b>)&#160;be&#160;the<br/>minimum&#160;number&#160;of&#160;multiplications&#160;to&#160;compute&#160;<b>y&#160;</b>=&#160;(<i>y</i>1<i>,&#160;...,&#160;yp</i>)&#160;with&#160;<i>yi&#160;∈&#160;</i>[2<i>λ</i>]<i>q<br/></i>and&#160;[2<i>λ</i>]&#160;=&#160;<i>{</i>1<i>,&#160;...,&#160;</i>2<i>λ&#160;−&#160;</i>1<i>}&#160;</i>from&#160;the&#160;inputs&#160;and&#160;unit&#160;vectors&#160;and&#160;<i>L</i>(<i>p,&#160;q,&#160;</i>2<i>λ</i>)&#160;be&#160;the<br/>maximum&#160;over&#160;all&#160;of&#160;them.<br/>
+<b>Lemma&#160;1.&#160;</b><i>For&#160;any&#160;value&#160;of&#160;c&#160;≤&#160;L</i>(<i>p,&#160;q,&#160;N&#160;</i>)<i>,&#160;there&#160;are&#160;at&#160;most:</i><br/>
+<br/>
+<br/>
+<i>H</i>2&#160;<i>c&#160;</i>2<i>q</i>+1<i>ec</i>(<i>q&#160;</i>+&#160;1)2<i>O</i>(1)<i>,</i><br/>
+<i>c</i><br/>
+<i>addition&#160;chains&#160;of&#160;length&#160;at&#160;most&#160;c.</i><br/>
+<b>Lemma&#160;2.&#160;</b><i>Deﬁne&#160;H&#160;</i>:=&#160;<i>κqνλ,&#160;φ</i>(<i>q,&#160;κ,&#160;ν,&#160;λ</i>)&#160;:=<br/>
+<i>qκν&#160;</i>log&#160;(<i>qκν</i>)&#160;+&#160;<i>κ&#160;</i>log&#160;(<i>H</i>)&#160;+&#160;<i>q&#160;</i>+&#160;log&#160;(<i>q&#160;</i>+&#160;1)&#160;+&#160;1<i>,</i><br/>
+<i>and&#160;ﬁx&#160;μ&#160;</i>:=&#160;<i>δH,&#160;corresponding&#160;to:</i><br/>
+(1&#160;<i>−&#160;δ</i>)<i>H&#160;−&#160;φ</i>(<i>q,&#160;κ,&#160;ν,&#160;λ</i>)<br/>
+<i>cδ&#160;</i>:=<br/>
+<i>.</i><br/>
+log&#160;(<i>H</i>)&#160;<i>−&#160;</i>log&#160;(<i>e</i>)&#160;+&#160;log&#160;(<i>μ</i>)&#160;+&#160;log&#160;(1<i>/δ</i>)<br/>
+<i>For&#160;the&#160;</i>(<i>κ,&#160;κ</i>)<i>-length&#160;MultiExp&#160;function&#160;of&#160;dimension&#160;ν&#160;for&#160;CRT&#160;g:</i><br/>
+&#160;<br/>
+1&#160;<i>μ</i><br/>
+Pr<br/>
+[<i>L</i>(<i>f&#160;</i>(<i>x</i>1)<i>,&#160;...,&#160;f&#160;</i>(<i>xq</i>))&#160;<i>≤&#160;cδ</i>]&#160;<i>≤</i><br/>
+<i>.</i><br/>
+<b>x</b><i>∈R</i>[2<i>λ</i>]<i>κ×q,</i>G<i>∈R</i>G<i>κ×ν</i><br/>
+2<br/>
+<i>Proof.&#160;</i>Write&#160;<i>G</i>(<i>j</i>)&#160;=&#160;<i>r</i><br/>
+<i>k</i><br/>
+<i>jkG</i>.&#160;As&#160;the&#160;<i>xi&#160;∈&#160;</i>[2<i>λ</i>]<i>κ&#160;</i>and&#160;<i>rjk&#160;∈&#160;</i>[2<i>λ</i>]&#160;are&#160;sampled&#160;ran-<br/>
+domly,&#160;the&#160;values&#160;<i>xikG</i>(<i>j</i>)&#160;=&#160;<i>x</i><br/>
+<i>k</i><br/>
+<i>ikrjkG&#160;</i>for&#160;<i>i&#160;∈&#160;</i>[<i>q</i>]<i>,&#160;j&#160;∈&#160;</i>[<i>ν&#160;−&#160;</i>1]<i>,&#160;k&#160;∈&#160;</i>[<i>κ</i>]&#160;will&#160;be&#160;distinct<br/>
+w.h.p.&#160;The&#160;<i>κ&#160;·&#160;q&#160;</i>values&#160;<i>g</i>(<i>xi</i>)<i>k&#160;·&#160;rνkG&#160;</i>will&#160;also&#160;be&#160;distinct&#160;w.h.p.&#160;as&#160;<i>g&#160;</i>is&#160;collision<br/>resistant&#160;in&#160;each&#160;of&#160;its&#160;<i>κ&#160;</i>output&#160;coordinates.<br/>
+Let&#160;<i>M&#160;</i>be&#160;the&#160;<i>q&#160;×</i>(<i>κν</i>)&#160;sized&#160;matrix&#160;with&#160;these&#160;values&#160;as&#160;entries.&#160;As&#160;each&#160;entry<br/>
+is&#160;an&#160;element&#160;in&#160;[2<i>λ</i>],&#160;the&#160;number&#160;of&#160;matrices&#160;<i>M&#160;</i>with&#160;<i>qκν&#160;</i>distinct&#160;elements&#160;is:<br/>
+<br/>
+<br/>
+2<i>λ</i><br/>
+<i>≥&#160;</i>2<i>λqκν&#160;,</i><br/>
+<i>qκν</i><br/>
+(<i>qκν</i>)<i>qκν</i><br/>
+and&#160;to&#160;each&#160;<i>M&#160;</i>there&#160;corresponds&#160;a&#160;unique&#160;matrix&#160;<i>F&#160;</i>=&#160;(<i>f&#160;</i>(<i>x</i>1)<i>,&#160;...,&#160;f&#160;</i>(<i>xq</i>))&#160;with<br/>dimension&#160;<i>q&#160;×&#160;ν</i>,&#160;where&#160;the&#160;<i>κ&#160;</i>products&#160;over&#160;random&#160;bases&#160;for&#160;each&#160;<i>xi&#160;</i>have&#160;been<br/>computed.&#160;Note&#160;that&#160;<i>L</i>(<i>F&#160;</i>)&#160;=&#160;<i>L</i>(<i>M&#160;</i>)&#160;+&#160;<i>κ&#160;−&#160;</i>1.<br/>
+We&#160;can&#160;thus&#160;upper&#160;bound&#160;the&#160;minimal&#160;addition&#160;chain&#160;size&#160;<i>L</i>(<i>F&#160;</i>)&#160;using&#160;<i>L</i>(<i>M&#160;</i>)<br/>
+and&#160;the&#160;number&#160;of&#160;matrices&#160;<i>M&#160;</i>:<br/>
+<i>|{</i><b>z&#160;</b>:&#160;<i>L</i>(<b>z</b>)&#160;<i>≤&#160;c}|</i><br/>
+Pr<br/>
+[<i>L</i>(<i>F&#160;</i>)&#160;<i>≤&#160;c</i>]&#160;<i>≤</i><br/>
+<i>.</i><br/>
+<b>x</b><i>∈R</i>[2<i>λ</i>]<i>κ×q,</i>G<i>∈R</i>G<i>κ×ν</i><br/>
+2<i>H−qκν&#160;</i>log&#160;(<i>qκν</i>)<br/>
+The&#160;numerator&#160;is&#160;upper&#160;bounded&#160;by&#160;Lemma&#160;<a href="978-3-031-47751-5_2s.html#14">1&#160;</a>and&#160;the&#160;fact&#160;that&#160;a&#160;single&#160;chain<br/>corresponds&#160;to&#160;at&#160;most&#160;<i>Hκ&#160;</i>matrices,&#160;giving:<br/>
+&#160;<br/>
+1&#160;<i>H−ψ</i>(<i>c</i>)<br/>
+Pr<br/>
+[<i>L</i>(<i>F&#160;</i>)&#160;<i>≤&#160;c</i>]&#160;<i>≤</i><br/>
+<i>,</i><br/>
+<b>x</b><i>∈R</i>[2<i>λ</i>]<i>κ×q,</i>G<i>∈R</i>G<i>κ×ν</i><br/>
+2<br/>
+<hr/>
+<a name=15></a>32<br/>
+A.&#160;Kattis&#160;and&#160;J.&#160;Bonneau<br/>
+where&#160;<i>ψ</i>(<i>c</i>)&#160;:=&#160;<i>c</i>(2&#160;log&#160;<i>H&#160;</i>+&#160;log&#160;<i>e</i>)&#160;+&#160;<i>φ</i>(<i>q,&#160;κ,&#160;ν,&#160;λ</i>)&#160;<i>−&#160;c&#160;</i>log&#160;(<i>c</i>)<i>.</i><br/>
+Suﬃces&#160;to&#160;show&#160;that&#160;for&#160;<i>c&#160;≤&#160;cδ</i>,&#160;<i>ψ</i>(<i>c</i>)&#160;<i>≤&#160;</i>(1&#160;<i>−&#160;δ</i>)<i>H.&#160;</i>Since&#160;<i>ψ</i>(<i>c</i>)&#160;is&#160;increasing&#160;for<br/>
+<i>c&#160;≤&#160;L</i>(<i>κ,&#160;νq,&#160;</i>2<i>λ</i>),&#160;required&#160;to&#160;show&#160;that&#160;<i>ρ&#160;≥&#160;cδ&#160;</i>for&#160;<i>ψ</i>(<i>ρ</i>)&#160;=&#160;(1&#160;<i>−&#160;δ</i>)<i>H&#160;</i>:<br/>
+<i>ρ</i>(2&#160;log&#160;<i>H&#160;</i>+&#160;log&#160;<i>e</i>)&#160;+&#160;<i>φ</i>(<i>q,&#160;κ,&#160;ν,&#160;λ</i>)&#160;<i>≥&#160;</i>(1&#160;<i>−&#160;δ</i>)&#160;<i>·&#160;H,</i><br/>
+log&#160;<i>ρ&#160;≥&#160;</i>log&#160;((1&#160;<i>−&#160;δ</i>)&#160;<i>·&#160;H&#160;−&#160;φ</i>(<i>q,&#160;κ,&#160;ν,&#160;λ</i>))&#160;<i>−&#160;</i>log&#160;(2&#160;log&#160;<i>H&#160;−&#160;</i>log&#160;(<i>e</i>))<i>,</i><br/>
+∴&#160;<i>ρ&#160;≥</i><br/>
+(1&#160;<i>−&#160;δ</i>)<i>H&#160;−&#160;φ</i>(<i>q,&#160;κ,&#160;ν,&#160;λ</i>)<br/>
+<i>,</i><br/>
+log&#160;<i>H&#160;−&#160;</i>log&#160;(<i>e</i>)&#160;+&#160;log&#160;(<i>μ</i>)&#160;+&#160;log&#160;(1<i>/δ</i>)<br/>
+since&#160;<i>μ&#160;</i>=&#160;<i>δH.</i><br/>
+<b>Corollary&#160;2.&#160;</b><i>Fix&#160;δ&#160;&gt;&#160;</i>0&#160;<i>and&#160;let&#160;ψ</i>(<i>ρδ</i>)&#160;<i>−&#160;</i>(1&#160;<i>−&#160;δ</i>)&#160;<i>·&#160;H&#160;</i>=&#160;0<i>.</i><br/>
+E[<i>L</i>(<i>f</i>(<i>x</i>1)<i>,&#160;...,&#160;f</i>(<i>xq</i>))]&#160;<i>≥&#160;ρδ&#160;·&#160;</i>(1&#160;<i>−&#160;</i>2<i>−δH</i>)<i>.</i><br/>
+<i>Proof.&#160;</i>By&#160;Markov’s&#160;inequality:<br/>
+Pr[<i>L</i>(<i>f&#160;</i>(<i>x</i>1)<i>,&#160;...,&#160;f&#160;</i>(<i>xq</i>))&#160;<i>≥&#160;ρδ</i>]&#160;<i>·&#160;ρδ&#160;≤&#160;</i>E[<i>L</i>(<b>x</b>)]<i>,</i><br/>
+(1&#160;<i>−&#160;</i>Pr[<i>L</i>(<i>f&#160;</i>(<i>x</i>1)<i>,&#160;...,&#160;f&#160;</i>(<i>xq</i>))&#160;<i>&lt;&#160;ρδ</i>])&#160;<i>·&#160;ρδ&#160;≤&#160;</i>E[<i>L</i>(<i>f</i>(<i>x</i>1)<i>,&#160;...,&#160;f</i>(<i>xq</i>))]<i>.</i><br/>
+<i>Proof.&#160;(Proof&#160;of&#160;Theorem&#160;</i><a href="978-3-031-47751-5_2s.html#6">1<i>).&#160;</i></a>Required&#160;to&#160;compute&#160;<i>q&#160;</i>iterations&#160;of&#160;the&#160;MultiExp<br/>function.&#160;Each&#160;iteration&#160;includes&#160;<i>ν&#160;</i>multiproducts&#160;over&#160;random&#160;bases,&#160;with&#160;the<br/>indices&#160;also&#160;sampled&#160;from&#160;[2<i>λ</i>].<br/>
+Using&#160;<i>c&#160;</i>oracle&#160;queries&#160;to&#160;do&#160;this&#160;corresponds&#160;to&#160;knowledge&#160;of&#160;an&#160;addition<br/>
+chain&#160;of&#160;length&#160;<i>c&#160;</i>containing&#160;all&#160;of&#160;<i>F&#160;</i>=&#160;(<i>f&#160;</i>(<i>x</i>1)<i>,&#160;...,&#160;f&#160;</i>(<i>xq</i>))&#160;with&#160;<i>xi&#160;∈&#160;</i>[2<i>λ</i>]<i>κ</i>.&#160;There-<br/>fore,&#160;the&#160;probability&#160;that&#160;we&#160;compute&#160;<i>F&#160;</i>for&#160;<b>x&#160;</b><i>∈R&#160;</i>[2<i>λ</i>]<i>κ×q&#160;</i>with&#160;less&#160;than&#160;<i>c&#160;</i>queries<br/>is&#160;upper&#160;bounded&#160;by&#160;the&#160;probability&#160;that&#160;<i>L</i>(<i>F&#160;</i>)&#160;<i>≤&#160;c</i>.<br/>
+Fix&#160;<i>δ&#160;&gt;&#160;</i>0.&#160;Lemma&#160;<a href="978-3-031-47751-5_2s.html#14">2&#160;</a>states&#160;that&#160;<i>∃cδ&#160;</i>s.t.&#160;this&#160;probability&#160;is&#160;negligible&#160;in<br/>
+<i>μ&#160;</i>:=&#160;<i>δκνqλ&#160;</i>for&#160;<i>c&#160;≤&#160;cδ</i>.&#160;One&#160;function&#160;computation&#160;of&#160;dimension&#160;<i>ν&#160;</i>with&#160;<i>κ&#160;</i>inputs<br/>has&#160;an&#160;upper&#160;bound&#160;on&#160;the&#160;expected&#160;number&#160;of&#160;multiplications&#160;of:<br/>
+<i>κνλ</i><br/>
+min&#160;(<i>κ,&#160;ν</i>)&#160;<i>·&#160;λ&#160;</i>+<br/>
+<i>·&#160;</i>(1&#160;+&#160;<i>o</i>(1))<i>.</i><br/>
+log&#160;(<i>κνλ</i>)<br/>
+Corollary&#160;<a href="978-3-031-47751-5_2s.html#15">2&#160;</a>implies&#160;that:<br/>
+<br/>
+<i>−</i><br/>
+<i>κνλ</i><br/>
+1<br/>
+<i>&#160;≤&#160;</i>1&#160;<i>−&#160;q−</i>1&#160;<i>·&#160;</i>min&#160;(<i>κ,&#160;ν</i>)&#160;<i>·&#160;λ&#160;</i>+<br/>
+<i>·&#160;</i>(1&#160;+&#160;<i>o</i>(1))<br/>
+<i>·&#160;</i>(1&#160;<i>−&#160;</i>2<i>−δκνqλ</i>)&#160;<i>·&#160;c</i><br/>
+log&#160;(<i>κνλ</i>)<br/>
+<i>δ</i><br/>
+<i>≤&#160;</i>log&#160;(<i>q</i>)&#160;+&#160;<i>δ&#160;</i>log(<i>κνλ</i>)&#160;+&#160;<i>o</i>(1)&#160;<i>≤&#160;</i>log&#160;(<i>q</i>)&#160;+&#160;<i>o</i>(1)<i>,</i><br/>
+log&#160;(<i>κνqλ</i>)<br/>
+log&#160;(<i>κνqλ</i>)<br/>
+where&#160;we&#160;have&#160;taken&#160;<i>δ&#160;≤&#160;</i>1<i>/&#160;</i>log&#160;(<i>κνλ</i>).<br/>
+<i>Proof.&#160;(Proof&#160;of&#160;Theorem&#160;</i><a href="978-3-031-47751-5_2s.html#10">4<i>).&#160;</i></a>We&#160;know&#160;that&#160;the&#160;NIP&#160;has&#160;a&#160;PKE&#160;extractor&#160;from<br/>its&#160;security&#160;proof&#160;and&#160;so&#160;<i>A&#160;</i>can&#160;extract&#160;two&#160;witnesses&#160;almost&#160;surely&#160;using&#160;extrac-<br/>tor&#160;<i>χP&#160;KE</i><br/>
+<i>A</i><br/>
+.&#160;If&#160;the&#160;polynomials&#160;are&#160;distinct,&#160;so&#160;are&#160;their&#160;witnesses.&#160;This&#160;follows<br/>
+directly&#160;from&#160;the&#160;fact&#160;that,&#160;since&#160;<i>π</i>1&#160;<i></i>=&#160;<i>π</i>2,&#160;either&#160;(1)&#160;one&#160;of&#160;<i>ui</i>(<i>X</i>)<i>,&#160;vi</i>(<i>X</i>)<i>,&#160;wi</i>(<i>X</i>)<br/>diﬀers&#160;in&#160;one&#160;of&#160;the&#160;proofs,&#160;or&#160;(2)&#160;the&#160;extracted&#160;witnesses&#160;diﬀer.&#160;Since&#160;the&#160;pred-<br/>icate&#160;is&#160;the&#160;same,&#160;it&#160;follows&#160;that&#160;the&#160;witnesses&#160;must&#160;diﬀer.<br/>
+<hr/>
+<a name=16></a>Proof&#160;of&#160;Necessary&#160;Work<br/>
+33<br/>
+<b>Lemma&#160;3.&#160;</b><i>Let&#160;HP&#160;</i>=&#160;<i>{HG&#160;}</i><br/>
+<i>be&#160;a&#160;family&#160;of&#160;eﬃciently&#160;computable&#160;func-</i><br/>
+<i>P,λ&#160;λ∈</i>N+<br/>
+<i>tions&#160;for&#160;which&#160;each&#160;HG&#160;</i>:&#160;<i>{</i>0<i>,&#160;</i>1<i>}λ&#160;→&#160;</i>G&#160;<i>is&#160;weakly&#160;collision-resistant.&#160;L</i>(<i>H</i><br/>
+<i>P,λ</i><br/>
+<i>P&#160;</i>)&#160;<i>is</i><br/>
+<i>hard&#160;single-witness.</i><br/>
+<i>Proof.&#160;<b>(Proof&#160;of&#160;Lemma&#160;</b></i><a href="978-3-031-47751-5_2s.html#16">3<i>).&#160;</i></a>Deﬁne&#160;S&#160;in&#160;the&#160;natural&#160;way:&#160;ﬁx&#160;<i>λ&#160;∈&#160;</i>N+&#160;and&#160;deﬁne<br/>S&#160;to&#160;randomly&#160;sample&#160;an&#160;element&#160;<i>x&#160;∈&#160;{</i>0<i>,&#160;</i>1<i>}λ</i>,&#160;outputting&#160;(<i>HP,λ</i>(<i>x</i>)<i>,&#160;x</i>).&#160;The<br/>sampler&#160;is&#160;eﬃcient&#160;by&#160;the&#160;eﬃciency&#160;of&#160;<i>HP,λ</i>(<i>x</i>),&#160;and&#160;(<i>HP,λ</i>(<i>x</i>)<i>,&#160;x</i>)&#160;<i>∈&#160;RL</i>(<i>HP,λ</i>)<i>}<br/></i>by&#160;deﬁnition.&#160;Witness&#160;intractability&#160;(WI)&#160;follows&#160;from&#160;the&#160;collision&#160;resistance&#160;of<br/><i>HP,λ&#160;</i>on&#160;constant-size&#160;inputs.&#160;If&#160;some&#160;<i>A&#160;</i>exists&#160;that&#160;violates&#160;WI,&#160;then&#160;running&#160;S<br/>on&#160;1<i>λ&#160;</i>and&#160;then&#160;<i>A&#160;</i>on&#160;S(1<i>λ</i>)&#160;and&#160;1<i>λ</i>,&#160;we&#160;non-negligibly&#160;ﬁnd&#160;a&#160;collision&#160;in&#160;<i>HG&#160;</i>.<br/>
+<i>P,λ</i><br/>
+<i>Proof.&#160;<b>(Proof&#160;of&#160;Theorem&#160;</b></i><a href="978-3-031-47751-5_2s.html#11">5<i><b>).&#160;</b></i></a>The&#160;MaskedHash&#160;QAP&#160;has&#160;4<i>N&#160;</i>(<i>k&#160;</i>+&#160;1)&#160;interme-<br/>diate&#160;witness&#160;variables&#160;(and&#160;8<i>N&#160;</i>(<i>k&#160;</i>+&#160;1)&#160;+&#160;2<i>k&#160;</i>constraints)&#160;which&#160;admits&#160;witnesses<br/>from&#160;a&#160;sampler&#160;S&#160;where&#160;the&#160;seed&#160;<i>ρ&#160;</i>is&#160;uniformly&#160;random&#160;and&#160;so&#160;all&#160;witness<br/>variables&#160;(with&#160;full&#160;support)&#160;also&#160;look&#160;random&#160;by&#160;the&#160;randomness&#160;of&#160;the&#160;group<br/>encoding.&#160;This&#160;is&#160;as&#160;the&#160;intermediate&#160;values&#160;are&#160;distinct&#160;powers&#160;of&#160;a&#160;group&#160;ele-<br/>ment&#160;that&#160;is&#160;random&#160;due&#160;to&#160;<i>ρ&#160;</i>and&#160;the&#160;independence&#160;of&#160;the&#160;<i>Ij&#160;</i>index&#160;elements.&#160;By<br/>unique&#160;witness&#160;extractability&#160;and&#160;single&#160;witness&#160;hardness&#160;of&#160;CRT&#160;functions,&#160;all<br/>valid&#160;witnesses&#160;have&#160;a&#160;unique&#160;encoding&#160;and&#160;hence&#160;a&#160;unique&#160;witness&#160;polynomial<br/><i>h</i>.<br/>
+We&#160;start&#160;with&#160;<i>&#160;</i>instances&#160;of&#160;<i>N&#160;k</i>-bit&#160;hash&#160;evaluations&#160;from&#160;S,&#160;and&#160;require&#160;<i></i><br/>
+valid&#160;proofs.&#160;We&#160;reduce&#160;to&#160;the&#160;4<i>N&#160;</i>(<i>k</i>+1)-length&#160;MultiExp&#160;problem&#160;for&#160;<i>&#160;</i>instances<br/>and&#160;<i>g&#160;</i>equal&#160;to&#160;the&#160;function&#160;evaluating&#160;the&#160;representation&#160;of&#160;<i>h&#160;</i>given&#160;the&#160;witness<br/>elements.&#160;We&#160;provide&#160;<i>&#160;</i>of&#160;the&#160;4<i>N&#160;</i>(<i>k&#160;</i>+&#160;1)&#160;intermediate&#160;witness&#160;variables&#160;and&#160;the<br/>corresponding&#160;9&#160;sets&#160;of&#160;bases&#160;to&#160;the&#160;MultiExp&#160;function.&#160;The&#160;representation&#160;of&#160;<i>h<br/></i>will&#160;be&#160;unique&#160;w.r.t.&#160;the&#160;witness&#160;(since&#160;the&#160;instance&#160;is&#160;single&#160;witness&#160;hard)&#160;and<br/>thus&#160;look&#160;random&#160;due&#160;to&#160;the&#160;inputs.&#160;Note&#160;that&#160;<i>μ&#160;</i>=&#160;8<i>N&#160;</i>(<i>k&#160;</i>+&#160;1)&#160;+&#160;2<i>k</i>.&#160;We&#160;ﬁnally<br/>perform&#160;a&#160;linear&#160;in&#160;<i>&#160;</i>number&#160;of&#160;multiplications&#160;to&#160;add&#160;any&#160;witness&#160;variables<br/>that&#160;were&#160;not&#160;included&#160;(i.e.&#160;not&#160;randomly&#160;distributed).&#160;Since&#160;the&#160;MultiExp&#160;index<br/>distributions&#160;are&#160;also&#160;random,&#160;a&#160;proof&#160;veriﬁes&#160;iﬀ&#160;the&#160;MultiExp&#160;solution&#160;is&#160;valid.<br/>
+Conversely,&#160;given&#160;<i>&#160;</i>(4<i>N&#160;</i>(<i>k&#160;</i>+&#160;1)<i>,&#160;</i>8<i>N&#160;</i>(<i>k&#160;</i>+&#160;1)&#160;+&#160;2<i>k</i>)-length&#160;MultiExp&#160;instances<br/>
+of&#160;dimension&#160;10&#160;with&#160;inputs&#160;and&#160;bases&#160;sampled&#160;from&#160;the&#160;QAP’s&#160;sampler&#160;and<br/>proving&#160;key&#160;respectively,&#160;we&#160;reduce&#160;to&#160;computing&#160;<i>&#160;</i>proofs&#160;for&#160;<i>N&#160;k</i>-bit&#160;hash<br/>evaluations.&#160;This&#160;is&#160;because&#160;the&#160;unassigned&#160;witness&#160;variables&#160;can&#160;be&#160;discerned<br/>from&#160;the&#160;auxiliary&#160;input&#160;to&#160;<i>g</i>,&#160;which&#160;comes&#160;from&#160;the&#160;QAP&#160;sampler.&#160;By&#160;the<br/>uniqueness&#160;of&#160;the&#160;proof’s&#160;encoding,&#160;the&#160;set&#160;of&#160;<i>&#160;</i>valid&#160;proofs&#160;will&#160;have&#160;to&#160;equal&#160;the<br/>MultiExp&#160;instances&#160;after&#160;a&#160;linear&#160;in&#160;<i>&#160;</i>number&#160;of&#160;operations&#160;to&#160;‘undo’&#160;products<br/>by&#160;any&#160;of&#160;the&#160;additional&#160;variables.<br/>
+<b>References</b><br/>
+1.&#160;Abusalah,&#160;H.,&#160;Fuchsbauer,&#160;G.,&#160;Gaˇ<br/>
+zi,&#160;P.,&#160;Klein,&#160;K.:&#160;SNACKs:&#160;leveraging&#160;proofs<br/>
+of&#160;sequential&#160;work&#160;for&#160;blockchain&#160;light&#160;clients.&#160;Cryptology&#160;ePrint&#160;Archive,&#160;Paper<br/>2022/240&#160;(2022)<br/>
+2.&#160;Announcing&#160;the&#160;ZPrize&#160;Competition.&#160;<a href="https://www.aleo.org/post/announcing-the-zprize-competition">https://www.aleo.org/post/announcing-the-</a><br/>
+<a href="https://www.aleo.org/post/announcing-the-zprize-competition">zprize-competition&#160;</a>(2022).&#160;Accessed:&#160;09&#160;Aug&#160;2022<br/>
+<hr/>
+<a name=17></a>34<br/>
+A.&#160;Kattis&#160;and&#160;J.&#160;Bonneau<br/>
+3.&#160;Ben-Sasson,&#160;E.,&#160;Chiesa,&#160;A.,&#160;Tromer,&#160;E.,&#160;Virza,&#160;M.:&#160;Succinct&#160;non-interactive&#160;zero<br/>
+knowledge&#160;for&#160;a&#160;von&#160;neumann&#160;architecture.&#160;In:&#160;USENIX&#160;Security&#160;(2014)<br/>
+4.&#160;Ben-Sasson,&#160;E.,&#160;Chiesa,&#160;A.,&#160;Tromer,&#160;E.,&#160;Virza,&#160;M.:&#160;Scalable&#160;zero&#160;knowledge&#160;via<br/>
+cycles&#160;of&#160;elliptic&#160;curves.&#160;Algorithmica&#160;<b>79</b>(4),&#160;1102–1160&#160;(2017)<br/>
+5.&#160;Bonneau,&#160;J.,&#160;Meckler,&#160;I.,&#160;Rao,&#160;V.,&#160;Shapiro,&#160;E.:&#160;Mina:&#160;decentralized&#160;cryptocur-<br/>
+rency&#160;at&#160;scale.&#160;<a href="https://docs.minaprotocol.com/static/pdf/technicalWhitepaper.pdf">https://docs.minaprotocol.com/static/pdf/technicalWhitepaper.<br/>pdf&#160;</a>(2020).&#160;Accessed:&#160;09&#160;Aug&#160;2022<br/>
+6.&#160;Bowe,&#160;S.,&#160;Chiesa,&#160;A.,&#160;Green,&#160;M.,&#160;Miers,&#160;I.,&#160;Mishra,&#160;P.,&#160;Wu,&#160;H.:&#160;ZEXE:&#160;enabling<br/>
+decentralized&#160;private&#160;computation.&#160;Cryptology&#160;ePrint&#160;Archive,&#160;Report&#160;2018/962<br/>(2018)<br/>
+7.&#160;B¨<br/>
+unz,&#160;B.,&#160;Agrawal,&#160;S.,&#160;Zamani,&#160;M.,&#160;Boneh,&#160;D.:&#160;Zether:&#160;towards&#160;privacy&#160;in&#160;a&#160;smart<br/>
+contract&#160;world.&#160;In:&#160;Bonneau,&#160;J.,&#160;Heninger,&#160;N.&#160;(eds.)&#160;FC&#160;2020.&#160;LNCS,&#160;vol.&#160;12059,&#160;pp.<br/>423–443.&#160;Springer,&#160;Cham&#160;(2020).&#160;<a href="https://doi.org/10.1007/978-3-030-51280-4_23">https://doi.org/10.1007/978-3-030-51280-4&#160;23</a><br/>
+8.&#160;B¨<br/>
+unz,&#160;B.,&#160;Kiﬀer,&#160;L.,&#160;Luu,&#160;L.,&#160;Zamani,&#160;M.:&#160;Flyclient:&#160;super-light&#160;clients&#160;for&#160;cryp-<br/>
+tocurrencies.&#160;cryptology&#160;ePrint&#160;Archive,&#160;Report&#160;2019/226&#160;(2019)<br/>
+9.&#160;Chatzigiannis,&#160;P.,&#160;Baldimtsi,&#160;F.,&#160;Chalkias,&#160;K.:&#160;SoK:&#160;Blockchain&#160;Light&#160;Clients.&#160;Cryp-<br/>
+tology&#160;ePrint&#160;Archive,&#160;Paper&#160;2021/1657&#160;(2021)<br/>
+10.&#160;Chen,&#160;W.,&#160;Chiesa,&#160;A.,&#160;Dauterman,&#160;E.,&#160;Ward,&#160;N.P.:&#160;Reducing&#160;participation&#160;costs<br/>
+via&#160;incremental&#160;veriﬁcation&#160;for&#160;ledger&#160;systems.&#160;Cryptology&#160;ePrint&#160;Archive,&#160;Paper<br/>2020/1522&#160;(2020)<br/>
+11.&#160;Chiesa,&#160;A.,&#160;Hu,&#160;Y.,&#160;Maller,&#160;M.,&#160;Mishra,&#160;P.,&#160;Vesely,&#160;P.,&#160;Ward,&#160;N.:&#160;Marlin:&#160;prepro-<br/>
+cessing&#160;zksnarks&#160;with&#160;universal&#160;and&#160;updatable&#160;SRS.&#160;Cryptology&#160;ePrint&#160;Archive,<br/>Paper&#160;2019/1047&#160;(2019).&#160;<a href="https://eprint.iacr.org/2019/1047">https://eprint.iacr.org/2019/1047</a><br/>
+12.&#160;Dahari,&#160;H.,&#160;Lindell,&#160;Y.:&#160;Deterministic-prover&#160;zero-knowledge&#160;proofs.&#160;Cryptology<br/>
+ePrint&#160;Archive,&#160;Paper&#160;2020/141&#160;(2020)<br/>
+13.&#160;Damg˚<br/>
+ard,&#160;I.B.,&#160;Pedersen,&#160;T.P.,&#160;Pﬁtzmann,&#160;B.:&#160;On&#160;the&#160;existence&#160;of&#160;statistically<br/>
+hiding&#160;bit&#160;commitment&#160;schemes&#160;and&#160;fail-stop&#160;signatures.&#160;In:&#160;CRYPTO&#160;(1993)<br/>
+14.&#160;Erd¨<br/>
+os,&#160;P.:&#160;Remarks&#160;on&#160;number&#160;theory&#160;III.&#160;On&#160;addition&#160;chains.&#160;Acta&#160;Arithmetica<br/>
+<b>6</b>,&#160;77–81&#160;(1960)<br/>
+15.&#160;Fisch,&#160;B.,&#160;Bonneau,&#160;J.,&#160;Greco,&#160;N.,&#160;Benet,&#160;J.:&#160;Scaling&#160;proof-of-replication&#160;for&#160;Filecoin<br/>
+mining.&#160;Stanford&#160;University,&#160;Technical&#160;Report&#160;(2018)<br/>
+16.&#160;Gordon,&#160;D.M.:&#160;A&#160;survey&#160;of&#160;fast&#160;exponentiation&#160;methods.&#160;J.&#160;Algorithms&#160;<b>27</b>(1),<br/>
+129–146&#160;(1998)<br/>
+17.&#160;Groth,&#160;J.:&#160;On&#160;the&#160;size&#160;of&#160;pairing-based&#160;non-interactive&#160;arguments.&#160;In:&#160;Eurocrypt<br/>
+(2016)<br/>
+18.&#160;Hegde,&#160;P.,&#160;Streit,&#160;R.,&#160;Georghiades,&#160;Y.,&#160;Ganesh,&#160;C.,&#160;Vishwanath,&#160;S.:&#160;Achieving<br/>
+almost&#160;all&#160;blockchain&#160;functionalities&#160;with&#160;polylogarithmic&#160;storage.&#160;arXiv&#160;preprint<br/><a href="http://arxiv.org/abs/2207.05869">arXiv:2207.05869&#160;</a>(2022)<br/>
+19.&#160;Henry,&#160;R.:&#160;Pippenger’s&#160;multiproduct&#160;and&#160;multiexponentiation&#160;algorithms.&#160;Univer-<br/>
+sity&#160;of&#160;Waterloo,&#160;Technical&#160;Report&#160;(2010)<br/>
+20.&#160;Kamvar,&#160;S.,&#160;Olszewski,&#160;M.,&#160;Reinsberg,&#160;R.:&#160;CELO:&#160;a&#160;multi-asset&#160;cryptographic&#160;pro-<br/>
+tocol&#160;for&#160;decentralized&#160;social&#160;payments.&#160;<a href="https://celo.org/papers/whitepaper">https://celo.org/papers/whitepaper&#160;</a>(2019)<br/>
+21.&#160;Kate,&#160;A.,&#160;Zaverucha,&#160;G.M.,&#160;Goldberg,&#160;I.:&#160;Constant-size&#160;commitments&#160;to&#160;polyno-<br/>
+mials&#160;and&#160;their&#160;applications.&#160;In:&#160;Asiacrypt&#160;(2010)<br/>
+22.&#160;Kiayias,&#160;A.,&#160;Lamprou,&#160;N.,&#160;Stouka,&#160;A.P.:&#160;Proofs&#160;of&#160;proofs&#160;of&#160;work&#160;with&#160;sublinear<br/>
+complexity.&#160;In:&#160;Financial&#160;Crypto&#160;(2016)<br/>
+23.&#160;Kiayias,&#160;A.,&#160;Russell,&#160;A.,&#160;David,&#160;B.,&#160;Oliynykov,&#160;R.:&#160;Ouroboros:&#160;a&#160;provably&#160;secure<br/>
+proof-of-stake&#160;blockchain&#160;protocol.&#160;In:&#160;CRYPTO&#160;(2017)<br/>
+24.&#160;Leung,&#160;D.,&#160;Suhl,&#160;A.,&#160;Gilad,&#160;Y.,&#160;Zeldovich,&#160;N.:&#160;Vault:&#160;fast&#160;bootstrapping&#160;for&#160;the<br/>
+algorand&#160;cryptocurrency.&#160;In:&#160;NDSS&#160;(2018)<br/>
+<hr/>
+<a name=18></a>Proof&#160;of&#160;Necessary&#160;Work<br/>
+35<br/>
+25.&#160;Maurer,&#160;U.:&#160;Abstract&#160;models&#160;of&#160;computation&#160;in&#160;cryptography.&#160;In:&#160;IMA&#160;Interna-<br/>
+tional&#160;Conference&#160;on&#160;Cryptography&#160;and&#160;Coding&#160;(2005)<br/>
+26.&#160;Miller,&#160;A.,&#160;Kosba,&#160;A.,&#160;Katz,&#160;J.,&#160;Shi,&#160;E.:&#160;Nonoutsourceable&#160;scratch-oﬀ&#160;puzzles&#160;to<br/>
+discourage&#160;bitcoin&#160;mining&#160;coalitions.&#160;In:&#160;ACM&#160;CCS&#160;(2015)<br/>
+27.&#160;Parno,&#160;B.,&#160;Gentry,&#160;C.,&#160;Howell,&#160;J.,&#160;Raykova,&#160;M.:&#160;Pinocchio:&#160;nearly&#160;practical&#160;veriﬁ-<br/>
+able&#160;computation.&#160;Cryptology&#160;ePrint&#160;Archive,&#160;Report&#160;2013/279&#160;(2013)<br/>
+28.&#160;Pippenger,&#160;N.:&#160;On&#160;the&#160;evaluation&#160;of&#160;powers&#160;and&#160;monomials.&#160;SIAM&#160;J.&#160;Comput.<br/>
+<b>9</b>(2),&#160;230–250&#160;(1980)<br/>
+29.&#160;Poelstra,&#160;A.:&#160;Mimblewimble.&#160;<a href="https://download.wpsoftware.net/bitcoin/wizardry/mimblewimble.pdf">https://download.wpsoftware.net/bitcoin/wizardry/</a><br/>
+<a href="https://download.wpsoftware.net/bitcoin/wizardry/mimblewimble.pdf">mimblewimble.pdf&#160;</a>(2016).&#160;Accessed&#160;09&#160;Aug&#160;2022<br/>
+30.&#160;Schnorr,&#160;C.P.:&#160;Eﬃcient&#160;identiﬁcation&#160;and&#160;signatures&#160;for&#160;smart&#160;cards.&#160;In:&#160;Eurocrypt<br/>
+(1989)<br/>
+31.&#160;SCIPRLab:&#160;libsnark:&#160;a&#160;c++&#160;library&#160;for&#160;zksnark&#160;proofs.&#160;<a href="https://github.com/scipr-lab/libsnark">https://github.com/scipr-</a><br/>
+<a href="https://github.com/scipr-lab/libsnark">lab/libsnark&#160;</a>(2017)<br/>
+32.&#160;Shoup,&#160;V.:&#160;Lower&#160;bounds&#160;for&#160;discrete&#160;logarithms&#160;and&#160;related&#160;problems.&#160;In:&#160;Euro-<br/>
+crypt&#160;(1997)<br/>
+33.&#160;Vesely,&#160;P.,&#160;et&#160;al.:&#160;Plumo:&#160;an&#160;ultralight&#160;blockchain&#160;client.&#160;Cryptology&#160;ePrint&#160;Archive,<br/>
+Paper&#160;2021/1361&#160;(2021)<br/>
+34.&#160;Wu,&#160;H.,&#160;Zheng,&#160;W.,&#160;Chiesa,&#160;A.,&#160;Popa,&#160;R.A.,&#160;Stoica,&#160;I.:&#160;DIZK:&#160;a&#160;distributed&#160;zero<br/>
+knowledge&#160;proof&#160;system.&#160;In:&#160;USENIX&#160;Security&#160;(2018)<br/>
+35.&#160;Zhandry,&#160;M.:&#160;To&#160;label,&#160;or&#160;not&#160;to&#160;label&#160;(in&#160;generic&#160;groups).&#160;Cryptology&#160;ePrint<br/>
+Archive,&#160;Paper&#160;2022/226&#160;(2022)<br/>
+<b>Open&#160;Access&#160;</b>This&#160;chapter&#160;is&#160;licensed&#160;under&#160;the&#160;terms&#160;of&#160;the&#160;Creative&#160;Commons<br/>Attribution&#160;4.0&#160;International&#160;License&#160;<a href="http://creativecommons.org/licenses/by/4.0/">(http://creativecommons.org/licenses/by/4.0/),<br/></a>which&#160;permits&#160;use,&#160;sharing,&#160;adaptation,&#160;distribution&#160;and&#160;reproduction&#160;in&#160;any&#160;medium<br/>or&#160;format,&#160;as&#160;long&#160;as&#160;you&#160;give&#160;appropriate&#160;credit&#160;to&#160;the&#160;original&#160;author(s)&#160;and&#160;the<br/>source,&#160;provide&#160;a&#160;link&#160;to&#160;the&#160;Creative&#160;Commons&#160;license&#160;and&#160;indicate&#160;if&#160;changes&#160;were<br/>made.<br/>
+The&#160;images&#160;or&#160;other&#160;third&#160;party&#160;material&#160;in&#160;this&#160;chapter&#160;are&#160;included&#160;in&#160;the<br/>
+chapter’s&#160;Creative&#160;Commons&#160;license,&#160;unless&#160;indicated&#160;otherwise&#160;in&#160;a&#160;credit&#160;line&#160;to&#160;the<br/>material.&#160;If&#160;material&#160;is&#160;not&#160;included&#160;in&#160;the&#160;chapter’s&#160;Creative&#160;Commons&#160;license&#160;and<br/>your&#160;intended&#160;use&#160;is&#160;not&#160;permitted&#160;by&#160;statutory&#160;regulation&#160;or&#160;exceeds&#160;the&#160;permitted<br/>use,&#160;you&#160;will&#160;need&#160;to&#160;obtain&#160;permission&#160;directly&#160;from&#160;the&#160;copyright&#160;holder.<br/>
+<hr/>
+<a name="outline"></a><h1>Document Outline</h1>
+<ul>
+<li><a href="978-3-031-47751-5_2s.html#1">Proof of Necessary Work: Succinct State Verification with Fairness Guarantees</a>
+<ul>
+<li><a href="978-3-031-47751-5_2s.html#1">1 Introduction</a></li>
+<li><a href="978-3-031-47751-5_2s.html#2">2 Proof of Necessary Work</a>
+<ul>
+<li><a href="978-3-031-47751-5_2s.html#6">2.1 Amortization Resistance and Efficiency</a></li>
+</ul>
+</li>
+<li><a href="978-3-031-47751-5_2s.html#7">3 Implications for Nakamoto Consensus</a></li>
+<li><a href="978-3-031-47751-5_2s.html#8">4 Design and Instantiation</a></li>
+<li><a href="978-3-031-47751-5_2s.html#12">5 Related Work</a></li>
+<li><a href="978-3-031-47751-5_2s.html#13">A &#160;Security Proofs</a></li>
+<li><a href="978-3-031-47751-5_2s.html#16">References</a></li>
+</ul>
+</li>
+</ul>
+<hr/>
+</body>
+</html>

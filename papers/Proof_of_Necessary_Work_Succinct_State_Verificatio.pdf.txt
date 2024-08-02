@@ -1,0 +1,1415 @@
+Proof of Necessary Work: Succinct State
+Veriﬁcation with Fairness Guarantees
+
+Assimakis Kattis(B)
+
+and Joseph Bonneau
+
+New York University, New York, NY 10012, USA
+{kattis,jcb}@cs.nyu.edu
+
+Abstract. Blockchain-based payment systems utilize an append-only
+log of transactions whose correctness can be veriﬁed by any observer.
+Classically, veriﬁcation costs grow linearly in either the number of trans-
+actions or blocks in the blockchain (often both). Incrementally Veriﬁable
+Computation (IVC) can be used to enable constant-time veriﬁcation, but
+generating the necessary proofs is expensive. We introduce the notion of
+Proof of Necessary Work (PoNW), in which proof generation is an inte-
+gral part of the proof-of-work used in Nakamoto consensus, producing
+proofs using energy that would otherwise be wasted. We implement and
+benchmark a prototype of our system, enabling stateless clients to verify
+the entire blockchain history in about 40 milliseconds.
+
+Keywords: proof-of-work · zero-knowledge proofs · consensus
+algorithms
+
+1 Introduction
+
+Balancing throughput with decentralization is a major challenge in modern cryp-
+tocurrencies. Current systems such as Bitcoin require participants to process the
+entire system history to verify that the current state (the most recent block in
+the chain) is correct. Despite strict limits on blockchain growth which cap total
+system throughput, veriﬁcation costs are prohibitive for many clients. Joining
+the system requires downloading and verifying over 450 GB of blockchain history
+(as of 2022) which takes days on a typical laptop. In practice, most clients don’t
+perform independent veriﬁcation and rely on a trusted third party instead.
+
+Succinct blockchains aim to support eﬃcient veriﬁcation of the system’s
+entire history by any participant without trusting any third parties. Participants
+only need to obtain some ﬁxed public parameters from a trusted source (e.g. the
+genesis block and the system’s rules). Participants can then join the system at
+any time and receive a succinct validity proof for the most recent block in the
+system using minimal bandwidth and time. These proofs demonstrate both that
+there exists a sequence of valid transactions from the genesis state S0 to the
+state committed in the current block, and that the block’s branch (the sequence
+of predecessor blocks) is of quality q according to the consensus protocol. In this
+work we focus on aggregate proof-of-work (PoW) diﬃculty as the measure of
+c(cid:2) The Author(s) 2024
+F. Baldimtsi and C. Cachin (Eds.): FC 2023, LNCS 13951, pp. 18–35, 2024.
+https://doi.org/10.1007/978-3-031-47751-5_2
+
+Proof of Necessary Work
+
+19
+
+branch quality, as used in Bitcoin consensus. Currently, systems such as Bitcoin
+require O(t + h) work to completely verify a branch containing t transactions
+and h blocks. Succinct proofs enable optimal asymptotic performance of O(1)
+veriﬁcation costs for a client joining the system at any point in its history.
+
+A key challenge for succinct blockchains is incentivizing the expensive costs of
+computing a validity proof for each block. Meanwhile, Bitcoin employs proof-of-
+work (PoW), which provides system security by verifying energy consumption.
+This energy, while necessary for the consensus protocol, is not used for anything
+else and hence is often described as ‘wasted.’ We propose a new approach to
+useful PoW in which the work aids in the veriﬁcation of the system itself. We
+denote this as proof of necessary work (PoNW) and show how it can be used
+within a succinct blockchain architecture as a suitable PoW puzzle.
+
+A synergistic beneﬁt is directly incentivizing hardware acceleration of zero-
+knowledge proofs. This is relevant for many distributed payment systems in
+which proof generation time is a critical bottleneck limiting transaction through-
+put and/or latency [6,7,15,20]. Indeed, recent industry developments [2] based
+on our work have yielded interest in dedicating resources toward an industry-
+wide eﬀort to maximize the performance of zero-knowledge proof systems. We
+believe this to be beneﬁcial not only for distributed payments, but also for any
+application where high-throughput, low-latency and low-energy zero-knowledge
+proof generation is required.
+
+Building a consensus algorithm which produces validity proofs for each block
+as a useful byproduct requires carefully designing the PoW process to repli-
+cate the security properties of Bitcoin’s non-useful puzzle. Our main technical
+contribution is a method to deeply embed a nonce into the proof computation
+process, making it suitable as a progress-free PoW puzzle. We formalize this
+intuition by introducing the notion of (cid:2)-amortization resistance and propose a
+protocol which achieves this. Our results are based on the average-case hard-
+ness of multiexponentiation in the Generic Group Model (GGM) [32]. We build
+a prototype allowing a stateless client to rapidly verify a block (and thus its
+complete history) in milliseconds with 500 bytes of data downloaded. This also
+assists miners in quickly validating new blocks broadcast on the network, which
+may reduce the risk of block collisions and enable faster block frequency.
+
+2 Proof of Necessary Work
+
+To allow proof generation to serve as a PoW puzzle, we require (a) a proof πi
+whose generation algorithm P is moderately diﬃcult to compute and (b) a PoW
+H,d
+that requires the miner to fully recompute P to test a potential
+puzzle P
+V
+solution. The second property is necessary for the puzzle to be progress-free for
+fairness to miners of diﬀering size. Indeed, if generating unique proofs πi based
+H,d
+on randomly sampled nonces ni is suﬃciently ‘hard’, then using P
+instead
+V
+of a generic puzzle (such as computing the double SHA256 digest in Bitcoin)
+would allow us to not only perform PoW with the same theoretical guarantees,
+but also compute a valid proof πi in the process.
+
+20
+
+A. Kattis and J. Bonneau
+
+We do not formally analyze any consensus properties, since our goal is not
+to design a new consensus protocol but to retain that used by Bitcoin (and
+similar systems) and inherit its properties. However, we would like the work
+done to be useful by producing proofs of each block’s validity. We introduce
+the notion of performing PoW by proving the validity system state, denoted by
+Proof of Necessary Work (PoNW).
+
+Deﬁnition 1. (Proof of Necessary Work). Given a pseudorandom function
+H and a proof πi ∈ Z in some RSM with transition tuple (NewState, VerifyState),
+H,d
+: S × S × Z → {0, 1} with diﬃculty d as
+we deﬁne the veriﬁcation puzzle P
+V
+the solution to the following function:
+
+PH
+V (Si, Si+1, πi+1) = 1
+
+(cid:2)
+
+VerifyState(Si, Si+1, πi+1) = 1
+H(πi+1) < d
+
+(cid:3)
+
+,
+
+where 1[·] is the indicator function.
+
+By having access to a proof generating algorithm P(t, Si, Si+1, ni) → πi+1
+that generates unique (yet valid) πi+1 for each ni, we can generate πi+1 for
+Si+1 = NewState(t, Si, πi) using a uniformly randomly sampled ni until the
+puzzle condition is satisﬁed:
+
+PH
+V (Si, Si+1, P(t, Si, Si+1, ni)) = 1.
+
+Then πi+1 suﬃces for public veriﬁcation that PoW has been performed. This is
+because our prover will always fail with constant probability (when H(πi+1) ≥
+d), so iteratively sampling new proofs (by sampling new ni) until a valid one is
+found can be shown, under the assumption that P is the most eﬃcient way to ﬁnd
+such an ni, to be a memoryless exponential process and hence fair. Note that,
+by construction, we also guarantee that πi+1 is a valid witness for the RSM.
+The number of transactions veriﬁed is always ﬁxed (with empty transactions
+still ‘added’) as otherwise miners would be incentivized to mine puzzles with the
+smallest blocks.
+
+Like Nakamoto consensus, our puzzle needs the property that solutions are
+equally hard to test even after testing an arbitrary number of previous solutions.
+In other words, a miner should not be able to amortize costs while testing mul-
+tiple potential solutions. This property is deﬁned more formally below based on
+the μ-Incompressibility of [26], although we work in the bounded-size precom-
+putation model. We model PoNW as a function f O with limited access to some
+oracle O that performs a hard computation in an encoding of some group G.
+
+Deﬁnition 2. ((cid:2)-Amortization Resistance). For inputs of length λ and
+ouputs q ∈ poly(λ), function f O = {f O(n)}n∈N is (cid:2)-amortization resistant on
+average with respect to a sampler S if for all adversaries A = (AO
+2 ) with
+A performing less than (1 − (cid:2))qN queries to the oracle O on average, where N
+number of queries required for one evaluation of f O(n) on average, the following
+is negligible in λ:
+
+1 , AO
+
+Proof of Necessary Work
+
+21
+
+⎡
+
+⎣
+
+Pr
+
+∀i ∈ [q], πi = f O(ni)
+
+{ni}q
+
+← n, (n, aux) ← S(1λ)
+
+i=1
+precomp ← AO
+← AO
+i=1
+
+1 (1λ, aux)
+2 (1λ, n, precomp)
+
+{πi}q
+
+⎤
+
+⎦ .
+
+This deﬁnition captures the fact that computing multiple proofs does not
+come with marginal gains: indeed, provers cannot use larger computational
+resources to batch process proofs and achieve disproportionate performance
+improvements. By preventing large miners from achieving algorithmic returns-
+to-scale, this property is crucial in ensuring fairness. With the above objectives
+in mind, we now look at how to adapt our implementation to realize such a
+system.
+
+Before we look at designing an amortization resistant PoNW system, we
+summarize the computationally expensive components of proof generation in
+the Quadratic Arithmetic Program (QAP) Non-Interactive Proof (NIPs) of [27]
+compiled with [21]. For an (cid:5)-size statement with m internal variables and n con-
+straints, the prover P needs to (1) update inputs and witnesses, and (2) perform
+9m + n exponentiations in G using elements from the proving key as bases.
+Since updating variable assignments is orders-of-magnitude faster, amortization
+resistance requires P to recompute (almost) all exponentiations for each new
+nonce.
+
+Amortization of Multiexponentiation. Multiexponentiation is inherently
+amortizable [16,19] given enough memory, although space requirements scale
+exponentially with the number of computed elements. This is because we can
+precompute the exponents of speciﬁc basis elements and perform look-ups that
+can be used by multiple evaluations at once. We make precise the relationship
+between size and amortization gain to demonstrate that non-negligible amorti-
+zation gains require an infeasibly large amount of space. Since we are interested
+in average-case guarantees, all input elements to the multiexponentiation algo-
+rithm (i.e. the enumerated exponents, or puzzle instances) are sampled uniformly
+randomly from some S.
+
+We consider amortization in Shoup’s Generic Group Model (GGM) [32],1 in
+which the adversary can only compute products based on existing group elements
+(with non-negligible probability), or directly query the exponentiation of some
+index. The adversary has access to a multiplication oracle O : G×G → G, which
+returns the multiplication of the input elements over some random encoding
+σ : Zp → G. This oracle computes O(σ(i), σ(j)) = σ(i + j). The adversary
+may also use a polynomially-sized precomputation string. Since they don’t have
+access to the exponents of the bases that are being multiplied together (so as to
+perform a direct look-up), computing some σ(k) requires the generation of an
+addition chain ending with σ(k).
+
+However, this is the only assumption underlying the lower-bound results
+which prove the optimality of (the generalized) Pippenger’s algorithm [19], as
+they obtain lower-bounds on the length of the minimal addition chain needed to
+
+1 Maurer proposed a slightly diﬀerent GGM deﬁnition [25], for a comparison see [35].
+
+22
+
+A. Kattis and J. Bonneau
+
+compute some element. In short, our main formal contribution relies on adapting
+the packing lower-bound ideas of [14,28] to formalize the relationship between
+amortization of multiexponentiation of random indices and the amount of space
+available to the adversary. We do this by making explicit the average-case lower
+bounds for multiexponentiation, which were only stated (but not proven) in
+[14,28] to be a constant term away from the worst-case lower bounds.
+
+Note that the notion of average-case hardness requires an underlying prob-
+ability distribution over which the input indices are sampled. Obviously, the
+distribution of the sampled puzzle instances can aﬀect the average-case bounds
+if, for example, the sampler provides structured output with high probability.
+Therefore, all results have to be taken with respect to the underlying distribution
+of the inputs, which is in turn speciﬁed by the choice of sampling algorithm S.
+Where this S is taken to be uniform (as in this work), the notion of average-case
+hardness defaults to the traditional average-case lower bound results.
+
+In order to make formal statements about the amortization resistance of com-
+puting multiple NIPs, we need to show that there exists some sampling algorithm
+SN IP outputting instance-witness pairs (φ, w) so that, on average over its public
+coins, these output puzzle instances require a minimum number of oracle calls
+each for computation of their corresponding proof π. Firstly, we construct the
+equivalent multiexponentiation problem that the above will reduce to. In the
+following, we restrict ourselves to the NIP of [27], in which the valid output
+k=1 wkGi
+k for i ∈ [9], wk ∈ [N ]
+proof consists of 9 group elements of the form
+m=1 g(w1, ..., wκ)mHm, where g an m-dimensional
+and an additional element
+n-variable polynomial encoding the instance’s witness and Gi, Hm ∈ G.
+
+(cid:8)μ
+
+(cid:8)κ
+
+Since the hardness of the above computation depends on the structure of
+w and g, it becomes apparent that we need to restrict the types of predicates
+that we are looking at. In subsequent sections, we make precise the following
+construction: a circuit with an eﬃcient sampler S such that (1) accepting witness
+elements w1, ..., wκ ∈ [N ] are randomly distributed, (2) for each valid instance
+φ there exists only one valid w, and (3) for each valid w, there exists a unique
+valid g. Note that (1) and (2) are properties of the predicate, while (3) requires a
+stronger result on the NIP’s knowledge guarantees. We will show that predicates
+satisfying (1) and (2) are enough to reduce the computation of a NIP from
+[27] (which satisﬁes (3)) to a multiexponentiation problem (Deﬁnition 3) whose
+amortization we can bound.
+
+Deﬁnition 3. The (κ, μ)-length MultiExp function f : [N ]κ → Gν of dimension
+ν for {G(1)
+
+, ..., G(ν−1)
+
+i }μ
+
+i
+
+i
+
+i=1, {G(ν)
+}κ
+κ(cid:10)
+
+(cid:9)
+
+i=1, and function g : [N ]κ → K ⊆ [N ]μ is
+μ(cid:10)
+
+κ(cid:10)
+
+(cid:11)
+
+f (x1, ..., xκ) :=
+
+i=1
+
+xiG(1)
+i
+
+, ...,
+
+i=1
+
+xiG(ν−1)
+
+i
+
+g(x)iG(ν)
+
+i
+
+,
+
+,
+
+i=1
+
+where the xi are given by sampler S, based on its random coins.
+
+In order to provide a reduction that exactly captures the average-case hard-
+ness of the above problem, the structure of g becomes important. This requires
+
+Proof of Necessary Work
+
+23
+
+a more technical treatment, so here we work in the case where g is a weakly
+collision-resistant map from the witness elements x = (x1, ..., xκ) to the values
+(g(x)1, ..., g(x)μ) ∈ K ⊆ [N ]μ. This deﬁnes a computationally unique correspon-
+dence between witness elements and representations of μ-degree polynomials
+with coeﬃcients in [N ]. We speciﬁcally require the mapping g : [N ]κ → K ⊆
+[N ]μ to be collision-resistant in each of its output coordinates, or that the fol-
+lowing probability is negligible for all PPT adversaries A:
+
+Pr [∃i s.t. g(A(z))i = zi; z ← g(x), x ←R [N ]κ] ≈ 0,
+
+where zi denotes the i-th coordinate of z. This is enough to provide multiexpo-
+nentiation amortization bounds, which are given below for the case when κ = μ.
+Note that the general case for μ > κ can also be calculated in the exact same
+way, but has been omitted for simplicity.
+
+Theorem 1. The (κ, κ)-length MultiExp function (c.f. Deﬁnition 3) of dimen-
+sion ν over index size λ := log (N ), group G with |G| = 2λ, and storage size q
+is (cid:2)-amortization resistant with respect to the uniform sampler for all collision-
+resistant g, and for large enough κ, λ, ν, q satisﬁes:
+
+(cid:2) ≤
+
+log (q) + o(1)
+log (q) + log (κ) + log (ν) + log (λ)
+
+.
+
+We prove Theorem 1 in Appendix A. This amortization gain is unavoidable for
+NIPs that reduce to multiexponentiation; such as by compilation with [21].
+
+2.1 Amortization Resistance and Eﬃciency
+
+We modify the DPS predicate Π to ensure that most of the proof variables
+change unpredictably with modiﬁcations of the nonce or state. This gives amor-
+tization resistance in exchange for increasing the number of variables and con-
+straints in the predicate. The performance overhead originates from the need to
+commit to state and ‘mask’ the computation, which can be expensive for large
+predicates.
+
+The naive approach would be to isolate each of the diﬀerent circuits in the
+system and show that they can be modiﬁed to change unpredictably based on
+some seed. The design challenge here is how to make this happen while conserv-
+ing the proof’s correctness guarantees. For this, we ideally want to leverage a
+property speciﬁc to our predicate in order to ‘mask’ the computations and treat
+the proving system as a black box. We leverage the Pedersen hash function to
+transform our predicate Π to an amortization resistant version in Sect. 4.
+
+Given some nonce n, the prover might only change a part of the input in order
+to (re)check diﬃculty. This is an issue if the same nonce can be used with many
+inputs (in our case, transactions), as an adversarial prover would compute a proof
+and then only switch out a single transaction (or bit!), rechecking diﬃculty with
+no expensive recomputation. Deﬁne ρ := PRFn(state) that commits to state
+where PRF a pseudorandom function family. We need to commit to all block
+
+24
+
+A. Kattis and J. Bonneau
+
+transactions, ensuring that changing one transaction changes ρ. This can be
+expensive if we exploit no information about the underlying predicate, since
+PRF would have to commit to every single original variable.
+
+Fortunately, for our predicate the input to PRF is small: we use ρ = PRFn(rt)
+where rt the root of the new state and n the given nonce. Since this input
+will anyways be computed as part of the protocol, we don’t actually suﬀer any
+overhead apart from having to verify the above computation. Note that this is
+actually constant in predicate size. In the GGM, we can replace the PRF by a
+collision resistant hash function CRT instead, since the randomness of the group
+encoding is suﬃcient for the witness elements to look random to an adversary.
+We can force unique changes to the Merkle path updating the account if we
+require n to be part of the leaf: since a change in the block (or nonce) would
+lead to a new n, all update paths need to be recomputed if any transaction
+is changed. However, we also need to enforce change to the old Merkle path
+checking account existence. This technique is thus not ideal, since these paths
+do not depend on the current nonce (or state) at all, meaning that around half
+our variables will remain the same, giving (cid:2) ≈ 1/2.
+
+To get around this, we opt for a diﬀerent approach. We ‘mask’ the input
+variables to H by interaction with ρ (which also commits to n) and transform the
+constraints of the hash function subcircuit CH into a new circuit that retains the
+original Proof of Knowledge (PoK) guarantees by verifying the same underlying
+computation. By the unpredictability of ρ and randomness of n, we hope to
+achieve upper bounds for amortization resistance based on the security of the
+CRT. In this case, the sampler would need to provide valid witnesses for CH of
+the form w = (w1, ..., wm) whose encodings are indistinguishable from random,
+given n sampled uniformly randomly and access to a multiplication oracle O for
+a randomized encoding of some G.
+
+3 Implications for Nakamoto Consensus
+
+PoNW introduces two novel eﬀects on the consensus protocol due to the fact
+that checking a nonce (on the order of seconds to minutes) can now take a
+signiﬁcant fraction of the average block frequency (ten minutes in the case of
+Bitcoin), whereas it was negligible for traditional PoW puzzles. We can evaluate
+these eﬀects assuming a single puzzle solution takes time τ to check (with the
+mean block arrival time normalized to 1). When τ becomes a signiﬁcant fraction
+of the average block generation time (τ ∼ 1), miners face a loss of eﬃciency as
+they will often be forced to discard a partially-checked puzzle solution when a
+block is broadcast while checking previous solutions. We prove the scale of this
+eﬃciency loss in a short theorem:
+
+Theorem 2. A miner in a PoW protocol with puzzle checking time τ will discard
+a fraction 1 − τ
+eτ −1 of their work due to newly broadcast solutions.
+Note that as τ → 0 (fast puzzle checking time relative to block interval),
+the fraction of wasted work drops to 0. This is why this eﬀect has never been
+
+Proof of Necessary Work
+
+25
+
+considered in prior work. In the reverse direction, as τ → ∞ the fraction of
+wasted work approaches 1. For τ = 1 (solutions take as long to check as the
+mean block interval), the fraction of wasted work is e−2
+≈ 0.42, suggesting
+e−1
+that we should aim to keep the time (even for slow miners) to get a solution
+signiﬁcantly shorter than the mean block time.
+
+Slow puzzle checking time also introduces a concern that miners might refuse
+to stop working on a partially-checked solution (and hence discard partial work)
+even if a valid solution is found and broadcast. These stubborn miners might
+cause collisions in the blockchain (two blocks being found at the same height in
+the chain). We can analyse a worst-case scenario in which all miners are syn-
+chronized with identical proving time, in eﬀect making all miners stubborn and
+maximizing the probability of simultaneous solutions. If miners aren’t synchro-
+nized, they may opt to ﬁnish their current eﬀort after a block is found, but even
+if all miners do so this reduces to the above case where all miners ﬁnish checking
+a solution simultaneously. We call each synchronized period in which all miners
+check a solution a round.
+
+Theorem 3. The expected number of solutions in a synchronized mining round
+is deﬁned by a Poisson distribution with λ = τ . The proportion of rounds with
+multiple solutions (of rounds with any solution) is upper bounded by τ /2.
+
+By Theorem 3, our prototype unoptimized 100 s proving time (and 10 min block
+time) leads to less than 1
+
+12 worst case collisions.
+
+4 Design and Instantiation
+
+We prototype our system using libsnark [31], a C++ library implementing the
+IVC system in [4] using the construction from [27]. This is done using Succinct
+Non-Interactive Arguments of Knowledge (SNARKs) [3], non-interactive proofs
+of knowledge with the additional property of succinctness: producing constant-
+sized proofs that can be instantly veriﬁed. We can equivalently consider ΠS as
+an arithmetic circuit CΠ , evaluating to 1 on some input Bi if and only if Bi is
+a valid commitment to the output of UpdateState given some transaction set t
+and Si−1. In our implementation, CΠ is a QAP. Since this construction depends
+on SNARKs over pairs of elliptic curves that form IVC-friendly cycles, we use
+the same pair of non-supersingular curves of prime order as [4] with 80 bits of
+security and ﬁeld size log p ≈ 298.
+
+A tree depth of 32 for our implementation allows for 4.2 billion accounts. We
+compare this to 32 million unique used wallets on the Bitcoin blockchain after
+10 years of operation. This requires 32 · 4 = 128 hash checks for each transaction.
+We use the circuits in libsnark to verify such proofs of inclusion and modiﬁcation.
+i=1 is the
+We modify the Pedersen hash [13] to compute
+bit representation of the input x and {Gi}D
+i=1 is a set of primitive roots for an
+elliptic curve group E(Fp). We use Schnorr signatures [30] over the same elliptic
+curve (EC), based on the hardness of DLP.
+
+i=1 G1−2xi
+
+where {xi}D
+
+(cid:12)D
+
+i
+
+26
+
+A. Kattis and J. Bonneau
+
+(cid:12)n
+
+In addition to some input x of length n bits, our evaluation requires a pseu-
+dorandom seed ρ ∈ {0, 1}n. Consider the following modiﬁcation, which can be
+thought of as masking the underlying evaluation by using two sets of input vari-
+ables: HG(ρ)2 · HH (ρ) and xi for i ∈ [n], where HG(·) the evaluation of the
+Pedersen function HG(x) =
+.
+The variable h0 = HG(ρ)2 · HH (ρ) forms the ‘starting point’ of the eval-
+uation. In the beginning, the prover will have access to generator constants
+{Hi, H −1
+i Hi} for the speciﬁc instance of the problem. It would
+then perform a 2-bit lookup based on xi and ρi, multiplying the intermediate
+variable ci by one of the above. By carefully choosing these qi, we can design
+the circuit in such a way that unpredictability based on the seed is retained by
+all intermediate variables except the output y, which we ensure equals HG(x).
+
+i=1 G1−2xi
+
+i H −1
+
+, G−2
+
+, G2
+
+i
+
+i
+
+i
+
+i=1 ← ρ
+
+i=1 ← x, {ρi}n
+
+Parse {xi}n
+Deﬁne q = {qi}n
+for i ≤ n do
+
+Algorithm 1. MaskedPedersen
+Require: x, ρ ∈ {0, 1}n, G, H ∈ Gn
+Ensure: y ∈ G
+1: procedure CacheGenerators(ρ, G, H)
+Parse {ρi}n
+2:
+Compute h ← H(ρ, G), h2 ← H(ρ, H), h0 = h2 · h2
+3:
+return h0, h
+4:
+5: end procedure
+6: procedure MaskedHash(x, ρ, h0, h)
+7:
+8:
+9:
+10:
+11:
+12:
+13:
+14:
+15:
+16:
+17:
+18:
+19: end procedure
+
+if ρi = 0, xi = 0 then qi = H −1
+else if ρi = 0, xi = 1 then qi = G−2
+i
+else if ρi = 1, xi = 0 then qi = G2
+i · Hi
+else if ρi = 1, xi = 1 then qi = Hi
+end if
+ci = ci−1 · qi
+
+end for
+y = cn · h−1
+return y
+
+i=0 and set c0 = h0
+
+i=1, c = {ci}n
+
+i=1 ← ρ
+
+· H −1
+i
+
+i
+
+i
+
+(cid:14)
+
+(cid:13)(cid:12)j
+
+(cid:13)(cid:12)n
+
+· H 1−2ρi
+i
+
+i=1 G1−2xi
+
+i=1 G1−2ρi
+
+Correctness follows from the following observation: at step 0, the vari-
+(cid:12)n
+able c0 = HH (ρ) · HG(ρ)2 = HG(ρ) ·
+is initialized as
+the hash of the seed. For all intermediate steps j < n, we have that cj =
+HG(ρ) ·
+. Finally, after the n-th bit
+has been processed the ﬁnal intermediate variable cn is equal to the Peder-
+sen hash of the original input x multiplied by (the unpredictable) HG(ρ). By
+multiplying with HG(ρ)−1, we get HG(x). This follows easily from the fact that
+at every step we are performing the following operation: ci = ci−1 ·(Hi ·1[ρi, xi =
+1] + H −1
+i Hi · 1[ρi = 1, xi = 0]).
+
+· 1[ρi = 0, xi = 1] + G2
+
+· 1[ρi, xi = 0] + G−2
+
+i=j+1 G1−2ρi
+
+H 1−2ρi
+i
+
+i H −1
+
+(cid:14)
+
+·
+
+i
+
+i
+
+i
+
+i
+
+Proof of Necessary Work
+
+27
+
+It can be quickly checked that this computation ensures the previous recursive
+property when initialized with c0 = HH (ρ) · HG(ρ)2. By induction, this implies
+that after the n-th bit, only HG(ρ) and the exponentiations due to the bits of x
+remain in the output variable i.e. cn = HG(ρ) ·
+
+(cid:12)n
+
+.
+
+i=1 G1−2xi
+
+i
+
+Where we know that the variable ai has small support (when, for example,
+it is boolean ai ∈ {0, 1}), the prover can always precompute once and use the
+same answers without performing exponentiations. This is not a problem since all
+miners would know what the precomputed answers are from the very beginning
+and can incorporate them with a small memory cost. The problem with creating
+variables that become more and more ‘deterministic’ is that at some point their
+support becomes so small that an adversary will be able to precompute some
+oracle queries. However, since the end value of the sequence of variables {ci}n
+i=1
+is h · HG(x) which is also unpredictable due to h, it is not feasible to predict any
+index i ∈ [n] without violating the security of the operation HG(ρ) = h even
+if HG(x) is previously known. Note that h can be ‘oﬀset’ by a random element
+i = h + Ii for each path i ∈ [N ]. This provides independence between
+I as h
+authentication paths using the same nonce.
+
+(cid:2)
+
+We must restrict the proof systems used because certain constructions are
+inherently insecure: Groth16 [17] can easily be re-randomized, for example, with
+only a few additional group multiplications. We thus need a notion akin to non-
+malleability, ensuring that we cannot construct proofs given access to previous
+valid proofs. To achieve this, we show that Pinocchio [27] satisﬁes unique witness
+extractability. This property requires the proof system to output proofs with
+unique encodings for each distinct statement-witness pair, and hence rules out
+malleability.
+
+Deﬁnition 4. Let NIP := (Setup, Prove, Verify, Simulate) denote a NIP for rela-
+uwe
+tion R. Deﬁne the PPT algorithm A with extractor χA, Adv
+BG,R,A,χA(λ) =
+Pr[Guwe
+BG,R,A,χA(λ) as:
+
+BG,R,A,χA(λ)], and Guwe
+
+BG,R,A,χA (λ)
+
+Main Guwe
+(p, G1, G2, GT , e, g) ← BG(1λ)
+(crs, τ ) ← Setup(R)
+(φ, π1, π2) ← AO(crs)
+(w1, w2) ← χA(trA)
+b1 ← (w1 = w2) ∪ (R(φ, w1) (cid:14)= 1) ∪ (R(φ, w2) (cid:14)= 1)
+b2 ← Verify(crs, φ, π1) ∩ Verify(crs, φ, π2) ∩ ((φ, π1) (cid:14)∈ Q) ∩ ((φ, π1) (cid:14)∈ Q) ∩ (π1 (cid:14)= π2)
+Return b1 ∩ b2
+O(φ)
+π ← Simulate(crs, τ, φ)
+Q = (φ, π) ∪ Q
+Return π
+
+NIP is unique witness extractable if ∀ A ∃χA s.t. Adv
+
+uwe
+BG,R,A,χA(λ) ∈ negl(λ).
+Theorem 4. Assume the q-PDH, 2q-SDH and d-PKE assumptions hold for q ≥
+max (2d − 1, d + 2). [27] satisﬁes unique witness extractability.
+
+28
+
+A. Kattis and J. Bonneau
+
+The ability to resample witnesses for a statement-witness pair is advanta-
+geous to an adversary, since an ‘easy’ witness could be found by repeated sam-
+pling. We follow the deﬁnition of 2-hard instances in [12] and deﬁne single witness
+hard languages, for which it is hard to ﬁnd a new witness given an existing one.
+
+Deﬁnition 5. Let RL be a relation, and L = {φ|∃w s.t. RL(φ, w) = 1} an NP
+language. L is a hard single-witness language if:
+
+1. Eﬃcient Sampling: There exists a PPT sampler S(1λ) outputting a
+
+statement-witness pair (cid:16)Sx, Sw(cid:17) with Sx ∈ {0, 1}λ and (Sx, Sw) ∈ RL.
+
+2. Witness Intractability: For every PPT A there exists a negligible function
+
+μ(·) such that:
+
+(cid:15)(cid:16)
+
+(cid:17)
+Sx(1λ), A(S(1λ), 1λ)
+
+(cid:18)
+∈ RL, A(S(1λ), 1λ) (cid:14)= Sw(1λ)
+
+Pr
+
+≤ μ(λ).
+
+A relation whose statements are outputs of a CRT hash function H deﬁnes a hard
+single-witness language. We show this for L(HP ) = {φ : ∃w s.t. HG
+P,|w|(w) = φ}
+where HG
+
+P,n a weakly collision-resistant hash function.
+
+We show that computing a [27] proof for the evaluation of MaskedHash (and
+our DPS predicate) will take on average a similar number of queries as a suit-
+ably parametrized MultiExp instance. We restrict to the case of outputs from a
+sampler S which samples a ρ randomly and generates valid witnesses. Since we
+are working in the GGM, the witness variables of the MaskedHash instance have
+an encoding that is indistinguishable from random. Therefore, the amortization
+bounds of Theorem 1 apply.
+
+Theorem 5. There exists a sampler S and QAP R evaluating N parallel
+instances of k-bit inputs of MaskedHash for which the [27] prover and the
+(4N (k + 1), 8N (k + 1) + 2k)-length MultiExp problem of dimension 10 are equiv-
+alent up to constant terms with respect to multiplicative hardness.
+
+The vast majority of the constraints and variables in the predicate of the
+designed system are hash evaluations, so Theorem 5 can be used to show that
+there exists a proof system verifying state transitions for the DPS with bounded
+amortization-resistance guarantees. This is because the DPS predicate spends
+the vast majority of its time computing a proof whose hardness can be bounded
+by Theorem 5, since it is a sequence of iterated Pedersen hashes over a unique
+simulation extractable NIP.
+
+Corollary 1. There exists a DPS with block size T , state tree depth d, and index
+size λ that admits a Proof of Necessary Work that is (cid:2)-amortization resistant
+w.r.t. a multiplication oracle and for which:
+
+(cid:2) (cid:2)
+
+log (q)
+log (q) + log (dT λ) + log (λ)
+
+,
+
+where q is memory size measured in proof elements.
+
+Table 1. Prototype Times and Key Sizes for Predicates verifying diﬀerent numbers
+of transactions: Average running times for setup G, prover P and veriﬁer V over 10
+iterations are shown alongside proving/veriﬁcation key and proof sizes.
+
+Proof of Necessary Work
+
+29
+
+Txs Constraints Generator Prover Veriﬁer
+Avg (s)
+# #
+
+Size
+Avg (s) Avg (ms) pk (GB) vk (kB) π (B)
+0.74
+24.57
+
+16.0
+
+0.76
+
+373
+
+3
+
+10
+
+20
+
+30
+
+40
+
+50
+
+3658281
+
+10071527
+
+19233307
+
+28395087
+
+37556867
+
+46718647
+
+53.99
+
+161.24
+
+268.93
+
+354.83
+
+485.52
+
+570.09
+
+88.14
+
+185.10
+
+198.61
+
+286.50
+
+358.95
+
+1.96
+
+3.74
+
+5.61
+
+7.15
+
+9.01
+
+We construct the DPS based on the above speciﬁcations and investigate its
+running time and memory consumption. Results are displayed in Table 1. Our
+benchmark machine was an Amazon Web Services (AWS) c5.24xlarge instance,
+with 96 vCPUs and 192GiB of RAM. The security properties of the DPS are
+based on the guarantee of Π-compliance provided by IVC. It is apparent that
+setup and proving times dominate both the running time and memory consump-
+tion in the protocol. Setup takes place once by a trusted third-party and hence
+is less critical for day-to-day system performance.
+
+The prover is run by the miners, or full nodes. These generate PoW solutions
+repeatedly and would compute proof instances for many input nonces. Thus,
+larger storage requirements (∼ 5.42GB key sizes) could be easily met by these
+nodes, as could the need for more parallelism and better computing power to
+bring down the proving rate. We normalize the block time to achieve τ = 1/3
+in the sense of Theorem 2 for a proof including 30 transactions. This gives us
+that a miner will discard in expectation 15.59% of their work for an eﬃciency of
+∼ 84% if all miners operated based on the above benchmarks. Theorem 3 then
+gives an upper bound on the block orphan rate (or likelihood of block collisions)
+of 16.65%. Since we are keeping block times constant at 10 minutes, we note
+that any improvements in SNARK proof generation times will correspondingly
+decrease the amount of wasted work and orphan rate. Moreover, this does not
+depend on the way that the proofs are generated: distributed techniques among
+many participants (such as [34]) would also beneﬁt eﬃciency through the corre-
+sponding decrease of average proof time.
+
+5 Related Work
+
+Several proposals have aimed to reduce veriﬁcation costs for light clients; Chatzi-
+giannis et al. provide a survey [9]. Most relevant to our work are Vault [24] and
+MimbleWimble [29] which speed up verifying transaction history and NIPoPoW
+[22] and FlyClient [8] which speed up verifying consensus. None of these propos-
+als achieve constant-time veriﬁcation, though they require signiﬁcantly less work
+
+30
+
+A. Kattis and J. Bonneau
+
+from provers. Succinct blockchains, which provide optimal O(1) bandwidth and
+computation costs to verify both history and consensus, were proposed in 2020,
+simultaneously by this work and the Mina project [5] (formerly Coda). Mina
+takes a similar high-level approach, encoding state transitions in a recursive
+proof system for asymptotically optimal veriﬁcation time. The two proposals
+vary in a number of technical details, but the main conceptual diﬀerences lie
+in our choice of consensus protocol. Mina implements proof-of-stake consensus,
+speciﬁcally a variant of Ouroboros [23] designed for succinct proofs, but does not
+incentivize eﬃcient proof generation. By contrast, we implement a PoW variant
+speciﬁcally designed to incentivize proving eﬃciency.
+
+Subsequent work has provided novel and eﬃcient constructions for succinct
+blockchains, though not focused directly on prover incentivization. Chen et
+al. [10] propose a general framework for succinct blockchains over arbitrary tran-
+sition functions, alongside benchmarks using the Marlin [11] proof system. Hegde
+et al. [18] tackle a related but critical problem: that of minimizing the total mem-
+ory requirements of full nodes. Vesely et al. [33] propose Plumo, which leverages
+oﬄine signature aggregation to design a cost and latency optimized light client
+for the Celo [33] blockchain. Abusalah et al. [1] propose SNACKS, a formal
+framework that adds knowledge extraction guarantees to Proofs of Sequential
+Work. We note that these contributions are orthogonal to our main focus of
+incentivizing eﬃcient proving, and all could be incorporated in a practical PoNW
+implementation.
+
+A Security Proofs
+
+Proof. (Proof of Theorem 2). Assume that a blocks are found in a Poisson process
+with a mean of λ = 1 and an individual miner can check one puzzle solution
+in time τ . Consider the expected number of blocks this individual miner is able
+to check before the network broadcasts a solution. A block will be found by the
+(cid:19) τ
+0 e−xdx = 1 − eτ . In this case,
+network in less than time τ with probability
+the miner will not even ﬁnish checking a single block. If the network does not
+broadcast a block within time τ , the miner will check at least one block. The
+Poisson process then repeats, since it is memoryless. So the expected number of
+blocks checked is Eblocks = (1 − eτ ) · 0 + e−τ · (1 + Eblocks) or:
+
+eτ · Eblocks = 1 + EblocksEblocks =
+
+1
+eτ − 1
+
+.
+
+If no partially-checked solutions were wasted, the miner would always expect
+
+to check 1
+
+τ solutions. Thus, the fraction of wasted work is:
+
+1 −
+
+1
+eτ −1
+1
+τ
+
+= 1 − τ
+
+eτ − 1
+
+.
+
+Proof. (Proof of Theorem 3). Since solutions are Poisson random variables:
+
+Pr [collision] = [1 − Po(1, τ )/(1 − Po(0, τ ))] ≤ τ /2.
+
+Proof of Necessary Work
+
+31
+
+We borrow notation from [28] and parametrize with q input indices, p outputs
+and maximum index size 2λ. Where not speciﬁed, H = pqλ. Let L(y) be the
+minimum number of multiplications to compute y = (y1, ..., yp) with yi ∈ [2λ]q
+and [2λ] = {1, ..., 2λ − 1} from the inputs and unit vectors and L(p, q, 2λ) be the
+maximum over all of them.
+
+Lemma 1. For any value of c ≤ L(p, q, N ), there are at most:
+(cid:21)c
+
+(cid:20)
+
+H 2
+c
+
+2q+1ec(q + 1)2O(1),
+
+addition chains of length at most c.
+
+Lemma 2. Deﬁne H := κqνλ, φ(q, κ, ν, λ) :=
+
+qκν log (qκν) + κ log (H) + q + log (q + 1) + 1,
+
+and ﬁx μ := δH, corresponding to:
+
+cδ :=
+
+(1 − δ)H − φ(q, κ, ν, λ)
+log (H) − log (e) + log (μ) + log (1/δ)
+
+.
+
+For the (κ, κ)-length MultiExp function of dimension ν for CRT g:
+
+Pr
+x∈R[2λ]κ×q,G∈RGκ×ν
+
+[L(f (x1), ..., f (xq)) ≤ cδ] ≤
+
+(cid:21)μ
+
+.
+
+(cid:20)
+
+1
+2
+
+Proof. Write G(j)
+k = rjkG. As the xi ∈ [2λ]κ and rjk ∈ [2λ] are sampled ran-
+domly, the values xikG(j)
+k = xikrjkG for i ∈ [q], j ∈ [ν −1], k ∈ [κ] will be distinct
+w.h.p. The κ · q values g(xi)k · rνkG will also be distinct w.h.p. as g is collision
+resistant in each of its κ output coordinates.
+
+Let M be the q ×(κν) sized matrix with these values as entries. As each entry
+is an element in [2λ], the number of matrices M with qκν distinct elements is:
+
+(cid:21)
+
+(cid:20)
+
+2λ
+qκν
+
+≥ 2λqκν
+
+(qκν)qκν ,
+
+and to each M there corresponds a unique matrix F = (f (x1), ..., f (xq)) with
+dimension q × ν, where the κ products over random bases for each xi have been
+computed. Note that L(F ) = L(M ) + κ − 1.
+
+We can thus upper bound the minimal addition chain size L(F ) using L(M )
+
+and the number of matrices M :
+
+Pr
+x∈R[2λ]κ×q,G∈RGκ×ν
+
+[L(F ) ≤ c] ≤
+
+|{z : L(z) ≤ c}|
+2H−qκν log (qκν)
+
+.
+
+The numerator is upper bounded by Lemma 1 and the fact that a single chain
+corresponds to at most H κ matrices, giving:
+
+Pr
+x∈R[2λ]κ×q,G∈RGκ×ν
+
+[L(F ) ≤ c] ≤
+
+(cid:21)H−ψ(c)
+
+,
+
+(cid:20)
+
+1
+2
+
+32
+
+A. Kattis and J. Bonneau
+
+where ψ(c) := c(2 log H + log e) + φ(q, κ, ν, λ) − c log (c).
+
+Suﬃces to show that for c ≤ cδ, ψ(c) ≤ (1 − δ)H. Since ψ(c) is increasing for
+
+c ≤ L(κ, νq, 2λ), required to show that ρ ≥ cδ for ψ(ρ) = (1 − δ)H :
+
+ρ(2 log H + log e) + φ(q, κ, ν, λ) ≥ (1 − δ) · H,
+
+log ρ ≥ log ((1 − δ) · H − φ(q, κ, ν, λ)) − log (2 log H − log (e)),
+
+∴ ρ ≥
+
+(1 − δ)H − φ(q, κ, ν, λ)
+log H − log (e) + log (μ) + log (1/δ)
+
+,
+
+since μ = δH.
+
+Corollary 2. Fix δ > 0 and let ψ(ρδ) − (1 − δ) · H = 0.
+
+E[L(f (x1), ..., f (xq))] ≥ ρδ · (1 − 2−δH ).
+
+Proof. By Markov’s inequality:
+
+Pr[L(f (x1), ..., f (xq)) ≥ ρδ] · ρδ ≤ E[L(x)],
+(1 − Pr[L(f (x1), ..., f (xq)) < ρδ]) · ρδ ≤ E[L(f (x1), ..., f (xq))].
+
+Proof. (Proof of Theorem 1). Required to compute q iterations of the MultiExp
+function. Each iteration includes ν multiproducts over random bases, with the
+indices also sampled from [2λ].
+
+Using c oracle queries to do this corresponds to knowledge of an addition
+chain of length c containing all of F = (f (x1), ..., f (xq)) with xi ∈ [2λ]κ. There-
+fore, the probability that we compute F for x ∈R [2λ]κ×q with less than c queries
+is upper bounded by the probability that L(F ) ≤ c.
+
+Fix δ > 0. Lemma 2 states that ∃cδ s.t. this probability is negligible in
+μ := δκνqλ for c ≤ cδ. One function computation of dimension ν with κ inputs
+has an upper bound on the expected number of multiplications of:
+
+min (κ, ν) · λ +
+
+κνλ
+log (κνλ)
+
+· (1 + o(1)).
+
+Corollary 2 implies that:
+(cid:20)
+
+(cid:2) ≤ 1 − q−1 ·
+
+min (κ, ν) · λ +
+
+(cid:21)−1
+
+· (1 + o(1))
+
+κνλ
+log (κνλ)
+
+· (1 − 2−δκνqλ) · cδ
+
+≤ log (q) + δ log(κνλ) + o(1)
+log (κνqλ)
+where we have taken δ ≤ 1/ log (κνλ).
+
+≤ log (q) + o(1)
+log (κνqλ)
+
+,
+
+Proof. (Proof of Theorem 4). We know that the NIP has a PKE extractor from
+its security proof and so A can extract two witnesses almost surely using extrac-
+tor χP KE
+. If the polynomials are distinct, so are their witnesses. This follows
+A
+directly from the fact that, since π1 (cid:14)= π2, either (1) one of ui(X), vi(X), wi(X)
+diﬀers in one of the proofs, or (2) the extracted witnesses diﬀer. Since the pred-
+icate is the same, it follows that the witnesses must diﬀer.
+
+Proof of Necessary Work
+
+33
+
+Lemma 3. Let HP = {HG
+tions for which each HG
+hard single-witness.
+
+P,λ}λ∈N+ be a family of eﬃciently computable func-
+P,λ : {0, 1}λ → G is weakly collision-resistant. L(HP ) is
+
+Proof. (Proof of Lemma 3). Deﬁne S in the natural way: ﬁx λ ∈ N+ and deﬁne
+S to randomly sample an element x ∈ {0, 1}λ, outputting (HP,λ(x), x). The
+sampler is eﬃcient by the eﬃciency of HP,λ(x), and (HP,λ(x), x) ∈ RL(HP,λ)}
+by deﬁnition. Witness intractability (WI) follows from the collision resistance of
+HP,λ on constant-size inputs. If some A exists that violates WI, then running S
+on 1λ and then A on S(1λ) and 1λ, we non-negligibly ﬁnd a collision in HG
+
+P,λ.
+
+Proof. (Proof of Theorem 5). The MaskedHash QAP has 4N (k + 1) interme-
+diate witness variables (and 8N (k + 1) + 2k constraints) which admits witnesses
+from a sampler S where the seed ρ is uniformly random and so all witness
+variables (with full support) also look random by the randomness of the group
+encoding. This is as the intermediate values are distinct powers of a group ele-
+ment that is random due to ρ and the independence of the Ij index elements. By
+unique witness extractability and single witness hardness of CRT functions, all
+valid witnesses have a unique encoding and hence a unique witness polynomial
+h.
+
+We start with (cid:5) instances of N k-bit hash evaluations from S, and require (cid:5)
+valid proofs. We reduce to the 4N (k+1)-length MultiExp problem for (cid:5) instances
+and g equal to the function evaluating the representation of h given the witness
+elements. We provide (cid:5) of the 4N (k + 1) intermediate witness variables and the
+corresponding 9 sets of bases to the MultiExp function. The representation of h
+will be unique w.r.t. the witness (since the instance is single witness hard) and
+thus look random due to the inputs. Note that μ = 8N (k + 1) + 2k. We ﬁnally
+perform a linear in (cid:5) number of multiplications to add any witness variables
+that were not included (i.e. not randomly distributed). Since the MultiExp index
+distributions are also random, a proof veriﬁes iﬀ the MultiExp solution is valid.
+Conversely, given (cid:5) (4N (k + 1), 8N (k + 1) + 2k)-length MultiExp instances
+of dimension 10 with inputs and bases sampled from the QAP’s sampler and
+proving key respectively, we reduce to computing (cid:5) proofs for N k-bit hash
+evaluations. This is because the unassigned witness variables can be discerned
+from the auxiliary input to g, which comes from the QAP sampler. By the
+uniqueness of the proof’s encoding, the set of (cid:5) valid proofs will have to equal the
+MultiExp instances after a linear in (cid:5) number of operations to ‘undo’ products
+by any of the additional variables.
+
+References
+
+1. Abusalah, H., Fuchsbauer, G., Gaˇzi, P., Klein, K.: SNACKs: leveraging proofs
+of sequential work for blockchain light clients. Cryptology ePrint Archive, Paper
+2022/240 (2022)
+
+2. Announcing the ZPrize Competition. https://www.aleo.org/post/announcing-the-
+
+zprize-competition (2022). Accessed: 09 Aug 2022
+
+34
+
+A. Kattis and J. Bonneau
+
+3. Ben-Sasson, E., Chiesa, A., Tromer, E., Virza, M.: Succinct non-interactive zero
+
+knowledge for a von neumann architecture. In: USENIX Security (2014)
+
+4. Ben-Sasson, E., Chiesa, A., Tromer, E., Virza, M.: Scalable zero knowledge via
+
+cycles of elliptic curves. Algorithmica 79(4), 1102–1160 (2017)
+
+5. Bonneau, J., Meckler, I., Rao, V., Shapiro, E.: Mina: decentralized cryptocur-
+rency at scale. https://docs.minaprotocol.com/static/pdf/technicalWhitepaper.
+pdf (2020). Accessed: 09 Aug 2022
+
+6. Bowe, S., Chiesa, A., Green, M., Miers, I., Mishra, P., Wu, H.: ZEXE: enabling
+decentralized private computation. Cryptology ePrint Archive, Report 2018/962
+(2018)
+
+7. B¨unz, B., Agrawal, S., Zamani, M., Boneh, D.: Zether: towards privacy in a smart
+contract world. In: Bonneau, J., Heninger, N. (eds.) FC 2020. LNCS, vol. 12059, pp.
+423–443. Springer, Cham (2020). https://doi.org/10.1007/978-3-030-51280-4 23
+8. B¨unz, B., Kiﬀer, L., Luu, L., Zamani, M.: Flyclient: super-light clients for cryp-
+
+tocurrencies. cryptology ePrint Archive, Report 2019/226 (2019)
+
+9. Chatzigiannis, P., Baldimtsi, F., Chalkias, K.: SoK: Blockchain Light Clients. Cryp-
+
+tology ePrint Archive, Paper 2021/1657 (2021)
+
+10. Chen, W., Chiesa, A., Dauterman, E., Ward, N.P.: Reducing participation costs
+via incremental veriﬁcation for ledger systems. Cryptology ePrint Archive, Paper
+2020/1522 (2020)
+
+11. Chiesa, A., Hu, Y., Maller, M., Mishra, P., Vesely, P., Ward, N.: Marlin: prepro-
+cessing zksnarks with universal and updatable SRS. Cryptology ePrint Archive,
+Paper 2019/1047 (2019). https://eprint.iacr.org/2019/1047
+
+12. Dahari, H., Lindell, Y.: Deterministic-prover zero-knowledge proofs. Cryptology
+
+ePrint Archive, Paper 2020/141 (2020)
+
+13. Damg˚ard, I.B., Pedersen, T.P., Pﬁtzmann, B.: On the existence of statistically
+hiding bit commitment schemes and fail-stop signatures. In: CRYPTO (1993)
+14. Erd¨os, P.: Remarks on number theory III. On addition chains. Acta Arithmetica
+
+6, 77–81 (1960)
+
+15. Fisch, B., Bonneau, J., Greco, N., Benet, J.: Scaling proof-of-replication for Filecoin
+
+mining. Stanford University, Technical Report (2018)
+
+16. Gordon, D.M.: A survey of fast exponentiation methods. J. Algorithms 27(1),
+
+129–146 (1998)
+
+17. Groth, J.: On the size of pairing-based non-interactive arguments. In: Eurocrypt
+
+(2016)
+
+18. Hegde, P., Streit, R., Georghiades, Y., Ganesh, C., Vishwanath, S.: Achieving
+almost all blockchain functionalities with polylogarithmic storage. arXiv preprint
+arXiv:2207.05869 (2022)
+
+19. Henry, R.: Pippenger’s multiproduct and multiexponentiation algorithms. Univer-
+
+sity of Waterloo, Technical Report (2010)
+
+20. Kamvar, S., Olszewski, M., Reinsberg, R.: CELO: a multi-asset cryptographic pro-
+tocol for decentralized social payments. https://celo.org/papers/whitepaper (2019)
+21. Kate, A., Zaverucha, G.M., Goldberg, I.: Constant-size commitments to polyno-
+
+mials and their applications. In: Asiacrypt (2010)
+
+22. Kiayias, A., Lamprou, N., Stouka, A.P.: Proofs of proofs of work with sublinear
+
+complexity. In: Financial Crypto (2016)
+
+23. Kiayias, A., Russell, A., David, B., Oliynykov, R.: Ouroboros: a provably secure
+
+proof-of-stake blockchain protocol. In: CRYPTO (2017)
+
+24. Leung, D., Suhl, A., Gilad, Y., Zeldovich, N.: Vault: fast bootstrapping for the
+
+algorand cryptocurrency. In: NDSS (2018)
+
+Proof of Necessary Work
+
+35
+
+25. Maurer, U.: Abstract models of computation in cryptography. In: IMA Interna-
+
+tional Conference on Cryptography and Coding (2005)
+
+26. Miller, A., Kosba, A., Katz, J., Shi, E.: Nonoutsourceable scratch-oﬀ puzzles to
+
+discourage bitcoin mining coalitions. In: ACM CCS (2015)
+
+27. Parno, B., Gentry, C., Howell, J., Raykova, M.: Pinocchio: nearly practical veriﬁ-
+
+able computation. Cryptology ePrint Archive, Report 2013/279 (2013)
+
+28. Pippenger, N.: On the evaluation of powers and monomials. SIAM J. Comput.
+
+9(2), 230–250 (1980)
+
+29. Poelstra, A.: Mimblewimble. https://download.wpsoftware.net/bitcoin/wizardry/
+
+mimblewimble.pdf (2016). Accessed 09 Aug 2022
+
+30. Schnorr, C.P.: Eﬃcient identiﬁcation and signatures for smart cards. In: Eurocrypt
+
+(1989)
+
+31. SCIPRLab: libsnark: a c++ library for zksnark proofs. https://github.com/scipr-
+
+lab/libsnark (2017)
+
+32. Shoup, V.: Lower bounds for discrete logarithms and related problems. In: Euro-
+
+crypt (1997)
+
+33. Vesely, P., et al.: Plumo: an ultralight blockchain client. Cryptology ePrint Archive,
+
+Paper 2021/1361 (2021)
+
+34. Wu, H., Zheng, W., Chiesa, A., Popa, R.A., Stoica, I.: DIZK: a distributed zero
+
+knowledge proof system. In: USENIX Security (2018)
+
+35. Zhandry, M.: To label, or not to label (in generic groups). Cryptology ePrint
+
+Archive, Paper 2022/226 (2022)
+
+Open Access This chapter is licensed under the terms of the Creative Commons
+Attribution 4.0 International License (http://creativecommons.org/licenses/by/4.0/),
+which permits use, sharing, adaptation, distribution and reproduction in any medium
+or format, as long as you give appropriate credit to the original author(s) and the
+source, provide a link to the Creative Commons license and indicate if changes were
+made.
+
+The images or other third party material
+
+in this chapter are included in the
+chapter’s Creative Commons license, unless indicated otherwise in a credit line to the
+material. If material is not included in the chapter’s Creative Commons license and
+your intended use is not permitted by statutory regulation or exceeds the permitted
+use, you will need to obtain permission directly from the copyright holder.
+
+

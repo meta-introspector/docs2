@@ -1,0 +1,146 @@
+<!DOCTYPE html><html>
+<head>
+<title></title>
+<style type="text/css">
+<!--
+.xflip {
+    -moz-transform: scaleX(-1);
+    -webkit-transform: scaleX(-1);
+    -o-transform: scaleX(-1);
+    transform: scaleX(-1);
+    filter: fliph;
+}
+.yflip {
+    -moz-transform: scaleY(-1);
+    -webkit-transform: scaleY(-1);
+    -o-transform: scaleY(-1);
+    transform: scaleY(-1);
+    filter: flipv;
+}
+.xyflip {
+    -moz-transform: scaleX(-1) scaleY(-1);
+    -webkit-transform: scaleX(-1) scaleY(-1);
+    -o-transform: scaleX(-1) scaleY(-1);
+    transform: scaleX(-1) scaleY(-1);
+    filter: fliph + flipv;
+}
+-->
+</style>
+</head>
+<body>
+<a name=1></a>Mina:&#160;Economics&#160;and&#160;Monetary&#160;Policy<br/>
+Brad&#160;Cohn,&#160;Evan&#160;Shapiro,&#160;and&#160;Emre&#160;Tekişalp<br/>
+O(1)&#160;Labs<br/>
+October&#160;2020<br/>
+Abstract<br/>
+As&#160;cryptocurrencies&#160;become&#160;more&#160;popular&#160;and&#160;widely&#160;used,&#160;the&#160;cost&#160;to&#160;verify&#160;the&#160;blockchain<br/>
+grows&#160;proportionally&#160;with&#160;total&#160;transaction&#160;throughput&#160;and&#160;quickly&#160;becomes&#160;out&#160;of&#160;reach<br/>for&#160;most&#160;real-world&#160;users.<br/>
+In&#160;this&#160;way,&#160;cryptocurrencies&#160;can&#160;end&#160;up&#160;victims&#160;of&#160;their&#160;own<br/>
+success,&#160;becoming&#160;increasingly&#160;inaccessible&#160;to&#160;their&#160;users&#160;who&#160;in&#160;turn&#160;are&#160;required&#160;to&#160;trust<br/>intermediaries.&#160;Mina&#160;Protocol&#160;solves&#160;this&#160;problem&#160;by&#160;replacing&#160;the&#160;blockchain&#160;with&#160;an&#160;easily<br/>verifiable&#160;proof.&#160;Such&#160;a&#160;protocol&#160;requires&#160;a&#160;careful&#160;separation&#160;of&#160;roles,&#160;incentive&#160;design,&#160;and<br/>sound&#160;monetary&#160;policy&#160;to&#160;function&#160;properly&#160;and&#160;resist&#160;exploitation.&#160;We&#160;present&#160;the&#160;main<br/>considerations&#160;below.<br/>
+1<br/>
+Introduction<br/>
+By&#160;combining&#160;cryptographic&#160;techniques&#160;with&#160;economic&#160;incentives,&#160;<a href="economicsWhitepapers.html#7">Bitcoin[Nak09]&#160;</a>became&#160;the&#160;first<br/>decentralized&#160;peer-to-peer&#160;payments&#160;protocol.&#160;A&#160;critical&#160;aspect&#160;of&#160;Bitcoin’s&#160;design&#160;is&#160;the&#160;extent<br/>to&#160;which&#160;different&#160;components&#160;reinforced&#160;and&#160;strengthened&#160;one&#160;another.&#160;For&#160;example,&#160;Proof&#160;of<br/>Work&#160;imposes&#160;a&#160;cost&#160;on&#160;block&#160;production,&#160;which&#160;discourages&#160;bad&#160;actors&#160;from&#160;submitting&#160;invalid<br/>transactions.&#160;However,&#160;that&#160;incentive&#160;is&#160;dramatically&#160;multiplied&#160;by&#160;the&#160;use&#160;of&#160;a&#160;blockchain&#160;to&#160;store<br/>historical&#160;transactions,&#160;because&#160;it&#160;makes&#160;any&#160;tampering&#160;immediately&#160;evident&#160;to&#160;all&#160;peers&#160;on&#160;the<br/>network&#160;with&#160;a&#160;very&#160;low&#160;computation&#160;cost.&#160;This&#160;technique—making&#160;attacks&#160;costly&#160;and&#160;defense<br/>cheap—is&#160;a&#160;cornerstone&#160;of&#160;modern&#160;cryptography&#160;and&#160;a&#160;hallmark&#160;of&#160;a&#160;well-designed&#160;cryptoeconomic<br/>protocol.<br/>
+However,&#160;Bitcoin’s&#160;design&#160;has&#160;some&#160;limitations.<br/>
+While&#160;blockchains&#160;enable&#160;rapid&#160;tamper-<br/>
+detection,&#160;they&#160;do&#160;not&#160;provide&#160;rapid&#160;evidence&#160;of&#160;correctness.&#160;In&#160;fact,&#160;each&#160;time&#160;a&#160;new&#160;partici-<br/>pant&#160;joins&#160;the&#160;network,&#160;they&#160;must&#160;check&#160;every&#160;transaction&#160;since&#160;the&#160;beginning&#160;of&#160;the&#160;network&#160;to<br/>verify&#160;correctness.&#160;This&#160;requirement&#160;grows&#160;linearly&#160;with&#160;total&#160;transaction&#160;throughput&#160;and&#160;quickly<br/>becomes&#160;out&#160;of&#160;reach&#160;for&#160;most&#160;real-world&#160;users&#160;on&#160;resource&#160;constrained&#160;devices&#160;like&#160;smartphones.<br/>In&#160;this&#160;way,&#160;as&#160;cryptocurrencies&#160;become&#160;more&#160;popular&#160;and&#160;widely&#160;used,&#160;they&#160;end&#160;up<br/>victims&#160;of&#160;their&#160;own&#160;success,&#160;becoming&#160;increasingly&#160;inaccessible&#160;to&#160;their&#160;users&#160;who&#160;in<br/>turn&#160;are&#160;required&#160;to&#160;trust&#160;intermediaries.<br/>
+Recursive&#160;zk-SNARKs&#160;provide&#160;a&#160;solution&#160;to&#160;this&#160;dilemma.&#160;Similar&#160;to&#160;how&#160;blockchains&#160;enable<br/>
+constant-time&#160;tamper-evidence&#160;of&#160;a&#160;historical&#160;ledger,&#160;recursive&#160;zk-SNARKs&#160;enable&#160;constant-time<br/>correctness-verification&#160;of&#160;a&#160;historical&#160;ledger.&#160;Instead&#160;of&#160;each&#160;participant&#160;on&#160;the&#160;network&#160;verifying<br/>historical&#160;transactions&#160;for&#160;themselves,&#160;the&#160;network&#160;collaborates&#160;to&#160;generate&#160;proofs-of-correctness<br/>for&#160;transactions&#160;(zk-SNARKs),&#160;and&#160;then&#160;shares&#160;those&#160;around&#160;the&#160;network.&#160;So&#160;instead&#160;of&#160;end&#160;users<br/>trusting&#160;intermediaries&#160;to&#160;provide&#160;accurate&#160;information&#160;about&#160;the&#160;state&#160;of&#160;the&#160;ledger,&#160;they&#160;are&#160;given<br/>the&#160;state&#160;along&#160;with&#160;a&#160;zk-SNARK&#160;which&#160;cryptographically&#160;guarantees&#160;that&#160;state&#160;is&#160;accurate.&#160;In<br/>short,&#160;Mina&#160;Protocol&#160;replaces&#160;the&#160;blockchain&#160;with&#160;an&#160;easily&#160;verifiable&#160;proof.&#160;For&#160;more<br/>details&#160;on&#160;the&#160;technical&#160;implementation&#160;of&#160;this&#160;protocol,&#160;refer&#160;to&#160;the&#160;technical&#160;whitepap<a href="economicsWhitepapers.html#7">er[BMRS20].</a><br/>
+Such&#160;a&#160;protocol&#160;requires&#160;a&#160;careful&#160;separation&#160;of&#160;roles,&#160;incentive&#160;design,&#160;and&#160;sound&#160;monetary<br/>
+policy&#160;to&#160;function&#160;properly&#160;and&#160;resist&#160;exploitation.&#160;We&#160;describe&#160;the&#160;main&#160;design&#160;considerations<br/>below.<br/>
+1<br/>
+<hr/>
+<a name=2></a>2<br/>
+Network&#160;Roles&#160;and&#160;Incentives<br/>
+Most&#160;cryptocurrency&#160;protocols&#160;have&#160;at&#160;least&#160;two&#160;roles&#160;in&#160;their&#160;networks:&#160;1)&#160;those&#160;who&#160;verify&#160;every<br/>transaction&#160;in&#160;the&#160;network,&#160;often&#160;called&#160;full&#160;nodes,&#160;stakers,&#160;or&#160;miners,&#160;and&#160;2)&#160;those&#160;who&#160;trust&#160;third<br/>parties&#160;to&#160;verify&#160;transactions&#160;for&#160;them,&#160;such&#160;as&#160;light&#160;clients.&#160;As&#160;these&#160;protocols&#160;gain&#160;adoption,&#160;it<br/>becomes&#160;increasingly&#160;expensive&#160;to&#160;verify&#160;the&#160;ledger,&#160;so&#160;more&#160;participants&#160;become&#160;priced&#160;out&#160;of&#160;the<br/>first&#160;group&#160;and&#160;pushed&#160;into&#160;the&#160;second.&#160;For&#160;example,&#160;even&#160;though&#160;Bitcoin&#160;has&#160;averaged&#160;less&#160;than&#160;1.5<br/>transactions&#160;per&#160;second&#160;historically,&#160;a&#160;new&#160;member&#160;of&#160;the&#160;network&#160;must&#160;verify&#160;nearly&#160;500,000,000<br/>transactions&#160;in&#160;order&#160;to&#160;have&#160;full-node&#160;security.&#160;This&#160;problem&#160;is&#160;compounded&#160;in&#160;some&#160;proposed<br/>cryptocurrencies,&#160;which&#160;claim&#160;to&#160;have&#160;10x-100,000x&#160;the&#160;transaction&#160;throughput&#160;of&#160;Bitcoin,&#160;and<br/>therefore&#160;generate&#160;gigabytes&#160;or&#160;terabytes&#160;of&#160;data&#160;every&#160;week&#160;under&#160;peak&#160;loads.<br/>
+In&#160;contrast,&#160;Mina&#160;has&#160;constant&#160;resource&#160;requirements:&#160;regardless&#160;of&#160;how&#160;many&#160;transactions<br/>
+the&#160;network&#160;has&#160;processed,&#160;users&#160;can&#160;fully&#160;verify&#160;the&#160;current&#160;state&#160;with&#160;just&#160;a&#160;small&#160;zk-SNARK.<br/>To&#160;support&#160;this,&#160;Mina&#160;has&#160;three&#160;roles&#160;in&#160;the&#160;network,&#160;each&#160;incentivized&#160;to&#160;participate&#160;by&#160;different<br/>mechanisms.<br/>
+2.1<br/>
+Verifiers<br/>
+We&#160;expect&#160;the&#160;vast&#160;majority&#160;of&#160;network&#160;participants&#160;to&#160;be&#160;capable&#160;of&#160;verifying.&#160;Because&#160;Mina&#160;uses<br/>recursive&#160;zk-SNARKs&#160;to&#160;continuously&#160;prove&#160;state&#160;validity,&#160;full-node&#160;security&#160;is&#160;achieved&#160;by&#160;simply<br/>downloading&#160;a&#160;zk-SNARK,&#160;which&#160;is&#160;around&#160;a&#160;few&#160;hundred&#160;bytes&#160;and&#160;takes&#160;a&#160;few&#160;milliseconds&#160;of<br/>compute&#160;to&#160;verify.&#160;The&#160;zk-SNARK&#160;certifies&#160;consensus&#160;information&#160;and&#160;a&#160;Merkle&#160;root&#160;to&#160;a&#160;recent<br/>ledger&#160;state.&#160;At&#160;this&#160;point,&#160;verifiers&#160;can&#160;request&#160;Merkle&#160;paths&#160;to&#160;relevant&#160;parts&#160;of&#160;the&#160;state.&#160;By<br/>checking&#160;the&#160;Merkle&#160;path,&#160;verifiers&#160;ensure&#160;that&#160;the&#160;parts&#160;of&#160;the&#160;state&#160;they&#160;care&#160;about&#160;(such&#160;as&#160;their<br/>account&#160;balances)&#160;are&#160;indeed&#160;contained&#160;within&#160;the&#160;same&#160;ledger&#160;that’s&#160;certified&#160;by&#160;the&#160;zk-SNARK.<br/>
+2.2<br/>
+Block&#160;Producers<br/>
+Block&#160;producers&#160;are&#160;akin&#160;to&#160;miners&#160;or&#160;stakers&#160;in&#160;other&#160;protocols.&#160;They&#160;are&#160;incentivized&#160;by&#160;protocol<br/>distributions&#160;in&#160;the&#160;form&#160;of&#160;block&#160;rewards&#160;or&#160;coinbase&#160;transactions,&#160;as&#160;well&#160;as&#160;network&#160;fees&#160;paid<br/>by&#160;users.&#160;Importantly,&#160;block&#160;producers&#160;are&#160;not&#160;incentivized&#160;by&#160;the&#160;threat&#160;of&#160;slashing&#160;in&#160;order&#160;to<br/>participate,&#160;as&#160;Mina&#160;uses&#160;Ourob<a href="economicsWhitepapers.html#7">oros[DGKR17].&#160;</a>In&#160;addition&#160;to&#160;directly&#160;staking,&#160;individuals&#160;can<br/>delegate&#160;their&#160;stake&#160;to&#160;another&#160;block&#160;producer.&#160;This&#160;allows&#160;the&#160;delegate&#160;to&#160;stake—but&#160;not&#160;send<br/>transactions—on&#160;another’s&#160;behalf.<br/>
+As&#160;is&#160;common,&#160;block&#160;producers&#160;select&#160;which&#160;transactions&#160;to&#160;include&#160;in&#160;the&#160;next&#160;block.&#160;Obviously,<br/>
+they&#160;are&#160;incentivized&#160;to&#160;include&#160;the&#160;highest&#160;fee&#160;transactions.&#160;However,&#160;in&#160;order&#160;to&#160;ensure&#160;the<br/>blockchain&#160;remains&#160;succinct,&#160;block&#160;producers&#160;have&#160;an&#160;additional&#160;responsibility:&#160;for&#160;each&#160;transaction<br/>they&#160;add&#160;to&#160;a&#160;block,&#160;they&#160;must&#160;SNARK&#160;an&#160;equivalent&#160;number&#160;of&#160;previously&#160;added&#160;transactions.&#160;If<br/>they&#160;don’t&#160;do&#160;so,&#160;their&#160;block&#160;won’t&#160;comply&#160;with&#160;the&#160;consensus&#160;rules&#160;and&#160;will&#160;be&#160;rejected&#160;by&#160;other<br/>nodes.&#160;It&#160;may&#160;be&#160;helpful&#160;to&#160;imagine&#160;a&#160;queue&#160;of&#160;transactions.&#160;If&#160;a&#160;block&#160;producer&#160;wants&#160;to&#160;add&#160;10<br/>transactions&#160;to&#160;the&#160;back&#160;of&#160;the&#160;queue&#160;(so&#160;they&#160;can&#160;claim&#160;the&#160;transaction&#160;fees),&#160;they&#160;must&#160;SNARK<br/>10&#160;transactions&#160;from&#160;the&#160;front&#160;of&#160;the&#160;queue.&#160;They&#160;may&#160;produce&#160;those&#160;SNARKs&#160;themselves,&#160;or<br/>they&#160;may&#160;select&#160;them&#160;from&#160;a&#160;marketplace&#160;that&#160;other&#160;specialized&#160;network&#160;participants,&#160;Snarkers,<br/>contribute&#160;to.<br/>
+2.3<br/>
+Snarkers<br/>
+Snarkers,&#160;described&#160;in&#160;the&#160;technical&#160;Mina&#160;whitepap<a href="economicsWhitepapers.html#7">er[BMRS20],&#160;</a>are&#160;network&#160;participants&#160;who<br/>produce&#160;zk-SNARKs&#160;that&#160;verify&#160;transactions.&#160;They&#160;are&#160;compensated&#160;by&#160;posting&#160;fees&#160;for&#160;doing&#160;so,<br/>called&#160;bids,&#160;and&#160;if&#160;their&#160;SNARKs&#160;are&#160;used&#160;in&#160;a&#160;block,&#160;the&#160;block&#160;producer&#160;pays&#160;out&#160;those&#160;fees&#160;from<br/>the&#160;total&#160;transaction&#160;fees.<br/>
+Given&#160;that&#160;many&#160;different&#160;Snarkers&#160;can&#160;post&#160;fees&#160;for&#160;a&#160;single&#160;transaction,&#160;and&#160;block&#160;produc-<br/>
+ers&#160;are&#160;incentivized&#160;to&#160;minimize&#160;the&#160;fees&#160;they&#160;pay&#160;out&#160;for&#160;SNARK&#160;work,&#160;this&#160;naturally&#160;forms&#160;a<br/>marketplace&#160;where&#160;participants&#160;compete&#160;to&#160;produce&#160;the&#160;most&#160;cost-efficient&#160;zk-SNARK&#160;proofs.&#160;For<br/>convenience,&#160;we&#160;can&#160;refer&#160;to&#160;this&#160;as&#160;the&#160;Snarketplace.&#160;Below,&#160;we’ll&#160;evaluate&#160;some&#160;of&#160;its&#160;economic<br/>dynamics.<br/>
+First,&#160;as&#160;long&#160;as&#160;there&#160;is&#160;some&#160;amount&#160;of&#160;latent&#160;compute&#160;available&#160;on&#160;the&#160;network—–almost<br/>
+certainly&#160;assured&#160;by&#160;a&#160;network&#160;of&#160;block&#160;producers–—the&#160;Snarketplace&#160;will&#160;not&#160;affect&#160;the&#160;protocol’s<br/>liveness&#160;or&#160;censorship&#160;resistance,&#160;since&#160;there&#160;will&#160;always&#160;be&#160;a&#160;bid&#160;to&#160;produce&#160;SNARKs&#160;at&#160;some&#160;cost.<br/>
+2<br/>
+<hr/>
+<a name=3></a>To&#160;see&#160;this,&#160;consider&#160;the&#160;incentives&#160;of&#160;a&#160;network&#160;participant&#160;who&#160;has&#160;spare&#160;compute&#160;capacity&#160;and<br/>observes&#160;SNARK&#160;fees&#160;rising&#160;on&#160;the&#160;network&#160;due&#160;to&#160;a&#160;lack&#160;of&#160;SNARK&#160;production.&#160;When&#160;SNARK<br/>fees&#160;go&#160;above&#160;the&#160;marginal&#160;cost&#160;of&#160;SNARK&#160;production&#160;for&#160;this&#160;participant,&#160;if&#160;they&#160;are&#160;a&#160;rational<br/>economic&#160;actor,&#160;they&#160;will&#160;begin&#160;offering&#160;bids&#160;above&#160;their&#160;price&#160;of&#160;production&#160;and&#160;below&#160;market&#160;price<br/>to&#160;capture&#160;profit,&#160;therefore&#160;stabilizing&#160;SNARK&#160;fees.&#160;Block&#160;producers&#160;can&#160;simply&#160;pass&#160;along&#160;those<br/>fees&#160;to&#160;those&#160;who&#160;are&#160;transacting.&#160;In&#160;practice,&#160;the&#160;computation&#160;cost&#160;to&#160;generate&#160;a&#160;SNARK&#160;should<br/>be&#160;extremely&#160;low,&#160;in&#160;the&#160;range&#160;of&#160;less&#160;than&#160;a&#160;penny&#160;per&#160;transaction&#160;at&#160;current&#160;cloud&#160;computing<br/>prices.<br/>
+Second,&#160;given&#160;economies&#160;of&#160;scale,&#160;it’s&#160;possible&#160;that&#160;some&#160;SNARK&#160;operations&#160;could&#160;become<br/>
+more&#160;dominant&#160;over&#160;time,&#160;as&#160;some&#160;mining&#160;operations&#160;have&#160;with&#160;Bitcoin.&#160;However,&#160;any&#160;resulting<br/>concentration&#160;of&#160;SNARK&#160;production&#160;would&#160;not&#160;have&#160;any&#160;bearing&#160;on&#160;the&#160;censorship&#160;resistance&#160;or<br/>liveness&#160;of&#160;the&#160;protocol.&#160;This&#160;is&#160;because&#160;anyone&#160;will&#160;be&#160;able&#160;to&#160;produce&#160;SNARKs&#160;at&#160;some&#160;price.<br/>So&#160;even&#160;if&#160;there&#160;was&#160;some&#160;SNARK&#160;producer&#160;who&#160;could&#160;offer&#160;cheaper&#160;SNARKs,&#160;if&#160;they&#160;refused&#160;to<br/>process&#160;certain&#160;transactions,&#160;anyone&#160;else&#160;on&#160;the&#160;network&#160;could&#160;provide&#160;a&#160;SNARK&#160;for&#160;a&#160;slightly<br/>higher&#160;fee,&#160;and&#160;block&#160;producers&#160;would&#160;still&#160;be&#160;incentivized&#160;to&#160;include&#160;it&#160;in&#160;the&#160;ledger.&#160;Third,<br/>an&#160;explicit,&#160;voluntary&#160;coordination&#160;mechanism&#160;that&#160;prevents&#160;double-proving&#160;would&#160;likely&#160;reduce<br/>SNARK&#160;fees&#160;and&#160;computational&#160;waste&#160;on&#160;the&#160;network,&#160;though&#160;such&#160;a&#160;mechanism&#160;isn’t&#160;necessary<br/>for&#160;security&#160;or&#160;liveness.<br/>
+2.3.1<br/>
+Censorship&#160;resistance<br/>
+It&#160;may&#160;be&#160;worthwhile&#160;to&#160;expand&#160;a&#160;bit&#160;on&#160;the&#160;argument&#160;supporting&#160;censorship&#160;resistance.&#160;While<br/>there&#160;are&#160;a&#160;number&#160;of&#160;plausible&#160;attacks&#160;to&#160;bitcoin’s&#160;censorship&#160;resistanc<a href="economicsWhitepapers.html#7">e[NBF+16],&#160;</a>it&#160;turns&#160;out<br/>you&#160;can&#160;be&#160;included&#160;in&#160;a&#160;block&#160;if&#160;you&#160;just&#160;pay&#160;a&#160;high&#160;enough&#160;fee&#160;or&#160;wait&#160;long&#160;enough.&#160;Mina&#160;is&#160;very<br/>similar&#160;to&#160;bitcoin,&#160;with&#160;the&#160;added&#160;complication&#160;that&#160;you&#160;also&#160;need&#160;your&#160;transaction&#160;to&#160;be&#160;Snarked<br/>at&#160;some&#160;point&#160;after&#160;it&#160;is&#160;included&#160;in&#160;the&#160;block.<br/>
+So&#160;for&#160;Mina&#160;to&#160;not&#160;be&#160;censorship&#160;resistant,&#160;a&#160;transaction&#160;would&#160;have&#160;to&#160;be&#160;included&#160;in&#160;a&#160;block<br/>
+and&#160;then&#160;never&#160;Snarked.&#160;That&#160;would&#160;require&#160;collusion&#160;among&#160;all&#160;Snarkers&#160;(who&#160;would&#160;refuse&#160;to<br/>Snark&#160;the&#160;transaction)&#160;or&#160;all&#160;block&#160;producers&#160;(who&#160;choose&#160;not&#160;to&#160;include&#160;the&#160;Snarked&#160;transaction<br/>in&#160;the&#160;ledger&#160;updates).&#160;By&#160;Ouroboros&#160;assumptions&#160;we&#160;can&#160;presume&#160;the&#160;network&#160;is&#160;decentralized<br/>and&#160;so&#160;block&#160;producers&#160;aren’t&#160;colluding.<br/>
+Now&#160;let’s&#160;turn&#160;to&#160;Snarkers.&#160;Because&#160;the&#160;computation&#160;cost&#160;of&#160;Snarking&#160;a&#160;transaction&#160;is&#160;both<br/>
+extremely&#160;low&#160;and&#160;accessible&#160;to&#160;anyone&#160;with&#160;a&#160;computer,&#160;getting&#160;all&#160;Snarkers&#160;to&#160;collude&#160;is&#160;far<br/>more&#160;difficult&#160;than&#160;getting&#160;all&#160;block&#160;producers&#160;to&#160;collude.&#160;Existing&#160;Snarkers&#160;cannot&#160;prevent&#160;a&#160;new<br/>Snarker&#160;from&#160;entering&#160;the&#160;market.&#160;If&#160;someone&#160;notices&#160;a&#160;transaction&#160;not&#160;being&#160;Snarked,&#160;they&#160;could<br/>easily&#160;and&#160;profitably&#160;offer&#160;to&#160;Snark&#160;it,&#160;and&#160;even&#160;with&#160;very&#160;low&#160;transaction&#160;fees&#160;a&#160;block&#160;producer<br/>could&#160;profitably&#160;include&#160;the&#160;Snarked&#160;transaction&#160;in&#160;a&#160;ledger&#160;update.<br/>
+3<br/>
+<hr/>
+<a name=4></a><img src="economicsWhitepaper-4_1.png"/><br/>
+4<br/>
+<hr/>
+<a name=5></a><img src="economicsWhitepaper-5_1.png"/><br/>
+5<br/>
+<hr/>
+<a name=6></a><img src="economicsWhitepaper-6_1.png"/><br/>
+3<br/>
+Nomenclature&#160;and&#160;Denomination<br/>
+Individual&#160;units&#160;of&#160;the&#160;currency&#160;are&#160;called&#160;mina.&#160;The&#160;initial&#160;supply&#160;of&#160;Mina&#160;is&#160;1,000,000,000.&#160;Each<br/>mina&#160;is&#160;divisible&#160;into&#160;1&#160;billion&#160;units&#160;(nanomina).&#160;Intermediary&#160;denominations&#160;of&#160;the&#160;currency&#160;use<br/>standard&#160;metric&#160;prefixes:<br/>
+1.&#160;1&#160;=&#160;1&#160;mina<br/>
+2.&#160;0.01&#160;=&#160;1&#160;centimina&#160;(cent)<br/>
+3.&#160;10−6&#160;=&#160;1&#160;micromina<br/>
+4<br/>
+Monetary&#160;Policy<br/>
+Because&#160;Mina&#160;uses&#160;a&#160;variant&#160;of&#160;Ouroboros&#160;Proof&#160;of&#160;Stak<a href="economicsWhitepapers.html#7">e[DGKR17][BMRS20],&#160;</a>block&#160;rewards&#160;and<br/>fees&#160;are&#160;distributed&#160;approximately&#160;pro-rata&#160;to&#160;current&#160;holdings&#160;as&#160;long&#160;as&#160;everyone&#160;in&#160;the&#160;network<br/>is&#160;staking.&#160;Therefore,&#160;assuming&#160;high&#160;staking&#160;participation,&#160;any&#160;nominal&#160;inflation&#160;in&#160;the&#160;proto-<br/>col&#160;is&#160;cancelled&#160;out&#160;by&#160;a&#160;nominal&#160;return&#160;denominated&#160;in&#160;the&#160;protocol,&#160;ensuring&#160;that&#160;accounts’<br/>proportional&#160;holdings&#160;of&#160;the&#160;currency&#160;remain&#160;constant.<br/>
+However,&#160;those&#160;who&#160;do&#160;not&#160;choose&#160;to&#160;stake&#160;or&#160;delegate&#160;will&#160;experience&#160;dilution&#160;relative&#160;to&#160;those<br/>
+who&#160;do.&#160;In&#160;order&#160;to&#160;motivate&#160;participants&#160;to&#160;begin&#160;staking,&#160;Mina’s&#160;nominal&#160;inflation&#160;will&#160;begin&#160;at<br/>12%.&#160;Then,&#160;over&#160;the&#160;course&#160;of&#160;the&#160;first&#160;five&#160;years,&#160;the&#160;inflation&#160;rate&#160;will&#160;fall&#160;to&#160;7%,&#160;and&#160;remain&#160;at<br/>7%&#160;thereafter&#160;by&#160;default,&#160;subject&#160;to&#160;changes&#160;via&#160;the&#160;chain’s&#160;gov<a href="economicsWhitepapers.html#6">ernance1.</a><br/>
+Importantly,&#160;the&#160;protocol&#160;will&#160;target&#160;these&#160;inflation&#160;rates&#160;regardless&#160;of&#160;the&#160;staking&#160;participation<br/>
+rate.&#160;That&#160;means&#160;that&#160;block&#160;rewards&#160;will&#160;change&#160;dynamically&#160;to&#160;target&#160;this&#160;inflation&#160;rate.&#160;For<br/>example,&#160;if&#160;only&#160;50%&#160;of&#160;the&#160;network&#160;stakes,&#160;then&#160;block&#160;rewards&#160;will&#160;double.&#160;This&#160;is&#160;because&#160;per<br/>Ouroboros,&#160;number&#160;of&#160;blocks&#160;produced&#160;per&#160;epoch&#160;is&#160;expected&#160;to&#160;be&#160;proportional&#160;to&#160;the&#160;staking<br/>ratio.&#160;This&#160;naturally&#160;encourages&#160;more&#160;individuals&#160;to&#160;stake&#160;at&#160;low&#160;participation&#160;rates.<br/>
+1A&#160;governance&#160;paper&#160;is&#160;forthcoming.<br/>
+6<br/>
+<hr/>
+<a name=7></a><img src="economicsWhitepaper-7_1.png"/><br/>
+The&#160;primary&#160;consideration&#160;when&#160;lowering&#160;inflation&#160;rates&#160;would&#160;be&#160;determining&#160;whether&#160;rewards<br/>
+are&#160;higher&#160;than&#160;is&#160;necessary&#160;to&#160;ensure&#160;block&#160;producers&#160;have&#160;sufficient&#160;incentive&#160;to&#160;validate&#160;without<br/>requiring&#160;a&#160;large&#160;increase&#160;in&#160;fees.<br/>
+It&#160;is&#160;also&#160;important&#160;to&#160;architect&#160;how&#160;monetary&#160;policy&#160;enables&#160;the&#160;ongoing&#160;development&#160;of&#160;a<br/>
+decentralized&#160;network&#160;such&#160;as&#160;Mina.&#160;Inflation,&#160;in&#160;the&#160;form&#160;of&#160;block&#160;rewards,&#160;is&#160;used&#160;to&#160;secure<br/>the&#160;chain&#160;against&#160;attacks&#160;by&#160;incentivizing&#160;validation&#160;by&#160;block&#160;producers.&#160;However,&#160;security&#160;is&#160;not<br/>the&#160;only&#160;requirement&#160;for&#160;a&#160;new&#160;network.&#160;Namely,&#160;long-term&#160;maintenance&#160;and&#160;improvement&#160;of&#160;the<br/>protocol&#160;will&#160;also&#160;require&#160;funding.&#160;We&#160;suggest&#160;the&#160;most&#160;suitable&#160;mechanism&#160;for&#160;this&#160;is&#160;the&#160;creation<br/>of&#160;special&#160;block&#160;rewards,&#160;allocated&#160;to&#160;recipients&#160;as&#160;determined&#160;by&#160;the&#160;chain’s&#160;governance.<br/>
+References<br/>
+[BMRS20]&#160;Joseph&#160;Bonneau,&#160;Izaak&#160;Meckler,&#160;Vanishree&#160;Rao,&#160;and&#160;Evan&#160;Shapiro.&#160;Coda:&#160;Decentralized<br/>
+Cryptocurrency&#160;at&#160;Scale,&#160;2020.<br/>
+[DGKR17]&#160;Bernardo&#160;David,&#160;Peter&#160;Gaži,&#160;Aggelos&#160;Kiayias,&#160;and&#160;Alexander&#160;Russell.&#160;Ouroboros&#160;praos:<br/>
+An&#160;adaptively-secure,&#160;semi-synchronous&#160;proof-of-stake&#160;protocol.<br/>
+Cryptology&#160;ePrint<br/>
+Archive,&#160;Report&#160;2017/573,&#160;2017.&#160;<a href="http://eprint.iacr.org/2017/573">http://eprint.iacr.org/2017/573.</a><br/>
+[Nak09]<br/>
+Satoshi&#160;Nakamoto.&#160;Bitcoin:&#160;A&#160;peer-to-peer&#160;electronic&#160;cash&#160;system,&#160;2009.<br/>
+[NBF+16]<br/>
+Arvind&#160;Narayanan,&#160;Joseph&#160;Bonneau,&#160;Edward&#160;Felten,&#160;Andrew&#160;Miller,&#160;and&#160;Steven<br/>Goldfeder.&#160;Bitcoin&#160;and&#160;Cryptocurrency&#160;Technologies:&#160;A&#160;Comprehensive&#160;Introduction,<br/>2016.&#160;Feather&#160;Forking.<br/>
+7<br/>
+<hr/>
+<a name="outline"></a><h1>Document Outline</h1>
+<ul>
+<li><a href="economicsWhitepapers.html#1">Introduction</a></li>
+<li><a href="economicsWhitepapers.html#2">Network Roles and Incentives</a>
+<ul>
+<li><a href="economicsWhitepapers.html#2">Verifiers</a></li>
+<li><a href="economicsWhitepapers.html#2">Block Producers</a></li>
+<li><a href="economicsWhitepapers.html#2">Snarkers</a>
+<ul>
+<li><a href="economicsWhitepapers.html#3">Censorship resistance</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="economicsWhitepapers.html#6">Nomenclature and Denomination</a></li>
+<li><a href="economicsWhitepapers.html#6">Monetary Policy</a></li>
+</ul>
+<hr/>
+</body>
+</html>

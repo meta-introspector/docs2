@@ -1,0 +1,2851 @@
+Coda: Decentralized Cryptocurrency at Scale
+
+Joseph Bonneau1, Izaak Meckler2, Vanishree Rao2, and Evan
+Shapiro2
+
+1New York University
+2O(1) Labs
+
+Abstract
+
+We introduce the notion of a succinct blockchain, a replicated state
+machine in which each state transition (block) can be eﬃciently veri-
+ﬁed in constant time regardless of the number of prior transitions in the
+system. Traditional blockchains require veriﬁcation time linear in the
+number of transitions. We show how to construct a succinct blockchain
+using recursively composed succinct non-interactive arguments of knowl-
+edge (SNARKs). Finally, we instantiate this construction to implement
+Coda, a payment system (cryptocurrency) using a succinct blockchain.
+Coda oﬀers payment functionality similar to Bitcoin, with a dramatically
+faster veriﬁcation time of 200ms making it practical for lightweight clients
+and mobile devices to perform full veriﬁcation of the system’s history.
+
+1
+
+Introduction
+
+Bitcoin and other distributed payment systems (also called cryptocurrencies or
+simply blockchains) aim to provide a decentralized system for making and ver-
+ifying payments. However, for traditional cryptocurrencies, including Bitcoin,
+decentralization comes at the cost of scalability as each node needs to process
+the entire system history upon joining the network. Asymptotically, verifying
+a blockchain containing 𝑡 transactions requires 𝛺(𝑡) time (usually more than
+linear in 𝑡 as bookkeeping is required to resolve transaction references during
+veriﬁcation). At the time of this writing, Bitcoin’s blockchain is over 250 GB
+and contains over 500 M transactions (see Figure 1). Downloading and verifying
+this history takes days on a typical laptop.
+
+These resource requirements deter most users from running a full node that
+stores and veriﬁes the blockchain. As seen in Figure 2, the number of full nodes
+in Bitcoin is not growing despite its increasing popularity over time. Instead
+most users run a light node, verifying only block headers but not transactions,
+or an ultralight node verifying nothing and relying on trusted advice from a
+trusted server. This undermines decentralization as most clients rely on trust
+rather than independent veriﬁcation. It also undermines performance: block size
+
+1
+
+(and therefore transaction throughput) is artiﬁcially capped in part to mitigate
+the burden of veriﬁcation.
+
+Figure 1: Growth of the Bitcoin blockchain over time, in GB. Source: www.
+blockchain.com.
+
+Figure 2: Estimated number of full nodes participating in the Bitcoin and
+Ethereum networks over time. Source: www.bitnodes.earn.com and www.
+Ethernodes.org.
+
+2
+
+In this work, our goal is to design a decentralized payment system that
+oﬀers eﬃcient veriﬁcation of system history from genesis without relying on
+any external advice. Speciﬁcally, we aim to provide veriﬁcation time constant
+(𝑂 (1)) in the number of transactions; we call such a blockchain, a succinct
+blockchain.
+
+We achieve this goal by including succinct proofs of state validity in each
+block. Generically, it is possible to compute a succinct non-interactive argument
+of knowledge (a SNARK) of any NP statement, including for example that
+the system stated committed to by the current block in a blockchain can be
+reached from a the genesis state by a series of valid transactions in the system.
+This (large) list of transactions is a witness that the current block is valid.
+However, computing a new proof of validity of the entire system history for
+Instead, we employ techniques
+each block would be prohibitively expensive.
+from incrementally computable SNARKs to ensure that the cost of computing
+a proof for each block is proportional only to the number of transactions added
+since the previous block.
+
+We instantiate the notion of a succinct blockchain and introduce the Coda
+protocol. Coda is a payment-oriented blockchain oﬀering similar functionality
+to Bitcoin, although with diﬀerent transaction semantics. In particular, Coda
+uses an account-based model (as in Ethereum [25]) (instead of the UTXO model
+as in Bitcoin[19] and others [20]), wherein the current state of the blockchain is
+a list of all account balances rather than a list of unspent coins (UTXOs).
+
+Each block contains a commitment to this state (in a Merkle tree) and not
+the entire state. Therefore a full node need not store the entire state, but can
+verify account balances eﬃciently given only the state commitment in the latest
+block header. However, a prover in our system (roughly equivalent to a miner
+in Bitcoin) does needs to store the full state since it is part of the witness when
+proving the validity of new blocks.
+
+For the consensus protocol of Coda, we present the ﬁrst provably-secure
+proof-of-stake (PoS) consensus protocol for succinct blockchains called Ouroboros
+Samasika. Note that an oﬀ-the-shelf consensus mechanism is not necessarily
+compatible with a succinct blockchain framework, since the way consensus is
+achieved when there are multiple contending chains could relying on arbitrary
+In
+transaction history, forcing nodes to store the entire transaction history.
+fact, this is a natural approach for consensus mechanisms, since the information
+needed to tell apart an honest chain from a dishonest one is likely to involve
+details at the point of the fork; since it is possible for a party to learn about a
+fork long after it occurred, it may need to store the entire history to assist in
+the chain selection process. This is indeed the case in the known PoS consensus
+mechanisms [17, 13, 4]. Furthermore, other PoS consensus mechanisms rely on
+a trusted external advice for bootstrapping [12].
+
+Concretely, in our current implementation, a state proof size is just and it
+takes around 200ms to verify it. Thus, any device that can support this level of
+computation, such as the current smartphones, can verify the current state of
+the system with no trusted advice.
+
+Beyond incrementally computable SNARKs, we employ multiple optimiza-
+
+3
+
+tions, the most signiﬁcant of which is parallel scan state. At a high level, this
+improves transaction throughput beyond the limits of sequentially computed
+proofs. Roughly, the idea is to enqueue all the blocks that still need to be ab-
+sorbed into a proof and distribute their proving across parallel provers. We also
+introduce a special queue of recent transactions to reduce transaction conﬁrma-
+tion latency below the limits imposed by minimum proving times. Furthermore,
+we introduce a special incentive structure to maximizing prover participation in
+the network.
+
+1.1 Our Contributions
+
+In summary, our contributions are:
+
+• We formalize the notion of a succinct blockchain. This notion may be of
+independent interest for alternative constructions of succinct blockchains.
+
+• We present an approach to constructing a succinct blockchain for generic
+functionalities modeled as replicated state machines using incrementally-
+computable SNARKs.
+
+• We present a concrete implementation of our approach for the speciﬁc
+
+functionality of a payments system called Coda.
+
+• We present Ouroboros Samasika, a provably-secure PoS consensus proto-
+
+col that is adaptively secure and oﬀers bootstrapping from genesis.
+
+• We introduce the notion of a parallel scan state to improve transaction
+conﬁrmation time beyond the limits otherwise imposed by the proof con-
+struction.
+
+• We present a performance evaluation report of executing the protocol
+
+involving a public community.
+
+2 Succinct Blockchains
+
+In this section, we introduce the notion of succinct blockchains.
+
+Underlying concepts of a blockchain. We begin by recalling deﬁnitions
+of certain underlying concepts of a blockchain [13]. This will assist in deﬁning
+succinct blockchains.
+
+Deﬁnition 2.1 (State, Block Proof, Block Producer, Block, Blockchain, Genesis
+Block). A state is a string st ∈ {0, 1}𝜆. A block proof is a value (or a set of
+values) 𝜋𝐵
+𝑖 containing information to verify whether the block is valid. Each
+block is associated with a unique party called its block producer. A block 𝐵𝑖 =
+(sn𝑖, st𝑖, 𝜋𝐵
+𝑖 , 𝑑𝑖, b-pk𝑖, 𝑏-sig𝑖) generated with a serial number sn𝑖 ∈ N contains the
+current state st𝑖, a block proof 𝜋𝐵
+𝑖 , data 𝑑𝑖 ∈ {0, 1}∗, the block producer’s public
+key b-pk𝑖 and a signature 𝑏-sig𝑖 on (sn𝑖, st𝑖, 𝜋𝐵
+
+𝑖 , 𝑑𝑖) with respect to b-pk𝑖.
+
+4
+
+A blockchain is a sequence of blocks C = (𝐵1, . . . , 𝐵𝑛) associated with a
+strictly increasing sequence of serial numbers. The ﬁrst block 𝐵1 is called the
+genesis block. The length len(C) = 𝑛 of a blockchain is the number of blocks in
+it.
+
+Succinct blockchains. We are now ready to introduce the deﬁnition of a
+succinct blockchain protocol. The deﬁnition will also introduce the notion of a
+blockchain summary, which, at a high level, is some summary of a blockchain
+such that the summary is valid if and only if the blockchain is valid. The concept
+of a blockchain underlying a blockchain summary will not be evident from the
+deﬁnition of a succinct blockchain protocol itself. However, it will be captured
+via the notion of chain extractability in Deﬁnition 2.4.
+
+Deﬁnition 2.2 (Succinct Blockchain Protocol). A succinct blockchain pro-
+tocol 𝛱 is characterized by a tuple of ﬁve PPT algorithms (VerifyConsensus,
+UpdateConsensus, VerifyBlock, UpdateChain, VerifyChain) syntactically deﬁned
+as follows.
+
+• VerifyConsensus(consensusState, consensusProof) → (cid:62)/⊥ : This algo-
+rithm takes as input a consensusState and a consensusProof, veriﬁes ac-
+cording to some notion of correctness and outputs (cid:62) or ⊥, respectively.
+
+• UpdateConsensus(consensusState, consensusProof) → nextConsensusState :
+This algorithm also takes as input a consensusState and a consensusProof
+and outputs an updated consensus state.
+
+• VerifyChainSummary(S𝑖) → (cid:62)/⊥ : This algorithms veriﬁes whether a
+
+given blockchain summary S𝑖 is valid or not.
+
+• VerifyBlock(S𝑖−1, 𝐵𝑖) → (cid:62)/⊥ : This algorithms veriﬁes whether a given
+block 𝐵𝑖 is valid with respect to a given blockchain summary S𝑖−1. As a
+part of the veriﬁcation, it checks that VerifyConsensus(consensusState𝑖−1,
+consensusProof 𝑖 → (cid:62), where, S𝑖−1 contains consensusState𝑖−1 and 𝜋𝐵
+𝑖
+contains consensusProof 𝑖, where, 𝐵𝑖 = (·, ·, 𝜋𝐵
+
+𝑖 , ·, ·, ·).
+
+• UpdateChainSummary(S𝑖−1, 𝐵𝑖) → S𝑖 : This algorithm takes a blockchain
+summary S𝑖−1 and a new block 𝐵𝑖 and outputs an updated blockchain
+summary S𝑖.
+
+The protocol satisﬁes the following succinctness property.
+
+Succinctness. Each of the algorithms VerifyBlock, VerifyChainSummary, and
+
+VerifyConsensus runs in time poly(𝜆). Furthermore, the size of the blockchain
+summary S𝑖 at any time 𝑡𝑖 is of size poly(𝜆) (i.e., constant in the number
+of chain summary updates).
+
+Remark 2.1 (Consensus mechanism). The algorithm pair (VerifyConsensus,
+UpdateConsensus) is said to constitute a consensus mechanism. The following
+
+5
+
+are some examples of how the notion can be instantiated. For proof-of-work
+protocols (e.g. Bitcoin), the consensus state would contain several previous
+diﬃculty targets and block times (from which to compute the current diﬃculty
+target) and a consensus proof would contain the proof-of-work itself along with
+a new time to update the state with. For an Ouroboros Praos-style [13] proof-of-
+stake mechanism, the consensus state would contain the current random seed,
+the (Merkle root of) the current epoch’s stakes, and some information about the
+previous blocks and block times. A consensus proof would contain a public-key
+and a veriﬁable random function (VRF) evaluation proof meeting the threshold
+target corresponding to that public-key and the stakes indicated in the consensus
+state.
+
+Types of Roles. Per the above deﬁnition, there are three kinds of roles in a
+succinct blockchain. (There can be additional roles depending on the instanti-
+ation.)
+
+1. Full node: In this role, a party keeps track of the blockchain summary
+
+and veriﬁes it.
+
+2. Block producer: In this role, a party produces a block.
+
+3. Blockchain summary producer: In this role, a party generates blockchain
+
+summaries.
+
+Note that the signiﬁcant advantage of a succinct blockchain is that any party
+with reasonable resources can be a full node, due to the succinctness property.
+That is, a succinct blockchain does not require the role of light clients to cope
+with growing blockchain sizes.
+
+Relationship between blockchain summary and underlying blockchain.
+Having deﬁned a succinct blockchain in terms of blockchain summaries, we will
+now show how the summaries are related to the underlying blockchains. Roughly
+speaking, we would like that the blockchain summaries inherit validity of un-
+derlying blockchains. That is, a summary is valid if and only if the underlying
+blockchain is valid.
+
+Furthermore, given a blockchain summary, we arrive at its underlying
+blockchain through the notion of extractability. Speciﬁcally, we deﬁne extrac-
+tion recursively; that is, given a blockchain summary with serial number 𝑖, an
+extractor (using some additional information) extracts a blockchain summary
+with serial number 𝑖 − 1 and a block 𝐵𝑖, wherein all the components satisfy the
+necessary veriﬁcation tests. The additional information the extractor uses is the
+execution transcript which we call the execution trace formally deﬁned below.
+
+Deﬁnition 2.3 (Execution Trace, Blockchain Summary in an Execution Trace).
+For an (adaptive) adversary A and an environment Z, an execution trace E
+of a blockchain protocol 𝛱 by a set of parties U with security parameter 𝜆
+is a transcript including the inputs provided by Z, the random coins of the
+
+6
+
+parties and the random coins of the adversary. This data determines the entire
+dynamics of the protocol: messages sent and delivered, the internal states of the
+parties at each step and the set of corrupt parties at each step. We denote the
+trace by E ← 𝛱 (1𝜆, U) or simply E ← 𝛱 (U).
+
+For every blockchain protocol 𝛱 , there exists an algorithm CurrChain, such
+that for every set of PPT parties U, E ← 𝛱 (U), time 𝑡, honest party 𝑃 ∈ U, we
+have that CurrChain outputs a valid blockchain summary; i.e., CurrChain(E, 𝑃, 𝑡)
+→ S and VerifyChainSummary(S) → (cid:62). S is said to be the blockchain sum-
+mary in 𝑃’s view of E at time 𝑡. A blockchain summary in an execution trace E
+is a blockchain summary C in any honest party’s view at any time 𝑡; we denote
+this by S ∈ E.
+
+We will now deﬁne the notion of chain extractability. This deﬁnition utilizes
+Intuitively, it is just
+a notion of ‘serial number of a blockchain summary’.
+a natural number 𝑗 that represents the number of blocks in the underlying
+blockchain. It is indicated in the subscript as S 𝑗 .
+
+Deﬁnition 2.4 (Chain Extractability). A succinct blockchain protocol 𝛱 =
+(VerifyConsensus, UpdateConsensus, VerifyBlock, UpdateChain, VerifyChain) is
+said to satisfy chain extractability if the following probability Adv𝛱 , U (1𝜆) is
+negligibly close to 1 for every U = {A𝑖 }𝑖, a set of PPT algorithms. For every
+A𝑖, there exists a PPT algorithm ExtA𝑖 , called an extractor, and Adv𝛱 , U is
+deﬁned as follows.
+
+Adv𝛱 ,U (1𝜆) := Pr
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+where, 𝑟 is the random coins of A𝑖.
+
+VerifyChainSummary(S 𝑗−1) = (cid:62)
+∧
+VerifyBlock(S 𝑗−1, 𝐵 𝑗 ) = (cid:62)
+∧
+𝐵1 is a Genesis block
+∧
+S0 is an empty string
+
+:
+
+E ← 𝛱 (U)
+∀S 𝑗 ∈ E, ∃A𝑖 ∈ U
+(S 𝑗−1, 𝐵 𝑗 ) ← ExtA𝑖 (E, S 𝑗 , 𝑟)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Deﬁnition 2.5 (Blockchain underlying a Blockchain Summary). Let 𝛱 be a
+blockchain protocol which satisﬁes chain extractability. Let E be an execution
+of the protocol by a set of parties U. Let 𝑃 ∈ U be an honest party that has
+been active since the beginning of the protocol. Let Sℓ be the blockchain in
+E (cid:48). For every 1 ≤ 𝑖 ≤ ℓ, let 𝐵𝑖 be a block guaranteed by the property of chain
+extractability. The sequence (𝐵1, . . . , 𝐵ℓ) is called the blockchain underlying Sℓ.
+
+2.1 Security Properties of a Succinct Blockchain
+
+We will now enlist the security properties of a succinct blockchain. Rather than
+the blockchain summaries, the properties pertain to the underlying blockchain
+guaranteed by the chain extractability property.
+
+Consider a blockchain protocol 𝛱 and an execution E. Let C be the un-
+derlying blockchain of the blockchain summary S in E. We recall the following
+
+7
+
+properties that were ﬁrst rigorously formulated in [15]. We will assume that
+time is divided into predeﬁned slots.
+
+Common Preﬁx (CP); with parameters 𝑘 ∈ N. The blockchains C1, C2 cor-
+responding to two alert parties at the onset of the slots sl1 ≤ sl2 are such
+(cid:100)𝑘 denotes the blockchain obtained by removing
+that C1
+the last 𝑘 blocks from C1 and (cid:52) denotes the preﬁx relation.
+
+(cid:100)𝑘 (cid:52) C2, where C1
+
+Chain Growth (CG); with parameters 𝜏 ∈ (0, 1] and 𝑠 ∈ N. Consider C, a
+blockchain possessed by an alert party at the onset of a slot sl. Let sl1
+and sl2 be two previous slots for which sl1 + 𝑠 ≤ sl2 ≤ sl, so sl1 is at least 𝑠
+slots prior to sl2. Then |C[sl1, sl2]| ≥ 𝜏 · 𝑠. We call 𝜏 the speed coeﬃcient.
+
+Chain Quality (CQ); with parameters 𝜇 ∈ (0, 1] and 𝑘 ∈ N. Consider any
+portion of length at least 𝑘 of the blockchain corresponding by an alert
+party at the onset of a slot; the ratio of blocks originating from alert
+parties in this portion is at least 𝜇, called the chain quality coeﬃcient.
+
+3 Preliminaries
+
+In this section we provide several requisite deﬁnitions of SNARK systems which
+we use to construct a succinct blockchain.
+
+Notations. We use the abbreviation PPT to stand for probabilistic polyno-
+mial time. We use 𝜆 to denote the security parameter.
+
+Deﬁnition 3.1 (SNARKs). Let 𝑅 = {(𝜙, 𝑤)} be a polynomial relation of state-
+ments 𝜙 and witnesses 𝑤. A Succinct Non-interactive ARgument of Knowledge
+for 𝑅 is a quadruple of algorithms (sSetup, sProve, sVerify, sSim), which is com-
+plete, succinct and knowledge sound (deﬁned below) and works as follows:
+
+• (srs, 𝜏) ← sSetup(𝑅): The setup algorithm generates the structured ran-
+
+dom string srs and a trapdoor 𝜏.
+
+• 𝜋 ← sProve(srs, 𝜙, 𝑤): the prover algorithm generates a proof 𝜋.
+
+• (cid:62)/⊥ ← sVerify(srs, 𝜙, 𝜋): the veriﬁer algorithm veriﬁes a given proof.
+
+• 𝜋 ← sSim(srs, 𝜙, 𝜏): the PPT simulator simulates a proof without the
+
+witness but by using the trapdoor.
+
+Completeness.
+It simply states that given a true statement, a prover with a
+witness can convince the veriﬁer. That is, for every (srs, 𝜏) ← sSetup(𝑅) and
+𝜋 ← sProve(srs, 𝜙, 𝑤), we have that (cid:62) ← sVerify(srs, 𝜙, 𝜋).
+
+Succinctness.
+
+It states that the proof size |𝜋| is poly(𝜆).
+
+8
+
+It states that whenever somebody produces a valid
+Knowledge soundness.
+argument it is possible to extract a valid witness from their internal data. For-
+mally, for every PPT adversary A, there exists a PPT extractor 𝜒A, such that
+the following probability is negligible in 𝜆:
+
+(srs, 𝜏) ← sSetup(𝑅)
+(𝜙, 𝜋) ← A (srs)
+𝑤 ← 𝜒A (transA)
+
+:
+
+Pr
+
+
+
+
+
+
+
+
+(𝜙, 𝑤) ∉ 𝑅
+
+
+∧
+
+
+sVerify(srs, 𝜙, 𝜋) → (cid:62)
+
+
+
+Simulation-extractable SNARKs. A simulation-extractable SNARK is a
+SNARK that achieves a higher level of security, namely, simulation extractabil-
+ity. The notion of simulation extractability is similar to the notion of knowledge
+soundness except that an adversary gets to see also simulated proofs.
+
+Signatures of Knowledge (SoK). An SoK is a generalization of digital sig-
+natures by replacing a public key with an instance in an NP language. For
+a formal deﬁnition, see [16]. The notion of SoKs is related to the notion
+of simulation-extractable non-interactive zero-knowledge arguments, such as,
+SNARKs. In fact, [16] showed that the former can be constructed based on the
+latter. In this work, we rely on SoKs constructed using SNARKs, thereby being
+able to exploit succinctness of such SoKs.
+
+4 Coda: A Succinct Blockchain based on Recur-
+
+sive SNARKs
+
+In this section, we introduce a succinct blockchain construction called Coda
+based on SNARKs. At a high-level, validity of a blockchain’s sequence of tran-
+sitions is proved using a SNARK. Then, the blockchain proof consists of this
+SNARK and omits the detailed list of blocks, since verifying the SNARK veri-
+ﬁes the embedded blocks. Succinctness of SNARK ensures succinctness of the
+blockchain.
+
+Note that a blockchain is dynamic and new blocks keep getting added to
+it. However, we would like to ensure succinctness at any given point in time.
+Therefore, as the blockchain “grows”, we compute a new SNARK proof that not
+only validates the new blocks, but also the existing SNARK proof itself. The
+notion of a SNARK proof that attests to the veriﬁability of another SNARK
+proof is the notion of “incrementally-computable SNARK” [24, 8, 6].
+
+We will ﬁrst specify the SNARK construction and then demonstrate how it
+
+can be employed to achieve a succinct blockchain.
+
+4.1
+
+Incrementally-computable SNARKs
+
+We now recall the notion of incrementally-computable SNARKs described var-
+iously in [24], [8] and [6]. Instead of phrasing the construction in the language
+
+9
+
+of incrementally veriﬁable computation as in [24] or in the language of PCD
+(proof-carrying data) systems as in [8] and [6], we opt to describe it in terms
+of state-transition systems as it maps more clearly onto the application of pro-
+ducing a succinct blockchain.
+
+We will ﬁrst recall the deﬁnition of a state transition system.
+
+Deﬁnition 4.1 (State transition system). A state transition system is a
+tuple (𝛴, T, Update), where 𝛴 is the set of states, T is the set of transitions and
+Update is a (non-deterministic) poly-time computable function Update : T×𝛴 →
+𝛴. Update may also “throw an exception” (i.e., fail to produce a new state for
+certain inputs). Moreover, elements in 𝛴 and T need to be representable by
+bit-strings of length poly(𝜆).
+
+We now deﬁne SNARKs for state transition systems. At a high level, we
+would like poly(𝜆)-size proofs (which are veriﬁable in poly(𝜆) time) which attest
+to statements of the form “there exist a state σ1 and a sequence of transitions
+𝑡1, . . . , 𝑡𝑘 ∈ T such that Update(𝑡𝑘 , Update(𝑡𝑘−1, . . . , Update(𝑡1, σ1))) = σ2”.
+In other words, we would like succinct certiﬁcates of the existence of state-
+transition sequences joining two states. The application to blockchains is the
+following: we will take our state to be the database of accounts (along with
+some metadata needed for correctly validating new blocks) and transitions to
+be blocks.
+
+Deﬁnition 4.2 (Incrementally-computable SNARKs). An incrementally-comp-
+utable SNARK for a state transition system (𝛴, T, Update) is a tuple of algo-
+rithms (sSetup, sProve, sVerify, sSim) such that the following holds. Suppressing
+parameter generation and passing the parameters to sProve and sVerify,
+
+1. (sSetup, sProve, sVerify, sSim) is a SNARK.
+
+(sSetup, sProve, sVerify, sSim) is a SNARK for the relation 𝑅 = {(σ𝑖+𝑘 ),
+σ𝑖, 𝑡𝑖+1, . . . , 𝑡𝑖+𝑘 )}, where, σ𝑖+𝑘 = Update(𝑡𝑖+𝑘 , Update(𝑡𝑖+𝑘−1, . . . , Update
+(𝑡𝑖+1, σ𝑖))) for any 𝑘.
+
+2. (sSetup, sProve, sVerify, sSim) is succinct.
+
+Every honestly generated proof has size poly(𝜆) and for any 𝜋, σ, we have
+that sVerify(σ, 𝜋) runs in time poly(𝜆).
+
+4.1.1
+
+Incrementally-computable SNARKs using Recursive Proof Com-
+position
+
+Na¨ıve recursive composition is theoretically viable, since, for a SNARK, proof
+veriﬁcation is asymptotically cheaper than merely verifying the corresponding
+NP statement. However, it is extremely expensive. Although SNARK veriﬁers
+execution is quite fast – in the order of just a few milliseconds on a desktop
+computer, generating a SNARK proof to attest to an accepting veriﬁer circuit
+is expensive. This is because, executing the veriﬁers still takes millions of steps
+
+10
+
+in computation, proving which is impractical even for a single layer of recursion,
+as explained in [6].
+
+To address this, we employ the “cycle of elliptic curves” technique (as de-
+scribed in [6]) in which two SNARK constructions – classically called Tick and
+Tock – are designed such that each can eﬃciently verify proofs from the other.
+Then, to exploit the parallelism mentioned in Remark ??, we deﬁne the Tick
+and Tock SNARKs to result in a “binary tree of proofs” as follows. A Tick
+SNARK is used to certify state transitions at the “base” of the tree. Then, to
+enable eﬃcient merging of those proofs, each of them is “wrapped” using a Tock
+SNARK. Then, two Tock proofs are merged using a Tick SNARK.
+
+Therefore, note that, we will need two Tick SNARKs - one for proving state
+transitions and another for merging two Tock proofs. And we will need one
+Tock SNARK to wrap a Tick proof into a Tock proof. More formally:
+
+1. The base SNARK. A Tick-based SNARK for certifying single state tran-
+
+sitions, which we will call the “base” SNARK.
+Statement: (σ1, σ2) ∈ 𝛴 2.
+Witness: 𝑡 ∈ T.
+Computation: There exists 𝑡 ∈ T such that Update(𝑡, σ1) = σ2.
+We will denote the proof by σ1 →Tick σ2.
+
+2. The merge SNARK. A Tick-based SNARK for merging two Tock proofs,
+
+which we will call the “merge” SNARK.
+Statement: (σ1, σ3) ∈ 𝛴 2.
+Witness: σ2 ∈ 𝛴 and Tock-proofs 𝜋1, 𝜋2.
+Computation: There exist σ2 ∈ 𝛴 and Tock-proofs 𝜋1, 𝜋2 such that
+VerifyTock((σ1, σ2), 𝜋1) and VerifyTock((σ2, σ3), 𝜋2)
+We will denote the proof by σ1 →Tick σ3. σ1 to σ2 and a SNARK proof
+certifying the existence of transitions from σ2 to σ3.
+
+3. The wrap SNARK. A Tock-based SNARK for wrapping a Tick proof,
+
+which we will call the “wrap” SNARK.
+Statement: (σ1, σ2) ∈ 𝛴 2.
+Witness: A Tick proof 𝜋.
+Computation: There exists a Tick proof 𝜋 such that VerifyTick((σ1, σ2), 𝜋).
+We will denote the proof by σ1 →Tock σ2.This SNARK merely wraps a
+Tick SNARK into a Tock SNARK so that another Tick SNARK can verify
+it eﬃciently.
+
+4.1.2 An example transition system
+
+To illustrate this, we’ll show how it can be applied to prove statements in a very
+simple transition system where each state is simply the hash H of the previous
+
+11
+
+state. Assume the current state is 𝑥 (cid:48) = H(H(. . . H(𝑥) . . . ))
+(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)
+(cid:125)
+
+(cid:124)
+from an initial state 𝑥. We apply the above technique with our state 𝛴 being the
+union of domain and range of H, 𝑇 being a singleton set containing an empty
+string, and the update function being Update(𝑡, 𝑥) = H(𝑥).
+
+for some 𝑘, starting
+
+(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)(cid:32)
+
+(cid:123)(cid:122)
+𝑘
+
+This gives us a SNARK for proving that there exists a sequence of transi-
+tions (𝑡1, . . . , 𝑡𝑘 ) such that Update(𝑡𝑘 , Update(𝑡𝑘−1, . . . , Update(𝑡1, 𝑥), . . . )) = 𝑥 (cid:48),
+which since Update(𝑡, 𝑦) = H(𝑦) gives us exactly what we want. For strings
+𝑥0, 𝑥4 with H(H(H(H(𝑥0)))) = 𝑥4, the tree of SNARK proofs appears as follows:
+
+𝑥0 →Tick 𝑥4
+
+𝑥0 →Tock 𝑥2
+
+𝑥0 →Tick 𝑥2
+
+𝑥2 →Tock 𝑥4
+
+𝑥2 →Tick 𝑥4
+
+𝑥0 →Tock 𝑥1
+
+𝑥1 →Tock 𝑥2
+
+𝑥2 →Tock 𝑥3
+
+𝑥3 →Tock 𝑥4
+
+𝑥0 →Tick 𝑥1
+
+𝑥1 →Tick 𝑥2
+
+𝑥2 →Tick 𝑥3
+
+𝑥3 →Tick 𝑥4
+
+4.2 CODA: A Succinct Blockchain Using Incrementally-
+
+computable SNARKs
+
+In this section, we present the Coda protocol, a succinct blockchain based
+on incrementally-computable SNARKs. Intuitively, blockchain updates can be
+seen as a state transition system, and thus incrementally-computable SNARKs
+(which are simply SNARKs for state transition systems) can enable the con-
+struction of succinct blockchains.
+
+4.2.1 Our Construction
+
+In this section, we present the Coda protocol. Speciﬁcally, we discuss the details
+for generic Turing-complete functionalities that transform a database. Then, in
+Section 5, we will instantiate the protocol with the payments functionality.
+
+At a high level, we will treat a blockchain as a state transition function.
+Consider, for example, a UTXO (Unpaid Transaction Output) model wherein
+every party has an ‘account’ with some ‘balance’, like in Bitcoin. The state of
+the blockchain is a database (such as a Merkle tree) of all the account balances.
+A transition is transfer of some part of the balance from one account to another
+account. While this is just an example, our protocol is generic and considers
+any state set 𝛴 (cid:48) and a Turing-complete transition function Update(cid:48) with some
+transition set T(cid:48); that is, we begin with (𝛴 (cid:48), T(cid:48), Update(cid:48)).
+
+Then, the Coda protocol for (𝛴 (cid:48), T(cid:48), Update(cid:48)) is constructed as follows. We
+employ our consensus protocol, namely Ouroboros Samasika, that we present
+in Section 7. We will combine (𝛴 (cid:48), T(cid:48), Update(cid:48)) and the consensus protocol
+
+12
+
+to construct a new state transition system (𝛴, T, Update), mainly to subsume
+consensus veriﬁcation in the update function. An incrementally-computable
+SNARK for (𝛴, T, Update) is employed and the proofs attest to the current
+state being computed correctly. The blockchain summary simply consists of
+the state in 𝛴 and the proof. A blockchain summary producer will just be a
+prover and a full node will only need to perform proof veriﬁcation to verify the
+blockchain correctness.
+
+Having described the protocol at an intuitive level, we will now discuss the
+details. Given (𝛴 (cid:48), T(cid:48), Update(cid:48)) and a collision-resistant hash function H, the
+protocol components are as follows.
+
+The Coda Protocol
+
+The Coda protocol has the following components.
+
+• Consensus mechanism (UpdateConsensus, VerifyConsensus): The
+consensus mechanism is the Ouroboros Samasika protocol that we
+present in Section 7. In Ouroboros Samasika VerifyConsensus runs
+in time poly(𝜆), as required.
+
+• Blocks: Consider a transition 𝑡 (cid:48)
+
+corresponding block 𝐵𝑖 = (sn𝑖, st𝑖, 𝜋𝐵
+with st𝑖 = 𝜎(cid:48)
+
+𝑖 = consensusProof 𝑖 and 𝑑𝑖 = 𝑡 (cid:48)
+𝑖 .
+
+𝑖−1, 𝜋𝐵
+
+𝑖 ∈ 𝑇 𝑎𝑢(cid:48) that acts on a state 𝜎(cid:48)
+
+𝑖−1. The
+𝑖 , 𝑑𝑖, b-pk𝑖, 𝑏-sig𝑖) is constructed
+
+• State transition system for SNARK: Consider the state transi-
+tion system (𝛴, T, Update) deﬁned as follows:
+𝛴 = {H(𝜎(cid:48)),
+consensusState}𝜎(cid:48) ∈𝛴 (cid:48),consensusState. A transition is a block. The func-
+tion Update(𝐵𝑖, 𝜎𝑖−1) veriﬁes if H(st𝑖) = 𝜎𝑖−1, the signature veri-
+ﬁes in the block veriﬁes and that VerifyConsensus(consensusState𝑖−1,
+consensusProof 𝑖), where consensusState𝑖−1 is part of 𝜎𝑖−1 and 𝜋𝐵
+𝑖 con-
+tains consensusProof 𝑖.
+
+• Blockchain summary: The blockchain summary consists of a state
+
+in 𝛴 and a proof snark𝑖.
+
+• VerifyChainSummary(S𝑖−1 = (𝜎𝑖, snark𝑖)): As mentioned earlier, this
+algorithm simply veriﬁes the proof snark𝑖 against the statement 𝜎𝑖.
+
+• VerifyBlock(S𝑖1
+
+, 𝐵𝑖): This algorithm, simply checks the consistencies,
+namely, verifying consensus, verifying signature and verifying that
+the state in S𝑖1 is the hash of the state in the block.
+
+• UpdateChainSummary(S𝑖−1, 𝐵𝑖): Let S𝑖−1 = (𝜎𝑖−1, snark𝑖−1). This
+algorithm runs the Update function as Update(𝐵𝑖, 𝜎𝑖−1) to obtain
+𝜎𝑖. Then, it veriﬁes the proof snark𝑖−1. Finally, it runs the prover to
+obtain the new proof snark𝑖.
+
+13
+
+Figure 3: The Coda protocol.
+
+Remark 4.1. We assume that the length of the blockchain does not aﬀect chain
+extractability, because no evidence suggests otherwise for the constructions of
+SNARKs that we use, as also noted in [7].
+
+5 The Coda Protocol for Payments
+
+In this section, we will focus on the payments application, where each party has
+an account with some balance and a transaction moves a part of its balance to
+a diﬀerent party’s account.
+
+In the following, we will ﬁrst specify the payments application framework
+followed by the underlying SNARK construction and then present the Coda
+protocol for payments.
+
+5.0.1 Coda’s Framework for Payments
+
+Let U be a set of parties. The framework consists of the following notions.
+
+• Accounts. Every party is said to have an account characterized by
+(pk, balance, nonce), with pk the party’s public key for authorizing pay-
+ments, balance ∈ N, and nonce ∈ I which functions to prevent transaction
+replay.
+
+• Ledger. We deﬁne a ledger as the list of all the accounts. We will refer to
+a party’s account by L(pk) and the ﬁelds of the account, such as balance,
+by L(pk).balance.
+
+• Transaction. A transaction is a transfer of value amt from a Sender’s
+account L(pk𝑠).balance to a Receiver’s account L(pk𝑟 ).balance. It is repre-
+sented as txn = (pk𝑠, pk𝑟 , amt, nonce𝑠, sig𝑠), where pk𝑠, pk𝑟 are the Sender’s
+and the Receiver’s public keys, respectively, nonce𝑠 is the nonce in the
+Sender’s account and sig𝑠 is a signature on (pk𝑟 , amt, nonce𝑠) by the Sender.
+
+• Transaction veriﬁcation. Given a transaction txn and a ledger L, the
+
+following algorithm veriﬁes validity of the transaction.
+
+VerifyTransaction(txn = (pk𝑠, pk𝑟 , amt, nonce𝑠, sig𝑠), L):
+assert (L(pk𝑠).balance ≥ amt);
+assert (L(pk𝑠).nonce = nonce𝑠);
+assert (VerifySig(pk𝑠, (pk𝑟 , amt, nonce𝑠), sig𝑠) = (cid:62));
+return (cid:62)
+
+• Ledger update. Given a ledger L and a set of transactions {txn =
+(pk𝑠, pk𝑟 , amt, nonce𝑠, sig𝑠)}, the following algorithm processes the set by
+updating the ledger.
+
+14
+
+UpdateLedger(L, {txn}):
+∀txn ∈ {txn}
+- L(pk𝑠).balance ← L(pk𝑠).balance − amt;
+- L(pk𝑟 ).balance ← L(pk𝑟 ).balance + amt;
+- L(pk𝑠).nonce ← L(pk𝑠).nonce + 1;
+return L
+
+5.0.2 The SNARK
+
+We will now describe the incrementally-computable SNARK S used for con-
+structing our succinct blockchain. Recall that a state transition system charac-
+terizes an incrementally-computable SNARK (cf. Deﬁnition 4.2). S is speciﬁed
+in Figure 4.
+
+SNARK S
+
+Let H be a collision-resistant hash function. S is deﬁned as an incrementally-
+computable SNARK for the following state transition system (𝛴, T, Update):
+
+• 𝛴 is the set {σ}𝑖 of pairs of ledger hash values and consensus states
+
+{(ledgerHash𝑖, consensusState𝑖)}.
+
+• T is the set of blocks 𝐵𝑖
+
+is of the form (𝑖, L𝑖−1, consensusProof 𝑖,
+{txn 𝑗 } 𝑗 , b-pk𝑖, 𝑏-sig𝑖), {txn 𝑗 } 𝑗 is a set of transactions and b-pk𝑖 is a
+public key for verifying the signature 𝑏-sig𝑖.
+
+• The function Update(𝑡𝑖, σ𝑖−1) → σ𝑖 is deﬁned as follows:
+
+Update(𝑡𝑖, σ𝑖−1) → σ𝑖:
+
+assert (VerifyTransaction(txn 𝑗 , L𝑖−1) = (cid:62)), ∀txn 𝑗 ;
+assert (ledgerHash𝑖−1 = H(L𝑖−1));
+assert (VerifyConsensus(consensusState𝑖−1,
+
+consensusProof 𝑖) = (cid:62));
+
+assert (VerifySig(b-pk𝑖, 𝑚, 𝑏-sig𝑖) = (cid:62)), where 𝑚 =
+
+(𝑖, L𝑖−1, consensusProof 𝑖, {txn 𝑗 } 𝑗 );
+
+L𝑖 ← UpdateLedger(L𝑖−1, {txn 𝑗 } 𝑗 );
+ledgerHash𝑖 ← H(L𝑖);
+consensusState𝑖 ← UpdateConsensus(
+consensusState𝑖−1, consensusProof 𝑖);
+return σ𝑖 ← (ledgerHash𝑖, consensusState𝑖)
+
+Figure 4: The underlying SNARK S.
+
+15
+
+5.0.3 Our Construction
+
+Let (VerifyConsensus, UpdateConsensus) be the Ouroboros Samasika consensus
+mechanism. Let H be a collision-resistant hash function. The Coda protocol is
+deﬁned as follows.
+
+The Coda Protocol for Payments
+
+The Coda protocol for payments, deﬁned in the framework from Section
+5.0.1, is based on the SNARK in Figure 4. It has the following components.
+
+• A blockchain C𝑖−1. A blockchain consists of the hash of the current
+ledger, the current consensus state and a SNARK proof. That is,
+
+C𝑖−1 = (ledgerHash𝑖−1
+
+, consensusState𝑖−1, snark𝑖−1)
+
+.
+
+• A block 𝐵𝑖. Recall that a block in general is of the form 𝐵𝑖 =
+𝑖 , 𝑑𝑖, b-pk𝑖, 𝑏-sig𝑖), where sn𝑖, b-pk𝑖, 𝑏-sig𝑖 are serial number,
+𝑖 , 𝑑𝑖) by the
+
+(sn𝑖, st𝑖, 𝜋𝐵
+block proposer’s public key and a signature on (sn𝑖, st𝑖, 𝜋𝐵
+block proposer, respectively. st𝑖, 𝜋𝐵
+
+𝑖 , 𝑑𝑖 are speciﬁed as follows.
+
+– st𝑖 = L𝑖−1;
+– 𝜋𝐵
+– 𝑑𝑖 = {txn 𝑗 } 𝑗 .
+
+𝑖 = consensusProof 𝑖;
+
+The algorithms VerifyBlock, UpdateChain, VerifyChain are deﬁned as
+
+follows.
+
+• VerifyBlock(S𝑖−1, 𝐵𝑖) → (cid:62)/⊥:
+
+assert (H(L𝑖−1) = ledgerHash𝑖−1);
+assert (VerifyConsensus(consensusState𝑖−1,
+
+consensusProof 𝑖) = (cid:62));
+
+∀ 𝑗assert (VerifyTransaction(txn 𝑗 , L𝑖−1) = (cid:62));
+assert (VerifySig(b-pk𝑖, 𝑚, sig𝑖) = (cid:62)),
+
+where 𝑚 = (sn𝑖, L𝑖−1, consensusProof 𝑖, {txn 𝑗 } 𝑗 )
+
+return (cid:62)
+
+16
+
+• UpdateChainSummary(S𝑖−1, 𝐵𝑖) → C𝑖:
+
+, consensusState𝑖−1);
+
+assign σ𝑖−1 ← (ledgerHash𝑖−1
+σ𝑖 ← Update(𝐵𝑖, σ𝑖−1);
+snark𝑖 ← sProve(σ𝑖, (σ𝑖−1, 𝑡𝑖));
+assign S𝑖 ← (σ𝑖, snark𝑖);
+return S𝑖
+
+• VerifyChainSummary(S𝑖) → (cid:62)/⊥:
+
+assign σ𝑖 ← (ledgerHash𝑖, consensusState𝑖);
+return sVerify(σ𝑖, snark𝑖)
+
+Figure 5: The Coda protocol for payments.
+
+6 Snark Workers
+
+In this section, we will introduce two optimization techniques, namely, ‘parallel
+scan state’ and ‘prover incentives’. They both target the following issue.
+
+The issue. Observe from Figure 3 that to compute S𝑖, we need S𝑖−1. Thus,
+there is a sequential dependency for SNARK proof computation. As a result, a
+na¨ıve implementation suﬀers from a block time that is at least the time required
+to compute the proof. Furthermore, it suﬀers from high memory requirements
+for block proposers due to high transaction latency (where, transaction latency
+is the time required for a transaction to be summarized in a SNARK proof).
+
+The solution. The goal is to design techniques that maximize the through-
+put. Speciﬁcally, our goal is to maximize the rate at which transactions can
+be processed and validated in the Coda protocol network. This enables more
+simultaneous users on the network.
+
+6.1 Parallel Scan State
+
+Recall that a raw chain of blocks is inherently sequential (i.e., cannot be par-
+allelized in general). However, thanks to incremental computability of the
+SNARK, the SNARK work can be parallelized. This is the key observation
+that leads to the notion of a ‘parallel scan state’, where we decouple producing
+a block from computing SNARK proofs.
+
+We maintain a special queue, called the work queue, where we enqueue new
+blocks as they are proposed. In other words, it is a queue of the ‘SNARK work’
+to be performed by the network.
+
+17
+
+The network then computes the SNARK proofs in parallel; a tree of proofs
+is computed where the leaves correspond to the proofs proving validity of single
+blocks and the other proofs simply attest to the correctness of their children
+proofs. Finally, the root proof attests to correctness of all the blocks corre-
+sponding to the leaves of the tree. Consider, for example, a sequence of blocks
+𝐵𝑖, 𝐵𝑖+1, . . . , 𝐵 𝑗 in the work queue. The root proof attests to the validity of each
+of the blocks. This root proof can be combined with the SNARK proof for
+the validity of S𝑖−1 to result in a SNARK proof that attests to the validity of
+S 𝑗 . This is illustrated in Figure 6. Note that this tree, under the hood, works
+similarly to the example transition system described in Section 4.1.2.
+
+Figure 6: A snapshot of a parallel scan state.
+
+Observe that, by careful design of parallelism, we can ensure that the through-
+put completely keeps up with the rate transactions are added, which is optimal.
+While the transaction latency in the na¨ıve approach was 𝑂 (𝑅), where 𝑅 is the
+rate at which blocks are produced, in the proposed approach, the transaction
+latency is 𝑂 (log(𝑅)). With a careful designing of data structure, the storage
+requirement can be reduced from 𝑂 (𝑅) in the na¨ıve approach to 2𝑅 − 1 + 𝑂 (1)
+in the proposed approach; we will omit the details of the data structure [2].
+
+6.2
+
+Incentivizing the Provers
+
+A party that generates SNARK proofs is called a snarker. We will describe
+prover incentives with the goal of achieving lowest possible transaction latency
+(i.e., to minimize the time gap between when a block is produced and when it
+is absorbed in the blockchain’s SNARK proof).
+
+The proposed incentive structure is the following. Every block producer that
+pushes a block to the work queue is required to pop a block by generating a
+proof validating the block.
+It posts a fee request together with the SNARK
+proof it generates. It also includes a transaction in the same block that pays
+the fee to the prover that will compute the snark for that block. Typically, the
+fees are paid out from the transaction fees the block producer would otherwise
+receive.
+
+In essence, there is a lowest-price auction for each piece of SNARK work.
+Block producers would like to pay snarkers as little as possible for their proofs
+and snarkers would like to receive as high a fee as possible for their proofs.
+Therefore, enforcing a block producer to also be a prover but for a diﬀerent
+block enforces stability in the system.
+
+18
+
+Note that this notion is similar to the aforementioned na¨ıve approach in that
+a block producer also computes a SNARK proof, but with the diﬀerence that
+the block producer computes proof for the block in the head of the queue.
+
+Remark 6.1. Given a proof and an associated fee request, we require that an
+adversary cannot maul the fee request. Otherwise, an attacker could pass-oﬀ
+a diﬀerent party’s proof as their own (by replacing the public key) or modify
+someone’s fee request.
+
+Signatures of knowledge are a cryptographic primitive that allows us to
+accomplish exactly this, as recalled in Section 3. In Coda, we use a construction
+based on the Bowe–Gabizon simulation-extractable SNARK [9].
+
+7 Ouroboros Samasika – PoS Consensus for Suc-
+
+cinct Blockchains
+
+One of the main technical contributions of this paper is the ﬁrst provably-secure
+proof-of-stake consensus protocol for a succinct blockchain. Existing protocols
+are either not adaptively secure or rely on a centralized trusted third party for
+checkpointing advice to nodes trying to bootstrap or rely on arbitrary informa-
+tion in the history of the protocol for chain selection, immediately rendering the
+protocol incompatible for succinct settings [17, 13, 4, 12].
+
+We construct a consensus protocol that is secure against adaptive corruption
+and does not require a trusted checkpointing service for bootsrapping, is adap-
+tively secure and, most importantly, succicnt. That is, it requires only succinct
+information to tell apart honest chains from dishonest ones, immaterial of how
+far in history they had forked. Our starting point is the Ouroboros Genesis [4]
+(sometimes referred to as Genesis in this paper) PoS consensus protocol.
+
+Ouroboros Genesis already enjoys adaptive security and oﬀers boostrapping
+from Genesis. However, the chain selection rules require information about an
+arbitrary distance in a chain’s history; this is natural, since, an adversary might
+modify arbitrary aspects of the blockchain to create a fork and the timing of
+the fork might be learned by parties long after it has occurred. For this reason,
+Ouroboros Genesis by itself is not usable in the succinct setting. The challenge
+is to somehow craft a constant-sized summary of the history that suﬃces in
+correctly choosing one chain from multiple candidates.
+
+In this section, we present Ouroboros Samasika wherein we resolve the above
+challenge. Speciﬁcally, we demonstrate an approach to succinctly summarize the
+information necessary to correctly arbitrate chains with long-range forks.
+
+7.1
+
+Intuitive Description
+
+In this part of the section, we will particularly focus on the core of a consen-
+sus protocol, namely, the chain selection rules. The entire consensus protocol
+appears in detail, along with the proofs of security, in Section 7.3.
+We will begin by recalling the rules of Ouroboros Genesis.
+
+19
+
+The chain selection rules of Ouroboros Genesis. There are two chain
+selection rules in Ouroboros Genesis. One is when the fork is a short-range one;
+in this case, the rule is to simply to choose the longest chain. The other is when
+the fork is a long-range one; in this case, one may not simply choose the longest
+chain, since an adversary could have posed various attacks over time to perhaps
+skew the leader selection distribution and managed to create a longer chain.
+Therefore, for long-range forks, the rule is to limit the comparison of chains to
+just a few slots immediately following the fork.
+
+Note that the rule for long-range forks requires information at arbitrary
+times in the history. Clearly, it is not trivial to summarize the information
+succinctly.
+
+We now present the chain selection rules of Ouroboros Samasika.
+
+The chain selection rules of Ouroboros Samasika. Similar to Genesis,
+Ouroboros Samasika also has two consensus rules applicable depending on how
+far in history the fork has occurred.
+
+Short-range fork rule. Roughly speaking, this rule is triggered whenever the
+fork is in such a way that the adversary has not yet been able to modify
+the block density distribution and the rule is to simply choose the longest
+chain. While the action of the rule is the same as in Ouroboros Genesis,
+the predicate for deciding whether a given fork is a short-range one or not
+is slightly diﬀerent. Since the main contribution is the long-range fork
+rule, we defer the exact description of the predicate to Appendix 7.7.
+
+Long-range fork rule. This rule is applied for forks that occurred more than
+𝑘 blocks ago. Before we describe the rule itself, following is the intuition.
+Firstly, recall the reason why simply the longest chain rule might not
+choose the right chain in this case; after an adversary creates a fork,
+over time, it might skew the leader selection distribution leading to a
+longer adversarial chain. Due to this, we can only rely on the density
+diﬀerence in the ﬁrst few slots following the fork (which is indeed what
+Ouroboros Genesis utilizes). The challenge is to somehow “carry forward”
+the summary of that density diﬀerence, even when the fork position – and
+hence the slot range in question – is not known ahead of time.
+
+The idea. The idea is to consider a moving window of slots and only
+store the minimum of all the densities observed so far in that window. Ob-
+serve that this idea almost resolves the challenge: for a dishonest chain,
+even if the adversary manages to increase the chain density, the minimum
+density value points to the window following the fork, providing the re-
+quired summary. On the other hand, for the honest chain, there is not a
+huge ﬂuctuation in the densities and, due to majority stake on the chain,
+the minimum density value across the chain is likely to be higher than
+that for the dishonest chain.
+
+20
+
+While this almost completely resolves the challenge, there is one other part
+to the challenge we still need to address. Namely, how long the window
+should be and how it should slide. This is critical, as it is constrained
+by two conﬂicting requirements: (1) The max-length of the window, since
+post a certain point after the fork, no guarantees can be made on the block
+densities in the adversarial chain and (2) The min-length of the window,
+since some minimum number of samples are required to tell apart the given
+two distributions. Let us call the window of the critical length following
+the fork, that satisﬁes both the constrains as the “critical window ”. So
+the challenge is to design the window length and its movement so that no
+matter where the fork is positioned, the moving window will capture the
+entire critical window in one shot. The idea is to have the window length
+slightly greater than the critical window length. As far as moving of the
+window is considered, ﬁrstly note that a na¨ıve shifting window (where the
+next shift moves the beginning of the window to after its current end)
+may not capture the entire critical window in any given position, since a
+fork can occur at arbitrary slots. The idea is to have the window shift
+by a fraction of its size. We call the resulting window as the “𝜈-shifting
+ω-window”, where ω is the window length and 𝜈 is the length by which
+it shifts (cf. Deﬁnition 1). With careful calibration of 𝜈 and ω, we can
+ensure that the window captures the critical window.
+
+This intuition is formally proven later in Theorem 2.
+
+Below, we formally describe the chain selection rules. Our new chain
+selection rule, formally speciﬁed as algorithm maxvalid-sc(·) (see Figure 7),
+surgically adapts the chain selection rule of Ouroboros Genesis, namely
+maxvalid-bg(·) (see Figure 20), but by replacing the long-range fork rule
+with a new one. We will continue all the discussions by referring to the
+underlying blockchains of chain summaries. We will note that the only
+information about the underlying blockchains needed in any part of the
+consensus mechanism is a ﬁxed number of blocks in the immediate history.
+Therefore, the consensus veriﬁcation is succinct.
+Here, Cloc is the local chain, N = {C1, . . . , C𝑀 } is the list of chains to
+choose from. The function isShortRange(C, C (cid:48)) outputs whether or not
+the chains fork in the “short range” or not. The function getMinDen(C)
+outputs the minimum of all the window densities observed thus far in C;
+it is formally deﬁned in Figure 16.
+
+21
+
+Algorithm maxvalid-sc(Cloc, N = {C1, . . . , C𝑀 }, 𝑘)
+
+// Compare Cloc with each candidate chain in N
+
+1. Set Cmax ← Cloc
+
+2. for 𝑖 = 1, . . . , 𝑀 do
+
+if isShortRange(C𝑖, Cmax) then // Short-range fork
+
+if |C𝑖 | > |Cmax| then
+Set Cmax ← C𝑖
+
+end if
+
+else //Long-range fork
+
+if getMinDen(C𝑖) > getMinDen(Cmax) then
+
+Set Cmax ← C𝑖
+
+end if
+
+end if
+
+end for
+
+3. return Cmax
+
+Figure 7: The new chain selection rule.
+
+7.2 Background
+
+We introduce many relevant concepts from Ouroboros Genesis which remain
+the same in our setting too. We begin by recalling a summary of the Ouroboros
+family of protocols.
+
+The Ouroboros family of consensus protocols. Kiayias et al. proposed
+the ﬁrst proof-of-stake (PoS) protocol Ouroboros [17] with rigorous security
+guarantees. However, the adversarial model only considered synchronous net-
+works. Here, the protocol execution is divided into time units called slots and
+groups of slots form epochs.
+
+The adversarial model was strengthened in the follow-up work Ouroboros
+Praos [13] by considering the semi-synchronous setting (where, the protocol
+execution is still divided into slots and epochs, but the network could experience
+a maximum delay of 𝛥 slots in delivering messages.) This work introduced the
+notion of “empty slots” as an artiﬁcial way to provide short periods of silence
+for parties to catch up in the cases of message delivery delays. An important
+point to note about the Ouroboros Praos is its chain selection rule. Whenever
+there are two chains that have forked ‘recently’ (i.e., when there is a so-called
+‘short-range fork ’), it chooses the longer chain. On the other hand, i.e., if the
+
+22
+
+fork is far back in history (or when there is a so-called ‘long-range fork ’), then
+it simply relies on a trusted external service (called the checkpointing service)
+to provide the advice on the honest chain. Clearly, this introduces a strong
+element of centralization which is tackled in the follow up project.
+
+Finally, Ouroboros Genesis overcame the Ouroboros Praos’s drawback
+of relying on an external service for resolving long-range forks by providing an
+additional chain selection rule [4]. Speciﬁcally, the rule considers a short range 𝑠
+of slots soon after the long-range fork and chooses the chain with higher density
+in those 𝑠 slots.
+
+Modeling time: Slots, epochs and empty slots. The protocol execution
+time is divided into epochs which are further divided into slots. There are 𝑅
+slots in an epoch. Like in Ouroboros Praos and Ouroboros Genesis, some slots
+can be “empty” (i.e., without any block associated with them). Speciﬁcally, a
+consensus parameter, 𝑓 , denotes the probability that any given slot has a block
+producer assigned to it. If no block producer is assigned to a slot, then the slot
+is empty (i.e., without a block).
+
+Types of parties. We categorize parties in a way that models various real-life
+scenarios, such as, newly joining parties and parties with temporary connectiv-
+ity/availability issues, as detailed fully in [4]. The model deﬁnes three kinds of
+parties as follows. Alert parties are parties that have access to all the required
+resources, and are also synchronized. These parties enjoy full security guar-
+antees and we will require a lower bound on their stake (see below) to ensure
+security. Potentially active parties (or active, for short) are all parties that,
+broadly speaking, might potentially act in the current time slot of the protocol
+execution. This includes honest parties that have access to all the required re-
+sources as well as adversarial parties. Inactive parties are all other parties, such
+as honest parties that cannot access some of the necessary resources to engage
+with the protocol, e.g., their network connection.
+
+Stake distributions. The protocol is assumed to maintain the following ra-
+tios:
+
+• 𝛼 ≥ 1/2 is the ratio of the alert stake to the active stake.
+
+• 𝛽 is the ratio of the active stake to the entire stake.
+
+Epoch randomness and leader selection distributions. Stake distribu-
+tion considered in an epoch ep is actually the stake distribution at the last slot
+of ep − 2. Besides stake distribution, the notion of epoch randomness inﬂuences
+leader selection distribution in any epoch. Speciﬁcally, epoch randomness is
+derived as a function of certain blocks information from the ﬁrst two-thirds of
+ep − 1.
+
+An important remark which we will use in our proofs is the following fact:
+Consider a fork at sl∗, where a dishonest chain forks from an honest chain. For
+
+23
+
+𝑅/3 slots following sl∗, the epoch randomness and leader selection distributions
+are guaranteed to be unskewed. However, in the slots following the 𝑅/3 slots,
+no such guarantee can be placed on the distribution in the dishonest chain.
+
+Notations. For a chain C and an interval of slots 𝐼 (cid:52)
+= [sl𝑖, sl 𝑗 ] = {sl𝑖, . . . , sl 𝑗 },
+we denote by C[𝐼] = C[sl𝑖, sl 𝑗 ] the sequence of blocks in C such that their slot
+numbers fall into the interval 𝐼. We replace the brackets in this notation with
+parentheses to denote intervals that do not include endpoints; e.g., (sl𝑖, sl 𝑗 ] =
+{sl𝑖+1, . . . , sl 𝑗 }. Finally, we denote by |C[𝐼]| the number of blocks in C[𝐼]. We
+typically denote a party by 𝑃.
+
+7.3 The New Chain Selection Rules
+
+In this section, we describe the proposed chain selection rule for the succinct
+setting. The description is structured so as to clearly highlight (in blue) the dif-
+ferences from the corresponding Ouroboros Genesis protocols and algorithms.
+Algorithms/protocols that are completely novel to Ouroboros Samasika have
+only their names highlighted; the description is not highlighted for readability.
+Moreover, in protocol descriptions, the details that are common to Ouroboros
+Samasika and Ouroboros Genesis are mentioned but not delved deep into, so as
+to (a) stay focused on the main contribution and (b) maintain a pseudocode
+level of description. We defer the reader to [4] for the details common to
+Ouroboros Samasika and Ouroboros Genesis. The formal chain selection al-
+gorithm maxvalid-sc was presented in Figure 7.
+
+7.3.1 The short-range chain selection rule
+
+Recall that a fork is a short-range one when it can be guaranteed that an
+adversary has not yet modiﬁed the block density distribution. maxvalid-sc calls
+the predicate isShortRange that outputs whether a given range is short-range
+one or not in this sense. The predicate is described as follows.
+
+24
+
+Algorithm isShortRange(C1, C2)
+
+1. Let prevLockcp
+
+1 and prevLockcp
+
+2 be the prevLockcp components in the
+
+last blocks of C1, C2, respectively.
+
+2. if prevLockcp
+
+1 = prevLockcp
+
+2 then
+
+3.
+
+return (cid:62)
+
+4. else
+
+5.
+
+return ⊥
+
+Figure 8: The algorithm to determine when a given fork is a short-range one or
+not.
+
+Below in Figure 12 is the protocol executed to select a new chain, denoted
+
+as SelectChain.
+
+Protocol SelectChain(𝑃, sid, Cloc, N = {C1, . . . , C𝑀 }, 𝑘)
+
+// Step 1: Discard invalid chains
+
+1. Initialize Nvalid ← ∅
+
+2. for 𝑖 = 1, . . . , 𝑀 do
+
+Invoke Protocol IsValidChain(𝑃, sid, Cloc, C𝑖, 𝑘); if it returns (cid:62) then
+update Nvalid ← Nvalid ∪ {C𝑖 }
+end for
+
+// Step 2: Apply chain selection rule on valid chains
+
+3. Execute Algorithm maxvalid-sc(Cloc, Nvalid, 𝑘). Denote the output
+
+chain by Cmax.
+
+4. Set Cloc ← Cmax. Output Cloc.
+
+Output: Output Cloc.
+
+Figure 9: The protocol for parties to select a chain when there is more than
+one.
+
+7.4 The Window Min-density
+
+The core concept in the new chain selection rule is that of the window min-
+density. As mentioned earlier in this section, the idea is to consider a shifting
+
+25
+
+window and to always maintain a minimum of densities in all the windows so
+far.
+
+More formally, we employ a 𝜈-shifting ω-window (see Deﬁnition 1), wherein
+
+a ω-long window shifts at a time by 𝜈 slots.
+
+Deﬁnition 1 (𝜈-shifting ω-window). For 𝜈, ω ∈ N and 0 < 𝜈 < ω, a 𝜈-shifting
+ω-window over a sequence of slots sl1, sl2, . . . is characterized by an algorithm
+shiftWindow that takes as input a variable (or a set of variables) which is a func-
+tion of slots in the interval [sl𝑖+1, sl𝑖+ω] and assigns/updates it with a function of
+the slots [sl𝑖+1+𝜈, sl𝑖+ω+𝜈]. We call 𝜈 the shift parameter and ω the window-length
+parameter.
+
+The shift parameter 𝜈 and the window-length parameter ω are set as follows.
+Let 𝑠CG be the chain growth parameter ensured by the short-range chain selec-
+tion rule (which is equivalent to the chain selection rule of Ouroboros Genesis)
+(cf. Theorem 2 in [4]).
+
+The starting point for Ouroboros Samasika is Ouroboros Genesis. In Ouroboros
+
+Genesis, a (non-shifting) window of size of the order 𝑠CG was considered imme-
+diately after the fork. In Ouroboros Samasika, due to succinctness, we consider
+the window positioning independent of the fork position. However, we do need
+to consider a window almost close to the fork. For this reason, we consider a
+window of size slightly larger than 𝑠CG (see (1)) and shift it slightly by 𝜈 slots
+as time progresses (see (2)) to capture a window close to the fork. For imple-
+mentation purposes, one can imagine 𝑛𝑠 sub-windows, each of length 𝜈 slots,
+making up a window (see (3)).
+
+ω = (1 + 𝜖𝑠)𝑠CG,
+𝜈 = 𝜖𝑠 𝑠CG,
+𝑛𝑠 = (1/𝜖𝑠) + 1,
+
+(1)
+
+(2)
+
+(3)
+
+while ensuring that 𝜈 and 1/𝜖𝑠 are whole numbers and that 𝜖𝑠 > 0. For intuition,
+here is an example: Let 𝑠CG = 6 slots. Let 𝜖𝑠 = 1/3. Then, the window is of size
+ω = 8 slots, with the shift being 𝜈 = 2 slots long (See Figure 10).
+
+26
+
+Figure 10: An example of the shifting window with 𝑠CG = 6 slots and 𝜖𝑠 = 1/3.
+Therefore, the window size ω = 8 slots and the shift size 𝜈 = 2 slots. The ﬁrst
+shift occurs when the current time is 𝑡2, the second at 𝑡3, and so on.
+
+We present an example implementation algorithm in Figures 11 and 13. We
+denote the window min-density by minDen. As mentioned earlier, we maintain
+𝑛𝑠 sub-windows, each of size 𝜈 slots; namely, pDen1
+, . . . , pDen𝑛𝑠 . We also main-
+tain an additional sub-window pDencurr also of size 𝜈 slots, to keep track of the
+density in the ongoing sub-window before there is a shift. The sequence of all
+−−→
+Den = (pDen1
+these parameters is denoted by
+
+, . . . , pDen𝑛𝑠
+
+, minDen).
+
+, pDencurr
+
+Algorithm isWindowStop(sl, 𝜈)
+
+1. if (sl % 𝜈) = 0
+
+2.
+
+return (cid:62)
+
+3. else
+
+4.
+
+return ⊥
+
+Figure 11: The algorithm to check if the end of the window is reached.
+
+Protocol SelectChain(𝑃, sid, Cloc, N = {C1, . . . , C𝑀 }, 𝑘)
+
+// Step 1: Discard invalid chains
+
+1. Initialize Nvalid ← ∅
+
+2. for 𝑖 = 1, . . . , 𝑀 do
+
+Invoke Protocol IsValidChain(𝑃, sid, Cloc, C𝑖, 𝑘); if it returns (cid:62) then
+update Nvalid ← Nvalid ∪ {C𝑖 }
+end for
+
+27
+
+// Step 2: Apply chain selection rule on valid chains
+
+3. Execute Algorithm maxvalid-sc(Cloc, Nvalid, 𝑘). Denote the output
+
+chain by Cmax.
+
+4. Set Cloc ← Cmax. Output Cloc.
+
+Output: Output Cloc.
+
+Figure 12: The protocol that chooses a chain using maxvalid-sc.
+
+Algorithm shiftWindow(
+
+−−→
+Den)
+
+Let
+
+, . . . , pDen𝑛𝑠
+
+−−→
+Den = (pDen1
+1. Set minDen ← min(minDen, minDen − pDen1 + pDencurr)
+2. for 𝑖 = 1 to 𝑛𝑠 − 1
+
+, pDencurr
+
+, minDen).
+
+3.
+
+Set pDen𝑖 ← pDen𝑖+1
+
+4. end for
+
+5. Set pDen𝑛𝑠 ← pDencurr and pDencurr ← 0
+
+6. return (pDen1
+
+, . . . , pDen𝑛𝑠
+
+, pDencurr
+
+, minDen)
+
+Figure 13: The algorithm to shift the window.
+
+Remark 7.1 (Divisibility of window length by the shift). The requirement of
+the shift length 𝜈 completely dividing the window length ω is only to have clean
+algorithm descriptions. All the arguments hold even if it is not the case.
+
+7.5 Adopting the New Chain Selection Rule
+
+We now discuss how the modiﬁcations introduced in the maxvalid-sc algorithm
+of Ouroboros Genesis percolates to the other consensus sub-protocols.
+
+−−→
+Den = (pDen1
+
+The
+
+, . . . , pDen𝑛𝑠
+
+, minDen) parameters are ﬁrst set
+, pDencurr
+when the Genesis block is generated by running the Initialization-Genesis proto-
+col. A party that has been registered with all its resources becomes operational
+by invoking this protocol.
+
+28
+
+Algorithm Initialization-Genesis(𝑃, sid, 𝑅, 𝑛𝑠, ω)
+
+1. Send (KeyGen, sid, 𝑃) to FVRF and FKES; receiving (VeriﬁcationKey, sid,
+
+𝑝 ) and (VeriﬁcationKey, sid, 𝑣kes
+𝑣vrf
+
+𝑝 ), respectively.
+
+2. if 𝜏 = 0 then
+
+3.
+
+4.
+
+5.
+
+6.
+
+7.
+
+Send (ver keys, sid, 𝑃, 𝑣vrf
+
+𝑝 , 𝑣kes
+
+𝑝 ) to FINIT to claim stake from the
+
+genesis block.
+
+Invoke FinishRound(𝑃) and invoke UpdateTime(𝑃) to update
+
+𝜏, ep, sl.
+
+while 𝜏 = 0 do
+
+Call UpdateTime(𝑃) to update 𝜏, ep, and sl and give up the
+
+activation
+
+end while
+
+8. end if
+
+// The following is executed if this is a non-genesis round.
+
+9. if 𝜏 > 0 then
+
+10.
+
+11.
+
+12.
+
+13.
+
+14.
+
+15.
+
+Set each of the variables {pDen1
+
+, . . . , pDen𝑛𝑠
+
+, pDencurr} to ∅. Also,
+
+set minDen ← ω.
+−−→
+Den = (pDen1
+
+Set
+
+, . . . , pDen𝑛𝑠
+
+, pDencurr
+
+, minDen).
+
+if FINIT signals an error then
+
+Halt the execution.
+
+end if
+
+Send (genblock req, sid, 𝑃) to FINIT.
+
+16. Receive from FINIT the response (genblock, sid, G(cid:48) = (S1, 𝜂1,
+
+−−→
+Den)),
+
+where
+
+S1 = ((𝑈1, 𝑣vrf
+1
+
+, 𝑣kes
+1
+
+, 𝑠1), . . . , (𝑈𝑛, 𝑣vrf
+
+𝑛 , 𝑣kes
+
+𝑛 , 𝑠𝑛)).
+
+17.
+
+Set CP = (prevLockcp, currStartcp, currStartcp), where, prevLockcp ←
+
+∅, currStartcp ← G(cid:48), currStartcp ← G(cid:48). Also set G ← (G(cid:48)||CP).
+
+18.
+
+Set Cloc ← G. Also, Set 𝑇 ep
+
+𝑝 ) the threshold
+for stakeholder 𝑃 for epoch ep, where 𝛼ep
+𝑝 is the relative stake of
+stakeholder 𝑃 in Sep and ℓVRF denotes the output length of FVRF.
+𝑝 , 𝑣kes
+Finally, send (HELLO, sid, 𝑃, 𝑣vrf
+
+𝑝 ← 2ℓVRF 𝜙 𝑓 (𝛼ep
+
+𝑝 ) to F new
+
+N-MC.
+
+19. end if
+
+29
+
+20. Set isInit ← (cid:62), 𝑡on ← 𝜏, and 𝑡work ← 0.
+
+Global variables:
+𝑣vrf
+𝑝 , 𝑣kes
+by all protocol parts.
+
+𝑝 , 𝜏, ep, sl, Cloc, 𝑇 ep
+
+The protocol
+
+list of variables
+𝑝 , isInit, and 𝑡on to make each of them accessible
+
+stores
+
+the
+
+Figure 14: The initialization protocol of Ouroboros Samasika (run only the ﬁrst
+time a party joins).
+
+30
+
+Protocol StakingProcedure(𝑃, sid, 𝑘, ep, sl, buﬀer, Cloc)
+
+The following steps are executed in an (MAINTAIN-LEDGER, sid, minerID)-
+interruptible manner:
+
+1. Send (EvalProve, sid, nonce 𝑗 (cid:107)sl(cid:107)NONCE) to FVRF, denote the response
+from FVRF by (Evaluated, sid, 𝑦𝜌, 𝜋𝜌). Also, send (EvalProve, sid, nonce 𝑗
+(cid:107)sl(cid:107)TEST)) to FVRF, denote the response from FVRF by (Evaluated, sid,
+𝑦, 𝜋).
+
+2. if 𝑦 < 𝑇 ep
+
+𝑝 then
+
+// Generate a new block
+
+3.
+
+4.
+
+5.
+
+6.
+
+7.
+
+8.
+
+9.
+
+10.
+
+11.
+
+12.
+
+Set buﬀer(cid:48) ← buﬀer, (cid:174)𝑁 ← txn𝑝base-tx and st ← blockifyOG( (cid:174)𝑁)
+
+repeat
+
+Parse buﬀer(cid:48) as sequence (txn1, . . . , txn𝑛)
+
+for 𝑖 = 1 to 𝑛 do
+
+if ValidTxOG(txn𝑖, (cid:174)st(cid:107)st) = 1 then
+
+Set (cid:174)𝑁 ← (cid:174)𝑁 (cid:107)txn𝑖, remove txn𝑖 from buﬀer(cid:48) and set
+
+st ← blockifyOG( (cid:174)𝑁)
+
+end if
+
+end for
+
+until (cid:174)𝑁 does not increase anymore
+
+Set crt = (𝑃, 𝑦, 𝜋), 𝜌 = (𝑦𝜌, 𝜋𝜌) and ℎ ← H(head(Cloc)) and
+send (USign, sid, 𝑃, (ℎ, st, sl, crt, 𝜌), sl) to FKES; denote the response
+by (Signature, sid, (ℎ, st, sl, crt, 𝜌), sl, 𝜎).
+
+13.
+
+Update min-density variables as follows:
+
+• Execute
+pDencurr
+
+−−→
+Den ← get
+, minDen).
+
+−−→
+Den(Cloc), where
+
+−−→
+Den = (pDen1
+
+, . . . , pDen𝑛𝑠
+
+,
+
+• pDencurr ← pDencurr + 1
+
+31
+
+• if isWindowStop(sl, 𝜈) then
+−−→
+Den)
+
+−−→
+Den ← shiftWindow(
+
+•
+
+• end if
+
+Set 𝐵(cid:48) ← (ℎ, st, sl, crt, 𝜌, 𝜎,
+
+−−→
+Den)
+
+Update the checkpoints CP as follows:
+
+if slot sl = 1, i.e., the ﬁrst one in the current epoch then
+
+• Set currStartcp ← 𝐵
+• Set prevLockcp ← currStartcp
+• Set currStartcp ← 𝐵
+
+else if 1 < sl ≤ 2
+
+3 ∗ 𝑅 then
+
+currStartcp ← 𝐵
+
+end if
+
+Set 𝐵 ← (𝐵(cid:48)||CP) and update Cloc ← Cloc(cid:107)𝐵.
+
+Multicast the
+
+extended chain and wait.
+
+Send (MULTICAST, sid, Cloc) to F bc
+
+N-MC and proceed from here
+
+14.
+
+15.
+
+16.
+
+17.
+
+18.
+
+19.
+
+20.
+
+21.
+
+upon next activation of this procedure.
+
+22. else
+
+23.
+
+Evolve the KES signing key by sending (USign, sid, 𝑃, 0, sl) to FKES
+and set the anchor at end of procedure to resume on next maintenance
+activation.
+
+24. end if
+
+Figure 15: The Ouroboros Samasika staking procedure.
+
+In Figure 7.5, we demonstrate where in the protocol architecture to maintain
+−−→
+and update the window min-density
+Den parameters. Speciﬁcally, we will have
+every block hold the current values of these parameters. For any block, the
+parameters are generated by the slot leader. Speciﬁcally, the slot leader begins
+−−→
+by retrieving
+Den for the last block in the chain the party is about to extend.
+Then, the party updates the parameters (using algorithms shiftWindow(·) and
+isWindowStop(·, ·)).
+
+Algorithm getMinDen(C)
+
+32
+
+Let 𝐵last be the last block in C.
+
+1. if 𝐵last = G then // i.e., if 𝐵last is the genesis block
+
+2.
+
+return 0
+
+3. else
+
+4.
+
+5.
+
+Parse 𝐵last to obtain the parameter minDen.
+
+return minDen
+
+Figure 16: The protocol to obtain the current window min-density of a given
+chain.
+
+7.6 Proofs of Security
+
+In this section, we prove security of the Ouroboros Samasika protocol. We begin
+with some preliminaries which will be useful in the proofs.
+
+7.6.1 Preliminaries
+
+In various parts of the proofs, we need to estimate the expected number of
+blocks for a given characteristic string. Below, we deﬁne and design various
+tools that will facilitate the estimations.
+
+Many of the arguments employ the Azuma’s inequality (cf. [18], Section 4)
+
+stated below.
+
+Lemma 1 (Azuma’s inequality (Azuma; Hoeﬀding)). Let 𝑋0, . . . , 𝑋𝑛 be a se-
+quence of real-valued random variables so that, for all 𝑡, |𝑋𝑡+1 − 𝑋𝑡 | ≤ 𝑐 for some
+constant 𝑐. If E[𝑋𝑡+1 | 𝑋0, . . . , 𝑋𝑡 ] ≤ 𝑋𝑡 for all 𝑡 then for every 𝛬 ≥ 0
+
+Pr[𝑋𝑛 − 𝑋0 ≥ 𝛬] ≤ exp
+
+(cid:18)
+
+−
+
+𝛬2
+2𝑛𝑐2
+
+(cid:19)
+
+.
+
+Alternatively, if E[𝑋𝑡+1 | 𝑋0, . . . , 𝑋𝑡 ] ≥ 𝑋𝑡 for all 𝑡 then for every 𝛬 ≥ 0
+
+Pr[𝑋𝑛 − 𝑋0 ≤ −𝛬] ≤ exp
+
+(cid:18)
+
+−
+
+𝛬2
+2𝑛𝑐2
+
+(cid:19)
+
+.
+
+Another large deviation bound that we use in our probabilistic arguments is
+
+the Chernoﬀ bound, recalled below.
+
+Theorem 1 (Chernoﬀ bound.). Let 𝑋1, . . . , 𝑋𝑛 be independent random vari-
+ables with E[𝑋𝑖] = 𝑝𝑖 and 𝑋𝑖 ∈ [0, 1]. Let 𝑋 = (cid:205)𝑛
+𝑝𝑖 = E[𝑋].
+𝑖=1
+
+𝑋𝑖 and 𝜇 = (cid:205)𝑛
+𝑖=1
+
+33
+
+Then, for all 𝛬 ≥ 0,
+
+𝑃𝑟 [𝑋 ≥ (1 + 𝛬)𝜇] ≤ 𝑒− 𝛬2
+𝑃𝑟 [𝑋 ≥ (1 + 𝛬)𝜇] ≤ 𝑒− 𝛬2
+
+2+𝛬 𝜇
+
+2+𝛬 𝜇
+
+Deﬁnition 2 (The super-binomial martingale conditions). Consider a family
+of random variables 𝑋1, . . . , 𝑋𝑛 taking values in {0, 1}𝑛. We say that they sat-
+isfy the 𝛾-super-binomial martingale conditions (or, simply, the 𝛾-martingale
+conditions) if
+
+Pr[𝑋𝑘 = 0 | 𝑋1, . . . , 𝑋𝑘−1] ≥ 𝛾, and hence
+Pr[𝑋𝑘 = 1 | 𝑋1, . . . , 𝑋𝑘−1] ≤ 1 − 𝛾.
+
+We may naturally apply the same terminology to inﬁnite sequences of variables
+taking values in {0, 1}.
+
+Corollary 1 (Corollary of the Azuma’s inequality (cf. Lemma 7 in [4])). Let
+𝑋1, . . . , 𝑋𝑛 satisfy the 𝛾-super-binomial martingale conditions with 𝛾 ≥ 1/2.
+Then, for any 𝛿 > 0,
+
+Pr[#0 (𝑋) ≤ (1 − 𝛿)𝛾𝑛] ≤ exp(−𝛿2𝑛/2)
+
+and
+
+Pr[#1(𝑋) ≥ (1 + 𝛿)(1 − 𝛾)𝑛] ≤ exp(−𝛿2𝑛/2)
+
+where, #0(𝑋) = |{𝑖 |𝑋𝑖 = 0}| and #1 (𝑋) = |{𝑖 |𝑋𝑖 = 1}|.
+
+7.6.2 The Proofs
+
+Like in Ouroboros Praos and Ouroboros Genesis, much of the analysis on char-
+acteristic strings is done by transforming them to their synchronous versions
+and analyzing the latter. The resulting distribution is called the ‘induced distri-
+bution’, denoted by 𝜌𝛥(·). In Lemma 6 of Genesis, it is shown that the induced
+distribution is a preﬁx of a distribution that satisﬁes 𝛾(1− 𝑓 ) 𝛥+1-martingale con-
+ditions (cf. Deﬁnition 3). In the following, we prove certain useful properties
+about the distribution which is employed in the crux of our main proof.
+
+Deﬁnition 3 (The super-binomial martingale conditions). Consider a family
+of random variables 𝑋1, . . . , 𝑋𝑛 taking values in {0, 1}𝑛. We say that they sat-
+isfy the 𝛾-super-binomial martingale conditions (or, simply, the 𝛾-martingale
+conditions) if
+
+Pr[𝑋𝑘 = 0 | 𝑋1, . . . , 𝑋𝑘−1] ≥ 𝛾, and hence
+Pr[𝑋𝑘 = 1 | 𝑋1, . . . , 𝑋𝑘−1] ≤ 1 − 𝛾.
+
+We may naturally apply the same terminology to inﬁnite sequences of variables
+taking values in {0, 1}.
+
+34
+
+Lemma 2 (Structure of the induced distribution). Let 𝑊 = 𝑊1, . . . , 𝑊𝑛 be a
+sequence of random variables, each taking values in {0, 1, ⊥}, which satisfy the
+( 𝑓 ; 𝛾)-characteristic conditions and let
+
+𝑋 = 𝑋1, . . . , 𝑋ℓ = 𝜌𝛥(𝑊1, . . . , 𝑊𝑛)
+
+be the synchronous equivalent random variables obtained by applying the 𝛥-
+reduction mapping to 𝑊. Also, let Pr[𝑊𝑖 =⊥ |𝑊1, . . . , 𝑊𝑖−1] ≤ (1 − 𝑎).
+If
+𝛾(1 − 𝑓 ) 𝛥+1 ≥ (1 + 𝜖)/2 for some 𝜖 ≥ 0 then, the following hold.
+
+1. For any 𝛿ℓ, 𝛿0 > 0,
+
+𝜖#0 (𝑎, 𝑛) (cid:52)
+
+= Pr[#0 (𝑋) < (1 − 𝛿0)
+
+(cid:32)
+
+≤ exp
+
+−
+
+(cid:33)
+
+ℓ 𝑎2𝑛
+𝛿2
+2(1 − 𝑎)2
+
+2. For any 𝛿1 > 0,
+
+(1 + 𝜖)
+2
+(cid:18)
+
++ exp
+
+−
+
+((1 − 𝛿ℓ)𝑎𝑛) − 𝛥]
+
+0 ((1 − 𝛿ℓ)𝑎𝑛)
+𝛿2
+2
+
+(cid:19)
+
+(4)
+
+𝜖#1 (𝑎, 𝑛) (cid:52)
+
+= Pr[#1 (𝑋) > (1 + 𝛿1)
+𝛿2
+1
+2
+
+≤= exp
+
+𝑎𝑛
+
+−
+
+(cid:19)
+
+(cid:18)
+
+(1 − 𝜖)
+2
+
+𝑎𝑛 − 𝛥]
+
+(5)
+
+Proof. We establish the bounds by employing Corollary 1. Recall that Corol-
+lary 1 provides bounds on the number of ones and zeros in a sequence of binary
+random variables that satisfy the martingale conditions. However, 𝑊 might
+contain ⊥ also. Therefore, we consider the 𝛥-reduced mapping of 𝑊: namely,
+𝑋 = 𝑋1, . . . , 𝑋ℓ = 𝜌𝛥(𝑊1, . . . , 𝑊𝑛) and apply the Lemma on the mapped distri-
+bution.
+
+From Lemma 8 (i) and (ii) in Ouroboros Genesis, we have that 𝑋1, . . . , 𝑋ℓ−𝛥 is
+a preﬁx to a sequence of random variables 𝑍1, 𝑍2, . . . that satisfy the 𝛾(1− 𝑓 ) 𝛥+1-
+martingale conditions (for deﬁnition, see Appendix 7.6.1). Therefore, we can
+apply Lemma 1 on 𝑋1, . . . , 𝑋ℓ−𝛥.
+
+Proof of (i). The proof of (i) is structured as follows. We will ﬁrst establish
+a lower bound on ℓ by applying the Azuma’s inequality. Then, for this lower
+bound, we will apply Lemma 1 on 𝑋1, . . . , 𝑋ℓ−𝛥 to obtain a lower bound on the
+number of zeroes.
+
+Consider the random variables
+
+(cid:40)
+
+𝐴𝑖
+
+(cid:52)
+=
+
+0, if 𝑊𝑖 =⊥
+1, if 𝑊𝑖 ≠⊥
+
+35
+
+and let ℓ = (cid:205)𝑛
+𝑖=1
+inequality to the random variables 𝐵𝑡
+
+𝐴𝑖. Then, Pr[ 𝐴𝑖 = 1 | 𝐴1, . . . , 𝐴𝑖−1] ≥ 𝑎. By applying Azuma’s
+
+(cid:52)
+= (cid:205)𝑡
+
+𝑖=1( 𝐴𝑖 − 𝑎), we obtain
+
+Pr[ℓ < (1 − 𝛿ℓ)𝑎𝑛] ≤ exp
+
+−
+
+(cid:32)
+
+(cid:33)
+
+ℓ 𝑎2𝑛
+𝛿2
+2(1 − 𝑎)2
+
+(cid:32)
+
+≤ exp
+
+−
+
+(cid:33)
+
+ℓ 𝑎2𝑛
+𝛿2
+2
+
+(6)
+
+With this length bound established, we must have #0(𝑋) ≥ #0 (𝑍1, . . . , 𝑍ℓ) −
+
+𝛥. Applying Lemma 1 to 𝑍𝑖, we conclude that
+
+Pr[#0(𝑍1, . . . , 𝑍ℓ) ≤ (1 − 𝛿0)
+
+(1 + 𝜖)
+2
+
+ℓ] ≤ exp
+
+ℓ
+
+(cid:19)
+
+(cid:18)
+
+−
+
+𝛿2
+0
+2
+
+(7)
+
+Taking the union bound over these two bad events yields Equation (4).
+
+Proof of (ii). By assuming the worst case of ℓ = 𝑎𝑛 and applying Lemma 1
+to the preﬁx of 𝑍𝑖s, we immediately obtain (5).
+
+(cid:3)
+
+Theorem 2. Consider the protocol Ouroboros-Samasika using maxvalid-sc
+as described in Figure 7, executed in the FN-MC-registration. Let 𝑓 be the
+active-slot coeﬃcient, let 𝛥 be the upper bound on the network delay. Let
+𝛼, 𝛽 ∈ [0, 1] denote a lower bound on the alert ratio and participating ratio
+throughout the whole execution, respectively. Let 𝑅 and 𝐿 denote the epoch
+length and the total lifetime of the system (in slots). If for some 𝜖𝑤 ∈ (0, 1) we
+have 𝛼 · (1 − 𝑓 ) 𝛥+1 ≥ (1 + 𝜖𝑤 )/2 and if the maxvalid-sc parameters, 𝜖𝑤 , 𝑠CG, 𝑠∃CQ
+and the network parameter 𝛥 satisfy
+
+288𝛥/(𝜖 𝛽) < 𝑘, 2(1 + 𝜖𝑤 )𝑠CG + 𝛥 ≤ 𝑅/3 and 𝑠CG + 𝑠∃CQ ≤ 𝑅/3,
+
+then the following guarantees for common preﬁx, chain growth, chain quality,
+and existential chain quality hold except for an additional error probability
+
+exp(ln 𝐿 − 𝛺(𝑘)) + 𝜖#0 (𝛽 𝑓 , ω) + 𝜖#1 (𝛽 𝑓 , ω)
+𝜖CG (𝛽 𝑓 /16, 𝑠CG) + 𝜖 ∃CQ (𝑠∃CQ) + 𝜖CP (𝑠CG)
+
+• Common preﬁx. The probability that the protocol violates the common
+
+preﬁx property with parameter 𝑘 is no more than
+
+𝜖CP (𝑘) (cid:52)
+=
+
+19𝐿
+𝜖 4 exp( 𝛥 − 𝜖 4𝑘/18) + 𝜖lift;
+
+• Chain growth. The probability that the protocol violates the chain
+(cid:52)
+= 48𝛥/(𝜖 𝛽 𝑓 ) and 𝜏CG = 𝛽 𝑓 /16
+
+growth property with parameters 𝑠 ≥ 𝑠CG
+is no more than
+
+𝜖CG (𝜏CG, 𝑠) (cid:52)
+=
+
+𝑠𝐿2
+
+2
+
+exp(−(𝜖 𝛽 𝑓 )2𝑠/256) + 𝜖lift;
+
+36
+
+• Existential chain quality. The probability that the protocol violates the
+(cid:52)
+= 12𝛥/(𝜖 𝛽 𝑓 )
+
+existential chain quality property with parameter 𝑠 ≥ 𝑠∃CQ
+is no more than
+
+𝜖 ∃CQ (𝑠) (cid:52)
+
+= (𝑠 + 1)𝐿2 exp(−(𝜖 𝛽 𝑓 )2𝑠/64) + 𝜖lift;
+
+where 𝜖lift is a shorthand for the quantity
+(cid:19)
+(cid:20)
+
+(cid:18)
+
+𝜖lift
+
+(cid:52)
+= 𝑄𝐿 ·
+
+𝑅3 exp
+
+−
+
+(𝜖 𝛽 𝑓 )2𝑅
+768
+
++
+
+38𝑅
+𝜖 4 exp
+
+(cid:18)
+
+𝛥 −
+
+𝜖 4 𝛽 𝑓 𝑅𝑅
+
+(cid:19)(cid:21)
+
+864
+
+Proof. We begin with a high-level description of the proof. Recall that our
+goal is to show that when we replace maxvalid-bg with maxvalid-sc, the overall
+execution of the protocol remains the same. To see this, consider a run of the
+protocol with maxvalid-bg and consider the ﬁrst slcurr an honest party discovers
+a long-range fork. Let Cloc be the local chain and Ccand be the candidate chain.
+We will show that maxvalid-sc will output the same chain recommendation as
+maxvalid-bg with all but negligible probability. (Note that, until slcurr, the whole
+execution would proceed identically if parties were using maxvalid-sc instead, as
+in both the cases they would always prefer the longer of the compared chains
+using the short-range fork rule.) This will then imply the full statement, as
+the reasoning can be applied inductively to each of the slots where maxvalid-bg
+encounters a long-range fork, throughout the whole execution.
+
+The proof is structured as follows:
+
+1. In Lemma 3, we will show that the ω-window with lowest density in Cloc
+
+has at least thigh number of blocks.
+
+2. In Lemma 4 and 5, we will consider a speciﬁc ω-window and establish an
+
+upper bound on the number of blocks in Ccand in that window.
+
+We will see that thigh > tlow thereby establishing the theorem.
+
+Lemma 3. There exists thigh such that getMinDen(Cloc) ≥ thigh except with
+probability 𝜖#0 (𝛽 𝑓 , ω).
+
+Proof. Let wmin
+getMinDen(Cloc) = |Cloc [wmin
+by this protocol execution within wmin
+loc .
+
+loc denote the window in Cloc with the lowest density (i.e.,
+loc ]|). Let 𝑊 denote the characteristic string induced
+
+Note that the number of blocks in wmin
+
+loc is at least #0 (𝑊), since 𝑊𝑖 = 0 means
+that the corresponding slot has a uniquely alert slot leader. Therefore, it suﬃces
+to lower bound #0 (𝑊).
+
+From Lemma 2, by setting 𝑎 = 𝛽 𝑓 , we get that, for any 0 < 𝛿ℓ, 𝛿loc < 1,
+
+Pr[#0(𝑊) ≤ (1 − 𝛿loc)
+
+(1 + 𝜖)
+2
+
+((1 − 𝛿ℓ) 𝛽 𝑓 ω) − 𝛥] ≤ 𝜖#0 (𝛽 𝑓 , ω)
+
+Hence, we have that thigh = (1−𝛿loc) (1+𝜖 )
+
+2
+thigh except with probability 𝜖#0 (𝛽 𝑓 , ω).
+
+((1−𝛿ℓ) 𝛽 𝑓 ω)−𝛥 and getMinDen(Cloc) ≥
+
+(cid:3)
+
+37
+
+Towards establishing an upper bound on the window density for Ccand, we
+will ﬁrst need to establish a helper lemma (Lemma 4) that states that no honest
+party holds the chain Ccand at any slot > slfork + 𝑠CG + 𝛥.
+Lemma 4. No honest party extends Ccand at any slot later than slfork + 𝑠CG + 𝛥
+except with probability 𝜖CG (𝛽 𝑓 /16, 𝑠CG) + 𝜖 ∃CQ (𝑠∃CQ) + 𝜖CP (𝑠CG, 𝛽 𝑓 /16).
+
+Proof. At a high level, the proof is structured as follows. We will consider
+two consecutive intervals of slots 𝐼growth = [slfork + 1, slfork + 𝑠CG] and 𝐼stabilize =
+[slfork + 𝑠CG + 1, slfork + 𝑠CG + 𝑠∃CQ]. Firstly, we will show that Cloc has a large
+number of blocks in 𝐼growth by employing the chain growth property; secondly,
+we will show that it has at least one honest block in 𝐼stabilize by employing the
+existential chain quality property; ﬁnally, in the crux of the proof, we show
+that if an honest party holds Ccand at a slot later than slfork + 𝑠CG + 𝛥, then it
+contradicts the chain preﬁx property.
+
+In the rest of the proof, we will assume that and
+
+(CP) there is no 𝑠CG 𝛽 𝑓 /16-CP violation,
+
+(∃CQ) there is no 𝑠∃CQ-∃CQ violation, and
+
+(CG) there is no (𝛽 𝑓 /16, 𝑠CG)-CG violation.
+
+We observe that Cloc exhibits signiﬁcant growth over the interval 𝐼growth:
+
+speciﬁcally, by the chain growth property established in Theorem 1 of [4],
+
+|Cloc [𝐼growth]| ≥ 𝑠CG 𝛽 𝑓 /16
+
+(8)
+
+Furthermore, observe that Cloc possesses at least one honestly-generated block
+over the interval 𝐼stabilize: speciﬁcally, since |𝐼stabilize| = 𝑠∃CQ and by the exis-
+tential chain quality property established in Theorem 1 of [4], there must exist
+a slot sl∗
+
+loc ∈ 𝐼stabilize for which the block Cloc [sl∗
+
+loc] was honestly generated.
+
+In order to establish the lemma, we observe that an honest party extending
+Ccand after the slot slfork + 𝑠CG + 𝛥 would yield a violation of common preﬁx.
+Assume for contradiction that there exists an honestly generated block in Ccand
+after slfork + 𝑠CG + 𝛥 slots. Let that slot be denoted by sl∗
+
+𝑡loc = Cloc [1, sl∗
+
+Let 𝐴 = |Cloc [𝐼growth]| and let 𝐵 = |Ccand [𝐼growth]|. Also, consider the tines
+cand].
+
+loc] and 𝑡cand = Ccand [1, sl∗
+Now, we will consider the following two cases.
+
+cand.
+
+Case 1: 𝐵 ≥ 𝐴: Recall that there is an honest block in Cloc at sl∗
+loc and in
+Ccand at sl∗
+cand. Therefore, 𝑡loc and 𝑡cand are viable tines. This gives rise to a
+divergence of div(𝑡loc, 𝑡cand) ≥ 𝐴. In other words, there is a divergence violation
+(or CP violation) with parameter 𝐴 ≥ 𝑠CG 𝛽 𝑓 /16 (from (8)).
+
+38
+
+cand]. Also, recall that sl∗
+
+Case 2: 𝐴 > 𝐵: Recall that there exists an honestly-generated block at
+Ccand [sl∗
+> slfork + 𝑠CG + 𝛥. Given that the delay
+of 𝛥 has passed, the honest party that generated Ccand [sl∗
+cand] has completely
+learned Cloc [1, slfork + 𝑠CG]. Since the honest party still extended Ccand instead
+of Cloc, we have that ˆ𝐵 (cid:52)
+= |Ccand [slfork + 1, sl∗
+cand]| ≥ 𝐴. Similar to the above case,
+(cid:3)
+this results in divergence violation with parameter 𝐴 ≥ 𝑠CG 𝛽 𝑓 /16.
+
+cand
+
+Recall that getMinDen(C) outputs the minimum density of blocks over win-
+dows of length w slots. Consider the window corresponding to which getMinDen
+output the density. Let the slot right before the window begins be denoted
+by slmin. Consider the interval 𝐼growth = (slmin, slmin + ω]. By the chain growth
+property established in Theorem 1 of [4] and by the assumption 𝑤 = 1.1
+
+Towards establishing Lemma 5 and Lemma 3, we will employ the chain
+growth and the existential chain quality properties; speciﬁcally, we will consider
+two disjoint consecutive intervals of length 𝑠CG and 𝑠∃CQ between slfork and slcurr.
+For this, we need to ﬁrst show that there are at least 𝑠CG + 𝑠∃CQ slots between
+slfork and slcurr so that we can apply the properties.
+Lemma 5. getMinDen(Ccand) ≤ tlow except with probability 𝜖#1 (𝛽 𝑓 , ω).
+
+Proof. In order to establish an upper bound on the min-density for Ccand, we
+will consider a speciﬁc window close to the fork and establish an upper bound
+of its density. It follows that the min-density of the chain is at most the upper
+bound.
+
+We will now specify the window we will focus on. Consider the ﬁrst window
+
+that begins after the slot slfork + 𝑠CG + 𝛥. Denote this window by w∗
+
+cand| ≤ tlow.
+
+We will show that |w∗
+From Lemma 4, we have that there are no honestly-generated blocks in
+Ccand after the slot slfork + 𝑠CG + 𝛥 except with probability 𝜖CG (𝛽 𝑓 /16, 𝑠CG) +
+𝜖 ∃CQ (𝑠∃CQ)+𝜖CP (𝑠CG, 𝛽 𝑓 /16). Therefore, all the blocks in Ccand after slfork+𝑠CG+ 𝛥
+cand| = #1( ˆ𝑊), where ˆ𝑊 denotes
+are adversarially generated. In other words, |w∗
+the characteristic string induced by this protocol execution within w∗
+
+We can now employ Lemma 2, by setting 𝑎 = 𝛽 𝑓 , we get that, for any
+
+cand.
+
+cand.
+
+0 < 𝛿1 < 1,
+
+Pr[#1 (𝑊) > (1 + 𝛿1)
+
+(1 − 𝜖)
+2
+
+𝛽 𝑓 − 𝛥] ≤ 𝜖#1 (𝛽 𝑓 , ω)
+
+Hence, we have that tlow = (1 + 𝛿1) (1−𝜖 )
+
+2
+
+except with probability 𝜖#1 (𝛽 𝑓 , ω).
+
+𝛽 𝑓 − 𝛥 and getMinDen(Ccand) ≤ tlow
+
+(cid:3)
+
+Consistent distribution. We have considered various ranges of slots in Lemma
+3, 4 and 5. It is required that all those ranges have the same the same stake
+distribution and randomness to determine slot leaders throughout the ranges.
+
+39
+
+This is ensured by the following two constraints:
+
+𝑠CG + 𝛥 + 𝜈 + ω ≤ 𝑅/3
+𝑠CG + 𝑠∃CQ ≤ 𝑅/3
+
+These constraints correspond to those in the theorem statement, since we have
+assigned ω = (1 + 𝜖𝑤 )𝑠CG and 𝜈 = 𝜖𝑤 𝑠CG.
+
+To ensure slot ranges are within slfork and slcurr. Observe that we have
+considered various ranges of slot positions in the above proof. It remains to en-
+sure that they all lie between slfork and slcurr. Towards this, we will ﬁrst establish
+a lower bound on slcurr − slfork. Then we will illustrate example assignments to
+various parameters with which the slot ranges lie within the limits.
+
+Recall that slfork is the slot associated with the last common block of Cloc and
+Ccand. Recall that by the design of the protocol (independently of the underlying
+maxvalid rule), for every slot sl𝑖 there is an event 𝐸𝑖 such that, if 𝐸𝑖 occurs, then
+no valid block can be created for the slot sl𝑖. Moreover, the events 𝐸1, 𝐸2, . . .
+are independent and Pr[𝐸𝑖] = 1 − 𝑓 . Therefore, using a Chernoﬀ bound (cf.
+Appendix 7.6.1) and a union bound over the running time 𝐿 of the system,
+and by using the fact that there are 𝑘 blocks between slfork and slcurr, we can
+lower-bound the number of slots between slfork and slcurr: slcurr − slfork ≥ 𝑘/2 𝑓 ,
+except with error probability exp(ln 𝐿 − 𝛺(𝑘)). For the remainder of the proof,
+we will assume that the execution satisﬁes slcurr: slcurr − slfork ≥ 𝑘/2 𝑓 for all
+pairs of slots bounding at least 𝑘 blocks on an honestly held chain).
+
+The following is a potential assignment that ensures that the ranges ﬁt within
+the limits. 𝑠CG, 𝑠∃CQ = 𝑘/(6 𝑓 ). Typically, 𝛥 (cid:28) 𝑘/(6 𝑓 ). And by setting 𝜖𝑤 = 1,
+we get that 2(1 + 𝜖𝑤 )𝑠CG + 𝛥 ≤ 𝑘/(2 𝑓 ). Further, by setting 𝑠∃CQ = 𝑘/(6 𝑓 ), we get
+𝑠CG + 𝑠∃CQ ≤ 𝑘/(2 𝑓 ). In these assignments, we needed to assume 48𝛥/(𝜖 𝛽) < 𝑘/6
+(cid:3)
+which conforms with the theorem statement.
+
+7.7 An Eﬃcient Implementation of the Short-range Fork
+
+Rule
+
+Recall that the short-range fork rule is simply to choose the longest chain, like
+in Ouroboros Genesis. Recall that a fork is a short-range one if it is less than
+𝑘 blocks ago in history. A na¨ıve implementation of this rule is to always store
+the last 𝑘 blocks. However, this is not eﬃcient. In the following, we propose
+an approach where only information about just two block needs to be stored at
+any given point in time.
+
+The idea is to maintain two checkpoints in every epoch, that can provide an
+estimate on how long ago a fork has occurred. One, a ‘start checkpoint’, which
+is at the beginning of each epoch, and the other, a ‘lock checkpoint’, which is at
+the last block in the ﬁrst two-thirds of an epoch. That is, in the current epoch,
+as time progresses away from the ﬁrst slot, the lock checkpoint is the last block
+so far until we reach the last block in the ﬁrst two-thirds of the epoch, when
+the lock checkpoint “freezes” at that block. These checkpoints are compared
+
+40
+
+for candidate chains to determine when the fork has occurred. To estimate the
+fork position, we consider the following two cases.
+
+Fork in the current epoch: We categorize this as a short-range fork. This
+is because the leader selection distribution for the current epoch was al-
+ready determined by the end of the ﬁrst two-thirds of the previous epoch.
+Therefore, we can safely assume that the adversary has not skewed the
+distribution for the current epoch and the simple longest chain rule suﬃces
+in this case.
+
+Fork in the previous epoch with the same lock checkpoint: Since the lock
+
+checkpoints for the previous epoch are the same for the candidate chains,
+as noted in the previous case, the leader selection distribution is well dis-
+tributed even after the fork. Hence, again, the simple longest chain rule
+suﬃces.
+
+8 Experimental Results
+
+We have implemented the Coda protocol and launched the testnet with par-
+ticipation from across the world. In this section, we report the results from a
+representative duration between November 12, 2019, 10 AM Paciﬁc Time Zone
+and December 15, 2019, 10 AM Paciﬁc Time Zone.
+
+8.1 The Implementation Details
+
+The implementation is written in OCaml. The SNARK themselves are written
+in a special intuitive OCaml-based language called Snarky, with a backend based
+on libsnark [5]. The underlying gossip protocol is based on libp2p [1].
+
+The incrementally-computable SNARK. Recall that the Coda protocol
+is based on an incrementally-computable SNARK. The SNARK implementation
+employs the parallel scan state technique from Section 6.1, where for a queue of
+blocks, a tree of SNARK proofs are generated and the root proof is combined
+with the proof for the blockchain prior the queue, to obtain a new proof for
+the updated blockchain. The SNARK proof attesting validity of a blockchain
+is called a blockchain proof and all the other proofs in the trees are called
+block proofs. Recall from Section 4.1.1 that, under the hood, there are three
+diﬀerent types of proofs, namely the base proofs, the wrap proofs and the merge
+proofs. In eﬀect, we have blockchain-base proofs, blockchain-wrap proofs, block-
+base proofs, block-wrap proofs and block-merge proofs.
+(Note that we do not
+have blockchain-merge proofs, since the blockchain proofs are only computed
+sequentially and therefore, multiple blockchain proofs are never merged.)
+
+The consensus parameters. The Coda protocol is instantiated with the
+Ouroboros Samasika consensus mechanism. We set the main consensus param-
+
+41
+
+Type of SNARK proof Number of constraints
+
+block-base proof
+block-wrap proof
+block-merge proof
+blockchain-base proof
+blockchain-wrap proof
+
+42700
+34954
+206388
+248006
+28313
+
+Table 1: Number of constraints in the diﬀerent proofs used for the Coda proto-
+col.
+
+eters at 𝑘 = 10 (the number of slots before guaranteed ﬁnality), slot duration
+𝑅=240 s, and 𝑓 = 0.5 (the average fraction of ﬁlled slots in an epoch).
+
+Community members across the world participated in the testnet. Besides,
+
+a few nodes were also run by us.
+
+Recall that, in the Coda protocol, every node is a full node, since verifying
+the entire blockchain is as simple as verifying just a short, constant-sized proof.
+However, every full node can have one or more of the following roles: a prover
+and a block producer.
+
+In total, the testnet had 85 unique participants. Among them, there were
+49 block producers (where, 44 of the nodes were run by the community and 5
+by us) and 8 unique provers .
+
+The block producer nodes run by us used the following instance size: ‘c5.2xlarge’.
+
+The prover nodes run by us used the following instance size: ‘c5.9xlarge’. The
+community members ran their nodes on Linux, OS X, or Windows through WSL
+(Windows Subsystem for Linux).
+
+8.2 The Results
+
+Filled vs. unﬁlled slots. Observe that the total number of slots in the
+duration of interest is 15839. Among them, 7926 slots were ﬁlled. Recall that
+𝑓 = 0.5 implied that the expect fraction of ﬁlled slots is 0.5. In the experiment,
+0.5004 fraction of slots were ﬁlled.
+
+Transactions and SNARK proofs. A total of 24826 transactions were sent,
+17256 of which were from the community members. There were 78 unique
+senders and 183 unique receivers.
+In total, 53120 block SNARK proofs were
+generated.
+
+The ﬁgures 17, 18 and 19 report the number of daily transactions, number
+
+of daily blocks produced and number of daily SNARKs produced.
+
+42
+
+Figure 17: Transactions produced from November 12, 2019, 10 AM to December
+15, 2019, 10 AM, Paciﬁc Time Zone
+
+Figure 18: Blocks produced from November 12, 2019, 10 AM to December 15,
+2019, 10 AM, Paciﬁc Time Zone
+
+Figure 19: SNARKs produced from November 12, 2019, 10 AM to December
+15, 2019, 10 AM, Paciﬁc Time Zone
+
+9 Future Work
+
+While the presented description of the Coda protocol is for the payments sytem,
+the notion can be easily extended to any Turing-complete functionalities. For
+
+43
+
+example, the framework can be extended to support user-deﬁned tokens and
+multisignature accounts. Also, our roadmap includes upgrading the underlying
+SNARKs to the recent advances in the SNARK line of research, such as, those
+with universal setup [10, 11].
+
+10 Related Work
+
+Coda is, of course, not the only project working on solutions to the tradeoﬀ
+between scaling and decentralization. Indeed, this tradeoﬀ has been a key chal-
+lenge since the very beginning of blockchains. The very ﬁrst reply to the original
+post of the bitcoin whitepaper raised this issue [14].
+
+Since then, many solutions have been suggested, all with various tradeoﬀs
+[3]. These solutions can be categorized into those that leverage existing chains,
+and those, like Coda, that propose novel architectures.
+
+10.1 Existing Chain Solutions
+
+The Lightning and Plasma networks move transactions oﬀ the main chain to
+side channels. However, chain operations still require downloading the entire
+blockchain and suﬀer from unsolved routing challenges [23]. There have also
+been critical attacks on Lightning that limit its usefulness [22].
+
+Light nodes have been suggested as a possible solution to enable wider ac-
+cess to cryptocurrencies. They work by downloading block headers in order to
+determine the Merkle root of the database state that has the strongest protocol
+state.
+
+Sharding has also been suggested as a way to increase capacity. Nodes
+however have full certainty only over shards they possess the full data for. In
+the case of shards that nodes do not have the full data for, those nodes essentially
+have to trust the consensus nodes, and in so doing are operating as light nodes.
+Furthermore, this technique suﬀers from the high cost of having to download a
+new shard in every validator rotation [21].
+
+Another proposed solution to blockchain access is reliance on third-party
+nodes. Instead of connecting to the blockchain trustlessly, a third-party oper-
+ates a full node which is relied upon for state updates. Inherently, this approach
+requires trusting the third party. Such access precludes both censorship resis-
+tance and guaranteed liveness.
+
+Acknowledgement
+
+We thank Amit Sahai for his valuable comments.
+
+44
+
+References
+
+[1] libp2p: Modular peer-to-peer networking stack. [Online; accessed February
+
+15, 2020].
+
+[2] The coda protocol. https://github.com/CodaProtocol/coda, 2018.
+
+[3] Vitalik Buterin talks scalability: ‘Ethereum blockchain is almost full’, 2019
+
+(accessed October, 2019). https://cointelegraph.com/news.
+
+[4] Christian Badertscher, Peter Gazi, Aggelos Kiayias, Alexander Russell, and
+Vassilis Zikas. Ouroboros genesis: Composable proof-of-stake blockchains
+with dynamic availability. Cryptology ePrint Archive, Report 2018/378,
+2018. “https://eprint.iacr.org/2018/378”.
+
+[5] Eli Ben-Sasson, Alessandro Chiesa, Daniel Genkin, Shaul Kﬁr, Eran
+Tromer, Madars Virza, and Howard Wu. libsnark. https://github.com/
+scipr-lab/libsnark, 2017.
+
+[6] Eli Ben-Sasson, Alessandro Chiesa, Eran Tromer, and Madars Virza. Scal-
+able zero knowledge via cycles of elliptic curves. In CRYPTO (2), volume
+8617 of Lecture Notes in Computer Science, pages 276–294. Springer, 2014.
+
+[7] Eli Ben-Sasson, Alessandro Chiesa, Eran Tromer, and Madars Virza. Scal-
+able zero knowledge via cycles of elliptic curves. Algorithmica, 79(4):1102–
+1160, Dec 2017.
+
+[8] Nir Bitansky, Ran Canetti, Alessandro Chiesa, and Eran Tromer. Recursive
+composition and bootstrapping for SNARKS and proof-carrying data. In
+STOC, pages 111–120. ACM, 2013.
+
+[9] Sean Bowe and Ariel Gabizon. Making groth’s zk-snark simulation ex-
+tractable in the random oracle model. Cryptology ePrint Archive, Report
+2018/187, 2018. https://eprint.iacr.org/2018/187.
+
+[10] Sean Bowe, Jack Grigg, and Daira Hopwood. Halo: Recursive proof compo-
+sition without a trusted setup. IACR Cryptology ePrint Archive, 2019:1021,
+2019.
+
+[11] Alessandro Chiesa, Yuncong Hu, Mary Maller, Pratyush Mishra, Noah
+Vesely, and Nicholas P. Ward. Marlin: Preprocessing zksnarks with uni-
+versal and updatable SRS. IACR Cryptology ePrint Archive, 2019:1047,
+2019.
+
+[12] Phil Daian, Rafael Pass, and Elaine Shi. Snow white: Robustly reconﬁg-
+urable consensus and applications to provably secure proof of stake.
+In
+Financial Cryptography, volume 11598 of Lecture Notes in Computer Sci-
+ence, pages 23–41. Springer, 2019.
+
+45
+
+[13] Bernardo David, Peter Gaˇzi, Aggelos Kiayias, and Alexander Russell.
+Ouroboros praos: An adaptively-secure, semi-synchronous proof-of-stake
+protocol. Cryptology ePrint Archive, Report 2017/573, 2017.
+http:
+//eprint.iacr.org/2017/573.
+
+[14] James A. Donald. Bitcoin P2P e-cash paper, 2008 (accessed October, 2019).
+
+[15] Juan A. Garay, Aggelos Kiayias, and Nikos Leonardos. The bitcoin back-
+bone protocol: Analysis and applications. In EUROCRYPT (2), volume
+9057 of Lecture Notes in Computer Science, pages 281–310. Springer, 2015.
+
+[16] Jens Groth and Mary Maller. Snarky signatures: Minimal signatures of
+knowledge from simulation-extractable snarks. In CRYPTO (2), volume
+10402 of Lecture Notes in Computer Science, pages 581–612. Springer, 2017.
+
+[17] Aggelos Kiayias, Alexander Russell, Bernardo David, and Roman
+Oliynykov. Ouroboros: A provably secure proof-of-stake blockchain proto-
+col. In CRYPTO (1), volume 10401 of Lecture Notes in Computer Science,
+pages 357–388. Springer, 2017.
+
+[18] Rajeev Motwani and Prabhakar Raghavan. Randomized Algorithms. Cam-
+
+bridge University Press, New York, NY, USA, 1995.
+
+[19] Satoshi Nakamoto. Bitcoin: A peer-to-peer electronic cash system,”
+
+http://bitcoin.org/bitcoin.pdf, 2008.
+
+[20] Eli Ben Sasson, Alessandro Chiesa, Christina Garman, Matthew Green, Ian
+Miers, Eran Tromer, and Madars Virza. Zerocash: Decentralized anony-
+mous payments from bitcoin. In 2014 IEEE Symposium on Security and
+Privacy, pages 459–474. IEEE, 2014.
+
+[21] Alexander Skidanov. Unsolved Problems in Blockchain Sharding, 2018 (ac-
+
+cessed October, 2019). https://medium.com/nearprotocol.
+
+[22] Saar Tochner, Stefan Schmid, and Aviv Zohar. Hijacking routes in payment
+channel networks: A predictability tradeoﬀ. CoRR, abs/1909.06890, 2019.
+
+[23] Trustnodes. Lightning Network Has Many Routing Problems Says Lead
+Dev at Lightning Labs, 2019 (accessed October, 2019). https://www.
+trustnodes.com.
+
+[24] Paul Valiant. Incrementally veriﬁable computation or proofs of knowledge
+In TCC, volume 4948 of Lecture Notes in
+
+imply time/space eﬃciency.
+Computer Science, pages 1–18. Springer, 2008.
+
+[25] Gavin Wood et al. Ethereum: A secure decentralised generalised transac-
+
+tion ledger. Ethereum project yellow paper, 151(2014):1–32, 2014.
+
+46
+
+Appendix A Chain Selection in Ouroboros Gen-
+
+esis
+
+Here, we recall the chain selection rule of Ouroboros Genesis. The protocol
+SelectChain is the same as in Ouroboros Samasika, except for calling the algo-
+rithm maxvalid-bg instead of maxvalid-sc. The algorithm maxvalid-bg is recalled
+below.
+
+Algorithm maxvalid-bg(Cloc, N = {C1, . . . , C𝑀 }, 𝑘, 𝑠)
+
+// Compare Cloc with each candidate chain in N
+
+1. Set Cmax ← Cloc
+
+2. for 𝑖 = 1, . . . , 𝑀 do
+
+if (C𝑖 forks from Cmax at most 𝑘 blocks ago) then // The case of
+
+a short-range fork
+
+if |C𝑖 | > |Cmax| then
+Set Cmax ← C𝑖
+
+end if
+
+else // The case of a long-range fork
+
+Let 𝑗 ← max{ 𝑗 (cid:48) ≥ 0 | Cmax and C𝑖 have the same block in sl 𝑗(cid:48)}
+if getLocalForkDen(C𝑖, 𝑗 + 𝑠) > getLocalForkDen(Cmax, 𝑗 + 𝑠)
+
+then
+
+Set Cmax ← C𝑖
+
+end if
+
+end if end for
+
+3. Return Cmax
+
+Figure 20: The chain selection rule of Ouroboros Genesis.
+
+Algorithm getLocalForkDen(C, 𝑛)
+
+return |C[sl1, sl𝑛]|, the number of blocks in the ﬁrst 𝑛 slots of C.
+
+Figure 21: The algorithm for parties to obtain chain density until a slot local
+to the fork.
+
+47
+
+

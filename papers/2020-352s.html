@@ -1,0 +1,2245 @@
+<!DOCTYPE html><html>
+<head>
+<title></title>
+<style type="text/css">
+<!--
+.xflip {
+    -moz-transform: scaleX(-1);
+    -webkit-transform: scaleX(-1);
+    -o-transform: scaleX(-1);
+    transform: scaleX(-1);
+    filter: fliph;
+}
+.yflip {
+    -moz-transform: scaleY(-1);
+    -webkit-transform: scaleY(-1);
+    -o-transform: scaleY(-1);
+    transform: scaleY(-1);
+    filter: flipv;
+}
+.xyflip {
+    -moz-transform: scaleX(-1) scaleY(-1);
+    -webkit-transform: scaleX(-1) scaleY(-1);
+    -o-transform: scaleX(-1) scaleY(-1);
+    transform: scaleX(-1) scaleY(-1);
+    filter: fliph + flipv;
+}
+-->
+</style>
+</head>
+<body>
+<a name=1></a>Coda:&#160;Decentralized&#160;Cryptocurrency&#160;at&#160;Scale<br/>
+Joseph&#160;Bonneau1,&#160;Izaak&#160;Meckler2,&#160;Vanishree&#160;Rao2,&#160;and&#160;Evan<br/>
+Shapiro2<br/>
+1New&#160;York&#160;University<br/>
+2O(1)&#160;Labs<br/>
+Abstract<br/>
+We&#160;introduce&#160;the&#160;notion&#160;of&#160;a&#160;succinct&#160;blockchain,&#160;a&#160;replicated&#160;state<br/>
+machine&#160;in&#160;which&#160;each&#160;state&#160;transition&#160;(block)&#160;can&#160;be&#160;efficiently&#160;veri-<br/>fied&#160;in&#160;constant&#160;time&#160;regardless&#160;of&#160;the&#160;number&#160;of&#160;prior&#160;transitions&#160;in&#160;the<br/>system.<br/>
+Traditional&#160;blockchains&#160;require&#160;verification&#160;time&#160;linear&#160;in&#160;the<br/>
+number&#160;of&#160;transitions.&#160;We&#160;show&#160;how&#160;to&#160;construct&#160;a&#160;succinct&#160;blockchain<br/>using&#160;recursively&#160;composed&#160;succinct&#160;non-interactive&#160;arguments&#160;of&#160;knowl-<br/>edge&#160;(SNARKs).&#160;Finally,&#160;we&#160;instantiate&#160;this&#160;construction&#160;to&#160;implement<br/>Coda,&#160;a&#160;payment&#160;system&#160;(cryptocurrency)&#160;using&#160;a&#160;succinct&#160;blockchain.<br/>Coda&#160;offers&#160;payment&#160;functionality&#160;similar&#160;to&#160;Bitcoin,&#160;with&#160;a&#160;dramatically<br/>faster&#160;verification&#160;time&#160;of&#160;200ms&#160;making&#160;it&#160;practical&#160;for&#160;lightweight&#160;clients<br/>and&#160;mobile&#160;devices&#160;to&#160;perform&#160;full&#160;verification&#160;of&#160;the&#160;system’s&#160;history.<br/>
+1<br/>
+Introduction<br/>
+Bitcoin&#160;and&#160;other&#160;distributed&#160;payment&#160;systems&#160;(also&#160;called&#160;cryptocurrencies&#160;or<br/>simply&#160;blockchains)&#160;aim&#160;to&#160;provide&#160;a&#160;decentralized&#160;system&#160;for&#160;making&#160;and&#160;ver-<br/>ifying&#160;payments.&#160;However,&#160;for&#160;traditional&#160;cryptocurrencies,&#160;including&#160;Bitcoin,<br/>decentralization&#160;comes&#160;at&#160;the&#160;cost&#160;of&#160;scalability&#160;as&#160;each&#160;node&#160;needs&#160;to&#160;process<br/>the&#160;entire&#160;system&#160;history&#160;upon&#160;joining&#160;the&#160;network.&#160;Asymptotically,&#160;verifying<br/>a&#160;blockchain&#160;containing&#160;𝑡&#160;transactions&#160;requires&#160;𝛺(𝑡)&#160;time&#160;(usually&#160;more&#160;than<br/>linear&#160;in&#160;𝑡&#160;as&#160;bookkeeping&#160;is&#160;required&#160;to&#160;resolve&#160;transaction&#160;references&#160;during<br/>verification).&#160;At&#160;the&#160;time&#160;of&#160;this&#160;writing,&#160;Bitcoin’s&#160;blockchain&#160;is&#160;over&#160;250&#160;GB<br/>and&#160;contains&#160;over&#160;500&#160;M&#160;transactions&#160;(see&#160;Figure&#160;<a href="2020-352s.html#2">1).&#160;</a>Downloading&#160;and&#160;verifying<br/>this&#160;history&#160;takes&#160;days&#160;on&#160;a&#160;typical&#160;laptop.<br/>
+These&#160;resource&#160;requirements&#160;deter&#160;most&#160;users&#160;from&#160;running&#160;a&#160;full&#160;node&#160;that<br/>
+stores&#160;and&#160;verifies&#160;the&#160;blockchain.&#160;As&#160;seen&#160;in&#160;Figure&#160;<a href="2020-352s.html#2">2,&#160;</a>the&#160;number&#160;of&#160;full&#160;nodes<br/>in&#160;Bitcoin&#160;is&#160;not&#160;growing&#160;despite&#160;its&#160;increasing&#160;popularity&#160;over&#160;time.&#160;Instead<br/>most&#160;users&#160;run&#160;a&#160;light&#160;node,&#160;verifying&#160;only&#160;block&#160;headers&#160;but&#160;not&#160;transactions,<br/>or&#160;an&#160;ultralight&#160;node&#160;verifying&#160;nothing&#160;and&#160;relying&#160;on&#160;trusted&#160;advice&#160;from&#160;a<br/>trusted&#160;server.&#160;This&#160;undermines&#160;decentralization&#160;as&#160;most&#160;clients&#160;rely&#160;on&#160;trust<br/>rather&#160;than&#160;independent&#160;verification.&#160;It&#160;also&#160;undermines&#160;performance:&#160;block&#160;size<br/>
+1<br/>
+<hr/>
+<a name=2></a><img src="2020-352-2_1.png"/><br/>
+<img src="2020-352-2_2.png"/><br/>
+(and&#160;therefore&#160;transaction&#160;throughput)&#160;is&#160;artificially&#160;capped&#160;in&#160;part&#160;to&#160;mitigate<br/>the&#160;burden&#160;of&#160;verification.<br/>
+Figure&#160;1:&#160;Growth&#160;of&#160;the&#160;Bitcoin&#160;blockchain&#160;over&#160;time,&#160;in&#160;GB.&#160;Source:&#160;<a href="http://www.blockchain.com">www.<br/>blockchain.com.</a><br/>
+Figure&#160;2:&#160;Estimated&#160;number&#160;of&#160;full&#160;nodes&#160;participating&#160;in&#160;the&#160;Bitcoin&#160;and<br/>Ethereum&#160;networks&#160;over&#160;time.<br/>
+Source:&#160;<a href="http://www.bitnodes.earn.com">www.bitnodes.earn.com&#160;</a>and&#160;<a href="http://www.Ethernodes.org">www.</a><br/>
+<a href="http://www.Ethernodes.org">Ethernodes.org.</a><br/>
+2<br/>
+<hr/>
+<a name=3></a>In&#160;this&#160;work,&#160;our&#160;goal&#160;is&#160;to&#160;design&#160;a&#160;decentralized&#160;payment&#160;system&#160;that<br/>
+offers&#160;efficient&#160;verification&#160;of&#160;system&#160;history&#160;from&#160;genesis&#160;without&#160;relying&#160;on<br/>any&#160;external&#160;advice.&#160;Specifically,&#160;we&#160;aim&#160;to&#160;provide&#160;verification&#160;time&#160;constant<br/>(𝑂&#160;(1))&#160;in&#160;the&#160;number&#160;of&#160;transactions;&#160;we&#160;call&#160;such&#160;a&#160;blockchain,&#160;a&#160;succinct<br/>blockchain.<br/>
+We&#160;achieve&#160;this&#160;goal&#160;by&#160;including&#160;succinct&#160;proofs&#160;of&#160;state&#160;validity&#160;in&#160;each<br/>
+block.&#160;Generically,&#160;it&#160;is&#160;possible&#160;to&#160;compute&#160;a&#160;succinct&#160;non-interactive&#160;argument<br/>of&#160;knowledge&#160;(a&#160;SNARK)&#160;of&#160;any&#160;NP&#160;statement,&#160;including&#160;for&#160;example&#160;that<br/>the&#160;system&#160;stated&#160;committed&#160;to&#160;by&#160;the&#160;current&#160;block&#160;in&#160;a&#160;blockchain&#160;can&#160;be<br/>reached&#160;from&#160;a&#160;the&#160;genesis&#160;state&#160;by&#160;a&#160;series&#160;of&#160;valid&#160;transactions&#160;in&#160;the&#160;system.<br/>This&#160;(large)&#160;list&#160;of&#160;transactions&#160;is&#160;a&#160;witness&#160;that&#160;the&#160;current&#160;block&#160;is&#160;valid.<br/>However,&#160;computing&#160;a&#160;new&#160;proof&#160;of&#160;validity&#160;of&#160;the&#160;entire&#160;system&#160;history&#160;for<br/>each&#160;block&#160;would&#160;be&#160;prohibitively&#160;expensive.&#160;Instead,&#160;we&#160;employ&#160;techniques<br/>from&#160;incrementally&#160;computable&#160;SNARKs&#160;to&#160;ensure&#160;that&#160;the&#160;cost&#160;of&#160;computing<br/>a&#160;proof&#160;for&#160;each&#160;block&#160;is&#160;proportional&#160;only&#160;to&#160;the&#160;number&#160;of&#160;transactions&#160;added<br/>since&#160;the&#160;previous&#160;block.<br/>
+We&#160;instantiate&#160;the&#160;notion&#160;of&#160;a&#160;succinct&#160;blockchain&#160;and&#160;introduce&#160;the&#160;Coda<br/>
+protocol.&#160;Coda&#160;is&#160;a&#160;payment-oriented&#160;blockchain&#160;offering&#160;similar&#160;functionality<br/>to&#160;Bitcoin,&#160;although&#160;with&#160;different&#160;transaction&#160;semantics.&#160;In&#160;particular,&#160;Coda<br/>uses&#160;an&#160;account-based&#160;model&#160;(as&#160;in&#160;Ethereum&#160;<a href="2020-352s.html#46">[25])&#160;</a>(instead&#160;of&#160;the&#160;UTXO&#160;model<br/>as&#160;in&#160;<a href="2020-352s.html#46">Bitcoin[19]&#160;</a>and&#160;others&#160;<a href="2020-352s.html#46">[20]),&#160;</a>wherein&#160;the&#160;current&#160;state&#160;of&#160;the&#160;blockchain&#160;is<br/>a&#160;list&#160;of&#160;all&#160;account&#160;balances&#160;rather&#160;than&#160;a&#160;list&#160;of&#160;unspent&#160;coins&#160;(UTXOs).<br/>
+Each&#160;block&#160;contains&#160;a&#160;commitment&#160;to&#160;this&#160;state&#160;(in&#160;a&#160;Merkle&#160;tree)&#160;and&#160;not<br/>
+the&#160;entire&#160;state.&#160;Therefore&#160;a&#160;full&#160;node&#160;need&#160;not&#160;store&#160;the&#160;entire&#160;state,&#160;but&#160;can<br/>verify&#160;account&#160;balances&#160;efficiently&#160;given&#160;only&#160;the&#160;state&#160;commitment&#160;in&#160;the&#160;latest<br/>block&#160;header.&#160;However,&#160;a&#160;prover&#160;in&#160;our&#160;system&#160;(roughly&#160;equivalent&#160;to&#160;a&#160;miner<br/>in&#160;Bitcoin)&#160;does&#160;needs&#160;to&#160;store&#160;the&#160;full&#160;state&#160;since&#160;it&#160;is&#160;part&#160;of&#160;the&#160;witness&#160;when<br/>proving&#160;the&#160;validity&#160;of&#160;new&#160;blocks.<br/>
+For&#160;the&#160;consensus&#160;protocol&#160;of&#160;Coda,&#160;we&#160;present&#160;the&#160;first&#160;provably-secure<br/>
+proof-of-stake&#160;(PoS)&#160;consensus&#160;protocol&#160;for&#160;succinct&#160;blockchains&#160;called&#160;Ouroboros<br/>Samasika.&#160;Note&#160;that&#160;an&#160;off-the-shelf&#160;consensus&#160;mechanism&#160;is&#160;not&#160;necessarily<br/>compatible&#160;with&#160;a&#160;succinct&#160;blockchain&#160;framework,&#160;since&#160;the&#160;way&#160;consensus&#160;is<br/>achieved&#160;when&#160;there&#160;are&#160;multiple&#160;contending&#160;chains&#160;could&#160;relying&#160;on&#160;arbitrary<br/>transaction&#160;history,&#160;forcing&#160;nodes&#160;to&#160;store&#160;the&#160;entire&#160;transaction&#160;history.&#160;In<br/>fact,&#160;this&#160;is&#160;a&#160;natural&#160;approach&#160;for&#160;consensus&#160;mechanisms,&#160;since&#160;the&#160;information<br/>needed&#160;to&#160;tell&#160;apart&#160;an&#160;honest&#160;chain&#160;from&#160;a&#160;dishonest&#160;one&#160;is&#160;likely&#160;to&#160;involve<br/>details&#160;at&#160;the&#160;point&#160;of&#160;the&#160;fork;&#160;since&#160;it&#160;is&#160;possible&#160;for&#160;a&#160;party&#160;to&#160;learn&#160;about&#160;a<br/>fork&#160;long&#160;after&#160;it&#160;occurred,&#160;it&#160;may&#160;need&#160;to&#160;store&#160;the&#160;entire&#160;history&#160;to&#160;assist&#160;in<br/>the&#160;chain&#160;selection&#160;process.&#160;This&#160;is&#160;indeed&#160;the&#160;case&#160;in&#160;the&#160;known&#160;PoS&#160;consensus<br/>mechanisms&#160;<a href="2020-352s.html#46">[17,&#160;13,&#160;</a><a href="2020-352s.html#45">4].&#160;</a>Furthermore,&#160;other&#160;PoS&#160;consensus&#160;mechanisms&#160;rely&#160;on<br/>a&#160;trusted&#160;external&#160;advice&#160;for&#160;bootstrapping&#160;<a href="2020-352s.html#45">[12].</a><br/>
+Concretely,&#160;in&#160;our&#160;current&#160;implementation,&#160;a&#160;state&#160;proof&#160;size&#160;is&#160;just&#160;and&#160;it<br/>
+takes&#160;around&#160;200ms&#160;to&#160;verify&#160;it.&#160;Thus,&#160;any&#160;device&#160;that&#160;can&#160;support&#160;this&#160;level&#160;of<br/>computation,&#160;such&#160;as&#160;the&#160;current&#160;smartphones,&#160;can&#160;verify&#160;the&#160;current&#160;state&#160;of<br/>the&#160;system&#160;with&#160;no&#160;trusted&#160;advice.<br/>
+Beyond&#160;incrementally&#160;computable&#160;SNARKs,&#160;we&#160;employ&#160;multiple&#160;optimiza-<br/>
+3<br/>
+<hr/>
+<a name=4></a>tions,&#160;the&#160;most&#160;significant&#160;of&#160;which&#160;is&#160;parallel&#160;scan&#160;state.&#160;At&#160;a&#160;high&#160;level,&#160;this<br/>improves&#160;transaction&#160;throughput&#160;beyond&#160;the&#160;limits&#160;of&#160;sequentially&#160;computed<br/>proofs.&#160;Roughly,&#160;the&#160;idea&#160;is&#160;to&#160;enqueue&#160;all&#160;the&#160;blocks&#160;that&#160;still&#160;need&#160;to&#160;be&#160;ab-<br/>sorbed&#160;into&#160;a&#160;proof&#160;and&#160;distribute&#160;their&#160;proving&#160;across&#160;parallel&#160;provers.&#160;We&#160;also<br/>introduce&#160;a&#160;special&#160;queue&#160;of&#160;recent&#160;transactions&#160;to&#160;reduce&#160;transaction&#160;confirma-<br/>tion&#160;latency&#160;below&#160;the&#160;limits&#160;imposed&#160;by&#160;minimum&#160;proving&#160;times.&#160;Furthermore,<br/>we&#160;introduce&#160;a&#160;special&#160;incentive&#160;structure&#160;to&#160;maximizing&#160;prover&#160;participation&#160;in<br/>the&#160;network.<br/>
+1.1<br/>
+Our&#160;Contributions<br/>
+In&#160;summary,&#160;our&#160;contributions&#160;are:<br/>
+•&#160;We&#160;formalize&#160;the&#160;notion&#160;of&#160;a&#160;succinct&#160;blockchain.&#160;This&#160;notion&#160;may&#160;be&#160;of<br/>
+independent&#160;interest&#160;for&#160;alternative&#160;constructions&#160;of&#160;succinct&#160;blockchains.<br/>
+•&#160;We&#160;present&#160;an&#160;approach&#160;to&#160;constructing&#160;a&#160;succinct&#160;blockchain&#160;for&#160;generic<br/>
+functionalities&#160;modeled&#160;as&#160;replicated&#160;state&#160;machines&#160;using&#160;incrementally-<br/>computable&#160;SNARKs.<br/>
+•&#160;We&#160;present&#160;a&#160;concrete&#160;implementation&#160;of&#160;our&#160;approach&#160;for&#160;the&#160;specific<br/>
+functionality&#160;of&#160;a&#160;payments&#160;system&#160;called&#160;Coda.<br/>
+•&#160;We&#160;present&#160;Ouroboros&#160;Samasika,&#160;a&#160;provably-secure&#160;PoS&#160;consensus&#160;proto-<br/>
+col&#160;that&#160;is&#160;adaptively&#160;secure&#160;and&#160;offers&#160;bootstrapping&#160;from&#160;genesis.<br/>
+•&#160;We&#160;introduce&#160;the&#160;notion&#160;of&#160;a&#160;parallel&#160;scan&#160;state&#160;to&#160;improve&#160;transaction<br/>
+confirmation&#160;time&#160;beyond&#160;the&#160;limits&#160;otherwise&#160;imposed&#160;by&#160;the&#160;proof&#160;con-<br/>struction.<br/>
+•&#160;We&#160;present&#160;a&#160;performance&#160;evaluation&#160;report&#160;of&#160;executing&#160;the&#160;protocol<br/>
+involving&#160;a&#160;public&#160;community.<br/>
+2<br/>
+Succinct&#160;Blockchains<br/>
+In&#160;this&#160;section,&#160;we&#160;introduce&#160;the&#160;notion&#160;of&#160;succinct&#160;blockchains.<br/>
+Underlying&#160;concepts&#160;of&#160;a&#160;blockchain.<br/>
+We&#160;begin&#160;by&#160;recalling&#160;definitions<br/>
+of&#160;certain&#160;underlying&#160;concepts&#160;of&#160;a&#160;blockchain&#160;<a href="2020-352s.html#46">[13].&#160;</a>This&#160;will&#160;assist&#160;in&#160;defining<br/>succinct&#160;blockchains.<br/>
+Definition&#160;2.1&#160;(State,&#160;Block&#160;Proof,&#160;Block&#160;Producer,&#160;Block,&#160;Blockchain,&#160;Genesis<br/>Block).&#160;A&#160;state&#160;is&#160;a&#160;string&#160;st&#160;∈&#160;{0,&#160;1}𝜆.&#160;A&#160;block&#160;proof&#160;is&#160;a&#160;value&#160;(or&#160;a&#160;set&#160;of<br/>values)<br/>
+𝐵<br/>
+𝜋<br/>
+containing&#160;information&#160;to&#160;verify&#160;whether&#160;the&#160;block&#160;is&#160;valid.&#160;Each<br/>
+𝑖<br/>
+block&#160;is&#160;associated&#160;with&#160;a&#160;unique&#160;party&#160;called&#160;its&#160;block&#160;producer.&#160;A&#160;block&#160;𝐵&#160;=<br/>
+𝑖<br/>
+(sn<br/>
+𝐵<br/>
+,&#160;st&#160;,&#160;𝜋<br/>
+,&#160;𝑑&#160;,&#160;b-pk&#160;,&#160;𝑏-sig&#160;)&#160;generated&#160;with&#160;a&#160;serial&#160;number&#160;sn&#160;∈<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+N&#160;contains&#160;the<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+current&#160;state&#160;st&#160;,&#160;a&#160;block&#160;proof<br/>
+𝐵<br/>
+𝜋<br/>
+,&#160;data&#160;𝑑&#160;∈&#160;{0,&#160;1}∗,&#160;the&#160;block&#160;producer’s&#160;public<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+key&#160;b-pk&#160;and&#160;a&#160;signature<br/>
+𝐵<br/>
+𝑏-sig<br/>
+on&#160;(sn&#160;,&#160;st&#160;,&#160;𝜋&#160;,&#160;𝑑&#160;)&#160;with&#160;respect&#160;to&#160;b-pk&#160;.<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+4<br/>
+<hr/>
+<a name=5></a>A&#160;blockchain&#160;is&#160;a&#160;sequence&#160;of&#160;blocks&#160;C&#160;=&#160;(𝐵1,&#160;.&#160;.&#160;.&#160;,&#160;𝐵&#160;)&#160;associated&#160;with&#160;a<br/>
+𝑛<br/>
+strictly&#160;increasing&#160;sequence&#160;of&#160;serial&#160;numbers.&#160;The&#160;first&#160;block&#160;𝐵1&#160;is&#160;called&#160;the<br/>genesis&#160;block.&#160;The&#160;length&#160;len(C)&#160;=&#160;𝑛&#160;of&#160;a&#160;blockchain&#160;is&#160;the&#160;number&#160;of&#160;blocks&#160;in<br/>it.<br/>
+Succinct&#160;blockchains.<br/>
+We&#160;are&#160;now&#160;ready&#160;to&#160;introduce&#160;the&#160;definition&#160;of&#160;a<br/>
+succinct&#160;blockchain&#160;protocol.&#160;The&#160;definition&#160;will&#160;also&#160;introduce&#160;the&#160;notion&#160;of&#160;a<br/>blockchain&#160;summary,&#160;which,&#160;at&#160;a&#160;high&#160;level,&#160;is&#160;some&#160;summary&#160;of&#160;a&#160;blockchain<br/>such&#160;that&#160;the&#160;summary&#160;is&#160;valid&#160;if&#160;and&#160;only&#160;if&#160;the&#160;blockchain&#160;is&#160;valid.&#160;The&#160;concept<br/>of&#160;a&#160;blockchain&#160;underlying&#160;a&#160;blockchain&#160;summary&#160;will&#160;not&#160;be&#160;evident&#160;from&#160;the<br/>definition&#160;of&#160;a&#160;succinct&#160;blockchain&#160;protocol&#160;itself.&#160;However,&#160;it&#160;will&#160;be&#160;captured<br/>via&#160;the&#160;notion&#160;of&#160;chain&#160;extractability&#160;in&#160;Definition&#160;<a href="2020-352s.html#7">2.4.</a><br/>
+Definition&#160;2.2&#160;(Succinct&#160;Blockchain&#160;Protocol).&#160;A&#160;succinct&#160;blockchain&#160;pro-<br/>tocol&#160;𝛱&#160;is&#160;characterized&#160;by&#160;a&#160;tuple&#160;of&#160;five&#160;PPT&#160;algorithms&#160;(VerifyConsensus,<br/>UpdateConsensus,&#160;VerifyBlock,&#160;UpdateChain,&#160;VerifyChain)&#160;syntactically&#160;defined<br/>as&#160;follows.<br/>
+•&#160;VerifyConsensus(consensusState,&#160;consensusProof)&#160;→&#160;&gt;/⊥&#160;:&#160;This&#160;algo-<br/>
+rithm&#160;takes&#160;as&#160;input&#160;a&#160;consensusState&#160;and&#160;a&#160;consensusProof,&#160;verifies&#160;ac-<br/>cording&#160;to&#160;some&#160;notion&#160;of&#160;correctness&#160;and&#160;outputs&#160;&gt;&#160;or&#160;⊥,&#160;respectively.<br/>
+•&#160;UpdateConsensus(consensusState,&#160;consensusProof)&#160;→&#160;nextConsensusState&#160;:<br/>
+This&#160;algorithm&#160;also&#160;takes&#160;as&#160;input&#160;a&#160;consensusState&#160;and&#160;a&#160;consensusProof<br/>and&#160;outputs&#160;an&#160;updated&#160;consensus&#160;state.<br/>
+•&#160;VerifyChainSummary(S&#160;)&#160;→&#160;&gt;/⊥&#160;:&#160;This&#160;algorithms&#160;verifies&#160;whether&#160;a<br/>
+𝑖<br/>
+given&#160;blockchain&#160;summary&#160;S&#160;is&#160;valid&#160;or&#160;not.<br/>
+𝑖<br/>
+•&#160;VerifyBlock(S<br/>
+)&#160;→&#160;&gt;/⊥&#160;:&#160;This&#160;algorithms&#160;verifies&#160;whether&#160;a&#160;given<br/>
+𝑖−1&#160;,&#160;𝐵𝑖<br/>
+block&#160;𝐵&#160;is&#160;valid&#160;with&#160;respect&#160;to&#160;a&#160;given&#160;blockchain&#160;summary&#160;S<br/>
+𝑖<br/>
+𝑖−1&#160;.<br/>
+As&#160;a<br/>
+part&#160;of&#160;the&#160;verification,&#160;it&#160;checks&#160;that&#160;VerifyConsensus(consensusState𝑖−1,<br/>consensusProof<br/>
+→&#160;&gt;,&#160;where,&#160;S<br/>
+𝐵<br/>
+𝑖<br/>
+𝑖−1<br/>
+contains&#160;consensusState𝑖−1&#160;and&#160;𝜋𝑖<br/>
+contains&#160;consensusProof&#160;,&#160;where,<br/>
+𝐵<br/>
+𝐵<br/>
+=&#160;(·,&#160;·,&#160;𝜋&#160;,&#160;·,&#160;·,&#160;·).<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+•&#160;UpdateChainSummary(S<br/>
+)&#160;→&#160;S&#160;:&#160;This&#160;algorithm&#160;takes&#160;a&#160;blockchain<br/>
+𝑖−1&#160;,&#160;𝐵𝑖<br/>
+𝑖<br/>
+summary&#160;S<br/>
+and&#160;outputs&#160;an&#160;updated&#160;blockchain<br/>
+𝑖−1<br/>
+and&#160;a&#160;new&#160;block&#160;𝐵𝑖<br/>
+summary&#160;S&#160;.<br/>
+𝑖<br/>
+The&#160;protocol&#160;satisfies&#160;the&#160;following&#160;succinctness&#160;property.<br/>
+Succinctness.&#160;Each&#160;of&#160;the&#160;algorithms&#160;VerifyBlock,&#160;VerifyChainSummary,&#160;and<br/>
+VerifyConsensus&#160;runs&#160;in&#160;time&#160;poly(𝜆).&#160;Furthermore,&#160;the&#160;size&#160;of&#160;the&#160;blockchain<br/>summary&#160;S&#160;at&#160;any&#160;time&#160;𝑡&#160;is&#160;of&#160;size&#160;poly(𝜆)&#160;(i.e.,&#160;constant&#160;in&#160;the&#160;number<br/>
+𝑖<br/>
+𝑖<br/>
+of&#160;chain&#160;summary&#160;updates).<br/>
+Remark&#160;2.1&#160;(Consensus&#160;mechanism).&#160;The&#160;algorithm&#160;pair&#160;(VerifyConsensus,<br/>UpdateConsensus)&#160;is&#160;said&#160;to&#160;constitute&#160;a&#160;consensus&#160;mechanism.&#160;The&#160;following<br/>
+5<br/>
+<hr/>
+<a name=6></a>are&#160;some&#160;examples&#160;of&#160;how&#160;the&#160;notion&#160;can&#160;be&#160;instantiated.&#160;For&#160;proof-of-work<br/>protocols&#160;(e.g.&#160;Bitcoin),&#160;the&#160;consensus&#160;state&#160;would&#160;contain&#160;several&#160;previous<br/>difficulty&#160;targets&#160;and&#160;block&#160;times&#160;(from&#160;which&#160;to&#160;compute&#160;the&#160;current&#160;difficulty<br/>target)&#160;and&#160;a&#160;consensus&#160;proof&#160;would&#160;contain&#160;the&#160;proof-of-work&#160;itself&#160;along&#160;with<br/>a&#160;new&#160;time&#160;to&#160;update&#160;the&#160;state&#160;with.&#160;For&#160;an&#160;Ouroboros&#160;Praos-style&#160;<a href="2020-352s.html#46">[13]&#160;</a>proof-of-<br/>stake&#160;mechanism,&#160;the&#160;consensus&#160;state&#160;would&#160;contain&#160;the&#160;current&#160;random&#160;seed,<br/>the&#160;(Merkle&#160;root&#160;of)&#160;the&#160;current&#160;epoch’s&#160;stakes,&#160;and&#160;some&#160;information&#160;about&#160;the<br/>previous&#160;blocks&#160;and&#160;block&#160;times.&#160;A&#160;consensus&#160;proof&#160;would&#160;contain&#160;a&#160;public-key<br/>and&#160;a&#160;verifiable&#160;random&#160;function&#160;(VRF)&#160;evaluation&#160;proof&#160;meeting&#160;the&#160;threshold<br/>target&#160;corresponding&#160;to&#160;that&#160;public-key&#160;and&#160;the&#160;stakes&#160;indicated&#160;in&#160;the&#160;consensus<br/>state.<br/>
+Types&#160;of&#160;Roles.<br/>
+Per&#160;the&#160;above&#160;definition,&#160;there&#160;are&#160;three&#160;kinds&#160;of&#160;roles&#160;in&#160;a<br/>
+succinct&#160;blockchain.&#160;(There&#160;can&#160;be&#160;additional&#160;roles&#160;depending&#160;on&#160;the&#160;instanti-<br/>ation.)<br/>
+1.&#160;Full&#160;node:&#160;In&#160;this&#160;role,&#160;a&#160;party&#160;keeps&#160;track&#160;of&#160;the&#160;blockchain&#160;summary<br/>
+and&#160;verifies&#160;it.<br/>
+2.&#160;Block&#160;producer:&#160;In&#160;this&#160;role,&#160;a&#160;party&#160;produces&#160;a&#160;block.<br/>
+3.&#160;Blockchain&#160;summary&#160;producer:&#160;In&#160;this&#160;role,&#160;a&#160;party&#160;generates&#160;blockchain<br/>
+summaries.<br/>
+Note&#160;that&#160;the&#160;significant&#160;advantage&#160;of&#160;a&#160;succinct&#160;blockchain&#160;is&#160;that&#160;any&#160;party<br/>with&#160;reasonable&#160;resources&#160;can&#160;be&#160;a&#160;full&#160;node,&#160;due&#160;to&#160;the&#160;succinctness&#160;property.<br/>That&#160;is,&#160;a&#160;succinct&#160;blockchain&#160;does&#160;not&#160;require&#160;the&#160;role&#160;of&#160;light&#160;clients&#160;to&#160;cope<br/>with&#160;growing&#160;blockchain&#160;sizes.<br/>
+Relationship&#160;between&#160;blockchain&#160;summary&#160;and&#160;underlying&#160;blockchain.<br/>Having&#160;defined&#160;a&#160;succinct&#160;blockchain&#160;in&#160;terms&#160;of&#160;blockchain&#160;summaries,&#160;we&#160;will<br/>now&#160;show&#160;how&#160;the&#160;summaries&#160;are&#160;related&#160;to&#160;the&#160;underlying&#160;blockchains.&#160;Roughly<br/>speaking,&#160;we&#160;would&#160;like&#160;that&#160;the&#160;blockchain&#160;summaries&#160;inherit&#160;validity&#160;of&#160;un-<br/>derlying&#160;blockchains.&#160;That&#160;is,&#160;a&#160;summary&#160;is&#160;valid&#160;if&#160;and&#160;only&#160;if&#160;the&#160;underlying<br/>blockchain&#160;is&#160;valid.<br/>
+Furthermore,&#160;given&#160;a&#160;blockchain&#160;summary,&#160;we&#160;arrive&#160;at&#160;its&#160;underlying<br/>
+blockchain&#160;through&#160;the&#160;notion&#160;of&#160;extractability.&#160;Specifically,&#160;we&#160;define&#160;extrac-<br/>tion&#160;recursively;&#160;that&#160;is,&#160;given&#160;a&#160;blockchain&#160;summary&#160;with&#160;serial&#160;number&#160;𝑖,&#160;an<br/>extractor&#160;(using&#160;some&#160;additional&#160;information)&#160;extracts&#160;a&#160;blockchain&#160;summary<br/>with&#160;serial&#160;number&#160;𝑖&#160;−&#160;1&#160;and&#160;a&#160;block&#160;𝐵&#160;,&#160;wherein&#160;all&#160;the&#160;components&#160;satisfy&#160;the<br/>
+𝑖<br/>
+necessary&#160;verification&#160;tests.&#160;The&#160;additional&#160;information&#160;the&#160;extractor&#160;uses&#160;is&#160;the<br/>execution&#160;transcript&#160;which&#160;we&#160;call&#160;the&#160;execution&#160;trace&#160;formally&#160;defined&#160;below.<br/>
+Definition&#160;2.3&#160;(Execution&#160;Trace,&#160;Blockchain&#160;Summary&#160;in&#160;an&#160;Execution&#160;Trace).<br/>For&#160;an&#160;(adaptive)&#160;adversary&#160;A&#160;and&#160;an&#160;environment&#160;Z,&#160;an&#160;execution&#160;trace&#160;E<br/>of&#160;a&#160;blockchain&#160;protocol&#160;𝛱&#160;by&#160;a&#160;set&#160;of&#160;parties&#160;U&#160;with&#160;security&#160;parameter&#160;𝜆<br/>is&#160;a&#160;transcript&#160;including&#160;the&#160;inputs&#160;provided&#160;by&#160;Z,&#160;the&#160;random&#160;coins&#160;of&#160;the<br/>
+6<br/>
+<hr/>
+<a name=7></a>parties&#160;and&#160;the&#160;random&#160;coins&#160;of&#160;the&#160;adversary.&#160;This&#160;data&#160;determines&#160;the&#160;entire<br/>dynamics&#160;of&#160;the&#160;protocol:&#160;messages&#160;sent&#160;and&#160;delivered,&#160;the&#160;internal&#160;states&#160;of&#160;the<br/>parties&#160;at&#160;each&#160;step&#160;and&#160;the&#160;set&#160;of&#160;corrupt&#160;parties&#160;at&#160;each&#160;step.&#160;We&#160;denote&#160;the<br/>trace&#160;by&#160;E&#160;←&#160;𝛱&#160;(1𝜆,&#160;U)&#160;or&#160;simply&#160;E&#160;←&#160;𝛱&#160;(U).<br/>
+For&#160;every&#160;blockchain&#160;protocol&#160;𝛱&#160;,&#160;there&#160;exists&#160;an&#160;algorithm&#160;CurrChain,&#160;such<br/>
+that&#160;for&#160;every&#160;set&#160;of&#160;PPT&#160;parties&#160;U,&#160;E&#160;←&#160;𝛱&#160;(U),&#160;time&#160;𝑡,&#160;honest&#160;party&#160;𝑃&#160;∈&#160;U,&#160;we<br/>have&#160;that&#160;CurrChain&#160;outputs&#160;a&#160;valid&#160;blockchain&#160;summary;&#160;i.e.,&#160;CurrChain(E,&#160;𝑃,&#160;𝑡)<br/>→&#160;S&#160;and&#160;VerifyChainSummary(S)&#160;→&#160;&gt;.&#160;S&#160;is&#160;said&#160;to&#160;be&#160;the&#160;blockchain&#160;sum-<br/>mary&#160;in&#160;𝑃’s&#160;view&#160;of&#160;E&#160;at&#160;time&#160;𝑡.&#160;A&#160;blockchain&#160;summary&#160;in&#160;an&#160;execution&#160;trace&#160;E<br/>is&#160;a&#160;blockchain&#160;summary&#160;C&#160;in&#160;any&#160;honest&#160;party’s&#160;view&#160;at&#160;any&#160;time&#160;𝑡;&#160;we&#160;denote<br/>this&#160;by&#160;S&#160;∈&#160;E.<br/>
+We&#160;will&#160;now&#160;define&#160;the&#160;notion&#160;of&#160;chain&#160;extractability.&#160;This&#160;definition&#160;utilizes<br/>
+a&#160;notion&#160;of&#160;‘serial&#160;number&#160;of&#160;a&#160;blockchain&#160;summary’.<br/>
+Intuitively,&#160;it&#160;is&#160;just<br/>
+a&#160;natural&#160;number&#160;𝑗&#160;that&#160;represents&#160;the&#160;number&#160;of&#160;blocks&#160;in&#160;the&#160;underlying<br/>blockchain.&#160;It&#160;is&#160;indicated&#160;in&#160;the&#160;subscript&#160;as&#160;S&#160;.<br/>
+𝑗<br/>
+Definition&#160;2.4&#160;(Chain&#160;Extractability).&#160;A&#160;succinct&#160;blockchain&#160;protocol&#160;𝛱&#160;=<br/>
+(VerifyConsensus,&#160;UpdateConsensus,&#160;VerifyBlock,&#160;UpdateChain,&#160;VerifyChain)&#160;is<br/>
+said&#160;to&#160;satisfy&#160;chain&#160;extractability&#160;if&#160;the&#160;following&#160;probability&#160;Adv𝛱&#160;,U&#160;(1𝜆)&#160;is<br/>negligibly&#160;close&#160;to&#160;1&#160;for&#160;every&#160;U&#160;=&#160;{A&#160;}&#160;,&#160;a&#160;set&#160;of&#160;PPT&#160;algorithms.&#160;For&#160;every<br/>
+𝑖<br/>
+𝑖<br/>
+A&#160;,&#160;there&#160;exists&#160;a&#160;PPT&#160;algorithm&#160;Ext<br/>
+,&#160;called&#160;an&#160;extractor,&#160;and&#160;Adv<br/>
+𝑖<br/>
+A<br/>
+𝛱&#160;,&#160;U<br/>
+is<br/>
+𝑖<br/>
+defined&#160;as&#160;follows.<br/>
+VerifyChainSummary&#160;(S&#160;𝑗&#160;−1)&#160;=&#160;&gt;<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+∧<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+VerifyBlock(S<br/>
+)&#160;=&#160;&gt;<br/>
+E&#160;←&#160;𝛱&#160;(U)<br/>
+𝑗&#160;−1&#160;,&#160;𝐵&#160;𝑗<br/>
+<br/>
+Adv<br/>
+<br/>
+∧<br/>
+:<br/>
+∀S&#160;∈&#160;E<br/>
+<br/>
+,&#160;∃A<br/>
+∈&#160;U<br/>
+𝛱&#160;,&#160;U&#160;(1𝜆&#160;)&#160;:=&#160;Pr&#160;<br/>
+𝑗<br/>
+𝑖<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+𝐵1&#160;is&#160;a&#160;Genesis&#160;block<br/>
+(S<br/>
+)&#160;←&#160;Ext<br/>
+(E,&#160;S&#160;,&#160;𝑟)<br/>
+𝑗&#160;−1&#160;,&#160;𝐵&#160;𝑗<br/>
+A<br/>
+𝑗<br/>
+<br/>
+𝑖<br/>
+<br/>
+<br/>
+<br/>
+∧<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+S0&#160;is&#160;an&#160;empty&#160;string<br/>
+<br/>
+<br/>
+<br/>
+where,&#160;𝑟&#160;is&#160;the&#160;random&#160;coins&#160;of&#160;A&#160;.<br/>
+𝑖<br/>
+Definition&#160;2.5&#160;(Blockchain&#160;underlying&#160;a&#160;Blockchain&#160;Summary).&#160;Let&#160;𝛱&#160;be&#160;a<br/>blockchain&#160;protocol&#160;which&#160;satisfies&#160;chain&#160;extractability.&#160;Let&#160;E&#160;be&#160;an&#160;execution<br/>of&#160;the&#160;protocol&#160;by&#160;a&#160;set&#160;of&#160;parties&#160;U.&#160;Let&#160;𝑃&#160;∈&#160;U&#160;be&#160;an&#160;honest&#160;party&#160;that&#160;has<br/>been&#160;active&#160;since&#160;the&#160;beginning&#160;of&#160;the&#160;protocol.&#160;Let&#160;S&#160;be&#160;the&#160;blockchain&#160;in<br/>
+ℓ<br/>
+E&#160;0.&#160;For&#160;every&#160;1&#160;≤&#160;𝑖&#160;≤&#160;ℓ,&#160;let&#160;𝐵&#160;be&#160;a&#160;block&#160;guaranteed&#160;by&#160;the&#160;property&#160;of&#160;chain<br/>
+𝑖<br/>
+extractability.&#160;The&#160;sequence&#160;(𝐵1,&#160;.&#160;.&#160;.&#160;,&#160;𝐵&#160;)&#160;is&#160;called&#160;the&#160;blockchain&#160;underlying&#160;S&#160;.<br/>
+ℓ<br/>
+ℓ<br/>
+2.1<br/>
+Security&#160;Properties&#160;of&#160;a&#160;Succinct&#160;Blockchain<br/>
+We&#160;will&#160;now&#160;enlist&#160;the&#160;security&#160;properties&#160;of&#160;a&#160;succinct&#160;blockchain.&#160;Rather&#160;than<br/>the&#160;blockchain&#160;summaries,&#160;the&#160;properties&#160;pertain&#160;to&#160;the&#160;underlying&#160;blockchain<br/>guaranteed&#160;by&#160;the&#160;chain&#160;extractability&#160;property.<br/>
+Consider&#160;a&#160;blockchain&#160;protocol&#160;𝛱&#160;and&#160;an&#160;execution&#160;E.&#160;Let&#160;C&#160;be&#160;the&#160;un-<br/>
+derlying&#160;blockchain&#160;of&#160;the&#160;blockchain&#160;summary&#160;S&#160;in&#160;E.&#160;We&#160;recall&#160;the&#160;following<br/>
+7<br/>
+<hr/>
+<a name=8></a>properties&#160;that&#160;were&#160;first&#160;rigorously&#160;formulated&#160;in&#160;<a href="2020-352s.html#46">[15].&#160;</a>We&#160;will&#160;assume&#160;that<br/>time&#160;is&#160;divided&#160;into&#160;predefined&#160;slots.<br/>
+Common&#160;Prefix&#160;(CP);&#160;with&#160;parameters&#160;𝑘&#160;∈&#160;N.&#160;The&#160;blockchains&#160;C1,&#160;C2&#160;cor-<br/>
+responding&#160;to&#160;two&#160;alert&#160;parties&#160;at&#160;the&#160;onset&#160;of&#160;the&#160;slots&#160;sl1&#160;≤&#160;sl2&#160;are&#160;such<br/>that&#160;C&#160;d𝑘<br/>
+d𝑘<br/>
+1<br/>
+4&#160;C2,&#160;where&#160;C1<br/>
+denotes&#160;the&#160;blockchain&#160;obtained&#160;by&#160;removing<br/>
+the&#160;last&#160;𝑘&#160;blocks&#160;from&#160;C1&#160;and&#160;4&#160;denotes&#160;the&#160;prefix&#160;relation.<br/>
+Chain&#160;Growth&#160;(CG);&#160;with&#160;parameters&#160;𝜏&#160;∈&#160;(0,&#160;1]&#160;and&#160;𝑠&#160;∈&#160;N.&#160;Consider&#160;C,&#160;a<br/>
+blockchain&#160;possessed&#160;by&#160;an&#160;alert&#160;party&#160;at&#160;the&#160;onset&#160;of&#160;a&#160;slot&#160;sl.&#160;Let&#160;sl1<br/>and&#160;sl2&#160;be&#160;two&#160;previous&#160;slots&#160;for&#160;which&#160;sl1&#160;+&#160;𝑠&#160;≤&#160;sl2&#160;≤&#160;sl,&#160;so&#160;sl1&#160;is&#160;at&#160;least&#160;𝑠<br/>slots&#160;prior&#160;to&#160;sl2.&#160;Then&#160;|C[sl1,&#160;sl2]&#160;|&#160;≥&#160;𝜏&#160;·&#160;𝑠.&#160;We&#160;call&#160;𝜏&#160;the&#160;speed&#160;coefficient.<br/>
+Chain&#160;Quality&#160;(CQ);&#160;with&#160;parameters&#160;𝜇&#160;∈&#160;(0,&#160;1]&#160;and&#160;𝑘&#160;∈&#160;N.&#160;Consider&#160;any<br/>
+portion&#160;of&#160;length&#160;at&#160;least&#160;𝑘&#160;of&#160;the&#160;blockchain&#160;corresponding&#160;by&#160;an&#160;alert<br/>party&#160;at&#160;the&#160;onset&#160;of&#160;a&#160;slot;&#160;the&#160;ratio&#160;of&#160;blocks&#160;originating&#160;from&#160;alert<br/>parties&#160;in&#160;this&#160;portion&#160;is&#160;at&#160;least&#160;𝜇,&#160;called&#160;the&#160;chain&#160;quality&#160;coefficient.<br/>
+3<br/>
+Preliminaries<br/>
+In&#160;this&#160;section&#160;we&#160;provide&#160;several&#160;requisite&#160;definitions&#160;of&#160;SNARK&#160;systems&#160;which<br/>we&#160;use&#160;to&#160;construct&#160;a&#160;succinct&#160;blockchain.<br/>
+Notations.<br/>
+We&#160;use&#160;the&#160;abbreviation&#160;PPT&#160;to&#160;stand&#160;for&#160;probabilistic&#160;polyno-<br/>
+mial&#160;time.&#160;We&#160;use&#160;𝜆&#160;to&#160;denote&#160;the&#160;security&#160;parameter.<br/>
+Definition&#160;3.1&#160;(SNARKs).&#160;Let&#160;𝑅&#160;=&#160;{(𝜙,&#160;𝑤)}&#160;be&#160;a&#160;polynomial&#160;relation&#160;of&#160;state-<br/>ments&#160;𝜙&#160;and&#160;witnesses&#160;𝑤.&#160;A&#160;Succinct&#160;Non-interactive&#160;ARgument&#160;of&#160;Knowledge<br/>for&#160;𝑅&#160;is&#160;a&#160;quadruple&#160;of&#160;algorithms&#160;(sSetup,&#160;sProve,&#160;sVerify,&#160;sSim),&#160;which&#160;is&#160;com-<br/>plete,&#160;succinct&#160;and&#160;knowledge&#160;sound&#160;(defined&#160;below)&#160;and&#160;works&#160;as&#160;follows:<br/>
+•&#160;(srs,&#160;𝜏)&#160;←&#160;sSetup(𝑅):&#160;The&#160;setup&#160;algorithm&#160;generates&#160;the&#160;structured&#160;ran-<br/>
+dom&#160;string&#160;srs&#160;and&#160;a&#160;trapdoor&#160;𝜏.<br/>
+•&#160;𝜋&#160;←&#160;sProve(srs,&#160;𝜙,&#160;𝑤):&#160;the&#160;prover&#160;algorithm&#160;generates&#160;a&#160;proof&#160;𝜋.<br/>
+•&#160;&gt;/⊥&#160;←&#160;sVerify(srs,&#160;𝜙,&#160;𝜋):&#160;the&#160;verifier&#160;algorithm&#160;verifies&#160;a&#160;given&#160;proof.<br/>
+•&#160;𝜋&#160;←&#160;sSim(srs,&#160;𝜙,&#160;𝜏):&#160;the&#160;PPT&#160;simulator&#160;simulates&#160;a&#160;proof&#160;without&#160;the<br/>
+witness&#160;but&#160;by&#160;using&#160;the&#160;trapdoor.<br/>
+Completeness.<br/>
+It&#160;simply&#160;states&#160;that&#160;given&#160;a&#160;true&#160;statement,&#160;a&#160;prover&#160;with&#160;a<br/>
+witness&#160;can&#160;convince&#160;the&#160;verifier.&#160;That&#160;is,&#160;for&#160;every&#160;(srs,&#160;𝜏)&#160;←&#160;sSetup(𝑅)&#160;and<br/>
+𝜋&#160;←&#160;sProve(srs,&#160;𝜙,&#160;𝑤),&#160;we&#160;have&#160;that&#160;&gt;&#160;←&#160;sVerify&#160;(srs,&#160;𝜙,&#160;𝜋).<br/>
+Succinctness.<br/>
+It&#160;states&#160;that&#160;the&#160;proof&#160;size&#160;|𝜋|&#160;is&#160;poly(𝜆).<br/>
+8<br/>
+<hr/>
+<a name=9></a>Knowledge&#160;soundness.<br/>
+It&#160;states&#160;that&#160;whenever&#160;somebody&#160;produces&#160;a&#160;valid<br/>
+argument&#160;it&#160;is&#160;possible&#160;to&#160;extract&#160;a&#160;valid&#160;witness&#160;from&#160;their&#160;internal&#160;data.&#160;For-<br/>mally,&#160;for&#160;every&#160;PPT&#160;adversary&#160;A,&#160;there&#160;exists&#160;a&#160;PPT&#160;extractor&#160;𝜒A,&#160;such&#160;that<br/>the&#160;following&#160;probability&#160;is&#160;negligible&#160;in&#160;𝜆:<br/>
+&#160;(srs,&#160;𝜏)&#160;←&#160;sSetup&#160;(&#160;𝑅)<br/>
+(𝜙,&#160;𝑤)&#160;∉&#160;𝑅<br/>
+<br/>
+Pr&#160;<br/>
+<br/>
+<br/>
+(𝜙,&#160;𝜋)&#160;←&#160;A&#160;(srs)<br/>
+:<br/>
+∧<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+𝑤&#160;←&#160;𝜒A&#160;(transA&#160;)<br/>
+sVerify(srs,&#160;𝜙,&#160;𝜋)&#160;→&#160;&gt;<br/>
+<br/>
+<br/>
+Simulation-extractable&#160;SNARKs.<br/>
+A&#160;simulation-extractable&#160;SNARK&#160;is&#160;a<br/>
+SNARK&#160;that&#160;achieves&#160;a&#160;higher&#160;level&#160;of&#160;security,&#160;namely,&#160;simulation&#160;extractabil-<br/>ity.&#160;The&#160;notion&#160;of&#160;simulation&#160;extractability&#160;is&#160;similar&#160;to&#160;the&#160;notion&#160;of&#160;knowledge<br/>soundness&#160;except&#160;that&#160;an&#160;adversary&#160;gets&#160;to&#160;see&#160;also&#160;simulated&#160;proofs.<br/>
+Signatures&#160;of&#160;Knowledge&#160;(SoK).<br/>
+An&#160;SoK&#160;is&#160;a&#160;generalization&#160;of&#160;digital&#160;sig-<br/>
+natures&#160;by&#160;replacing&#160;a&#160;public&#160;key&#160;with&#160;an&#160;instance&#160;in&#160;an&#160;NP&#160;language.&#160;For<br/>a&#160;formal&#160;definition,&#160;see&#160;<a href="2020-352s.html#46">[16].</a><br/>
+The&#160;notion&#160;of&#160;SoKs&#160;is&#160;related&#160;to&#160;the&#160;notion<br/>
+of&#160;simulation-extractable&#160;non-interactive&#160;zero-knowledge&#160;arguments,&#160;such&#160;as,<br/>SNARKs.&#160;In&#160;fact,&#160;<a href="2020-352s.html#46">[16]&#160;</a>showed&#160;that&#160;the&#160;former&#160;can&#160;be&#160;constructed&#160;based&#160;on&#160;the<br/>latter.&#160;In&#160;this&#160;work,&#160;we&#160;rely&#160;on&#160;SoKs&#160;constructed&#160;using&#160;SNARKs,&#160;thereby&#160;being<br/>able&#160;to&#160;exploit&#160;succinctness&#160;of&#160;such&#160;SoKs.<br/>
+4<br/>
+Coda:&#160;A&#160;Succinct&#160;Blockchain&#160;based&#160;on&#160;Recur-<br/>sive&#160;SNARKs<br/>
+In&#160;this&#160;section,&#160;we&#160;introduce&#160;a&#160;succinct&#160;blockchain&#160;construction&#160;called&#160;Coda<br/>based&#160;on&#160;SNARKs.&#160;At&#160;a&#160;high-level,&#160;validity&#160;of&#160;a&#160;blockchain’s&#160;sequence&#160;of&#160;tran-<br/>sitions&#160;is&#160;proved&#160;using&#160;a&#160;SNARK.&#160;Then,&#160;the&#160;blockchain&#160;proof&#160;consists&#160;of&#160;this<br/>SNARK&#160;and&#160;omits&#160;the&#160;detailed&#160;list&#160;of&#160;blocks,&#160;since&#160;verifying&#160;the&#160;SNARK&#160;veri-<br/>fies&#160;the&#160;embedded&#160;blocks.&#160;Succinctness&#160;of&#160;SNARK&#160;ensures&#160;succinctness&#160;of&#160;the<br/>blockchain.<br/>
+Note&#160;that&#160;a&#160;blockchain&#160;is&#160;dynamic&#160;and&#160;new&#160;blocks&#160;keep&#160;getting&#160;added&#160;to<br/>
+it.&#160;However,&#160;we&#160;would&#160;like&#160;to&#160;ensure&#160;succinctness&#160;at&#160;any&#160;given&#160;point&#160;in&#160;time.<br/>Therefore,&#160;as&#160;the&#160;blockchain&#160;“grows”,&#160;we&#160;compute&#160;a&#160;new&#160;SNARK&#160;proof&#160;that&#160;not<br/>only&#160;validates&#160;the&#160;new&#160;blocks,&#160;but&#160;also&#160;the&#160;existing&#160;SNARK&#160;proof&#160;itself.&#160;The<br/>notion&#160;of&#160;a&#160;SNARK&#160;proof&#160;that&#160;attests&#160;to&#160;the&#160;verifiability&#160;of&#160;another&#160;SNARK<br/>proof&#160;is&#160;the&#160;notion&#160;of&#160;“incrementally-computable&#160;SNARK”&#160;<a href="2020-352s.html#46">[24,&#160;</a><a href="2020-352s.html#45">8,&#160;6].</a><br/>
+We&#160;will&#160;first&#160;specify&#160;the&#160;SNARK&#160;construction&#160;and&#160;then&#160;demonstrate&#160;how&#160;it<br/>
+can&#160;be&#160;employed&#160;to&#160;achieve&#160;a&#160;succinct&#160;blockchain.<br/>
+4.1<br/>
+Incrementally-computable&#160;SNARKs<br/>
+We&#160;now&#160;recall&#160;the&#160;notion&#160;of&#160;incrementally-computable&#160;SNARKs&#160;described&#160;var-<br/>iously&#160;in&#160;<a href="2020-352s.html#46">[24],&#160;</a><a href="2020-352s.html#45">[8]&#160;</a>and&#160;<a href="2020-352s.html#45">[6].&#160;</a>Instead&#160;of&#160;phrasing&#160;the&#160;construction&#160;in&#160;the&#160;language<br/>
+9<br/>
+<hr/>
+<a name=10></a>of&#160;incrementally&#160;verifiable&#160;computation&#160;as&#160;in&#160;<a href="2020-352s.html#46">[24]&#160;</a>or&#160;in&#160;the&#160;language&#160;of&#160;PCD<br/>(proof-carrying&#160;data)&#160;systems&#160;as&#160;in&#160;<a href="2020-352s.html#45">[8]&#160;</a>and&#160;<a href="2020-352s.html#45">[6],&#160;</a>we&#160;opt&#160;to&#160;describe&#160;it&#160;in&#160;terms<br/>of&#160;state-transition&#160;systems&#160;as&#160;it&#160;maps&#160;more&#160;clearly&#160;onto&#160;the&#160;application&#160;of&#160;pro-<br/>ducing&#160;a&#160;succinct&#160;blockchain.<br/>
+We&#160;will&#160;first&#160;recall&#160;the&#160;definition&#160;of&#160;a&#160;state&#160;transition&#160;system.<br/>
+Definition&#160;4.1&#160;(State&#160;transition&#160;system).&#160;A&#160;state&#160;transition&#160;system&#160;is&#160;a<br/>tuple&#160;(&#160;𝛴&#160;,&#160;T,&#160;Update),&#160;where&#160;𝛴&#160;is&#160;the&#160;set&#160;of&#160;states,&#160;T&#160;is&#160;the&#160;set&#160;of&#160;transitions&#160;and<br/>Update&#160;is&#160;a&#160;(non-deterministic)&#160;poly-time&#160;computable&#160;function&#160;Update&#160;:&#160;T×𝛴&#160;→<br/>
+𝛴&#160;.&#160;Update&#160;may&#160;also&#160;“throw&#160;an&#160;exception”&#160;(i.e.,&#160;fail&#160;to&#160;produce&#160;a&#160;new&#160;state&#160;for<br/>
+certain&#160;inputs).&#160;Moreover,&#160;elements&#160;in&#160;𝛴&#160;and&#160;T&#160;need&#160;to&#160;be&#160;representable&#160;by<br/>bit-strings&#160;of&#160;length&#160;poly(𝜆).<br/>
+We&#160;now&#160;define&#160;SNARKs&#160;for&#160;state&#160;transition&#160;systems.&#160;At&#160;a&#160;high&#160;level,&#160;we<br/>
+would&#160;like&#160;poly(𝜆)-size&#160;proofs&#160;(which&#160;are&#160;verifiable&#160;in&#160;poly(𝜆)&#160;time)&#160;which&#160;attest<br/>to&#160;statements&#160;of&#160;the&#160;form&#160;“there&#160;exist&#160;a&#160;state&#160;σ1&#160;and&#160;a&#160;sequence&#160;of&#160;transitions<br/>𝑡1,&#160;.&#160;.&#160;.&#160;,&#160;𝑡<br/>
+∈&#160;T&#160;such&#160;that&#160;Update(𝑡&#160;,&#160;Update(𝑡<br/>
+𝑘<br/>
+𝑘<br/>
+𝑘&#160;−1&#160;,&#160;.&#160;.&#160;.&#160;,&#160;Update&#160;(𝑡1&#160;,&#160;σ1&#160;)&#160;)&#160;)<br/>
+=&#160;σ2”.<br/>
+In&#160;other&#160;words,&#160;we&#160;would&#160;like&#160;succinct&#160;certificates&#160;of&#160;the&#160;existence&#160;of&#160;state-<br/>transition&#160;sequences&#160;joining&#160;two&#160;states.&#160;The&#160;application&#160;to&#160;blockchains&#160;is&#160;the<br/>following:&#160;we&#160;will&#160;take&#160;our&#160;state&#160;to&#160;be&#160;the&#160;database&#160;of&#160;accounts&#160;(along&#160;with<br/>some&#160;metadata&#160;needed&#160;for&#160;correctly&#160;validating&#160;new&#160;blocks)&#160;and&#160;transitions&#160;to<br/>be&#160;blocks.<br/>
+Definition&#160;4.2&#160;(Incrementally-computable&#160;SNARKs).&#160;An&#160;incrementally-comp-<br/>utable&#160;SNARK&#160;for&#160;a&#160;state&#160;transition&#160;system&#160;(&#160;𝛴&#160;,&#160;T,&#160;Update)&#160;is&#160;a&#160;tuple&#160;of&#160;algo-<br/>rithms&#160;(sSetup,&#160;sProve,&#160;sVerify,&#160;sSim)&#160;such&#160;that&#160;the&#160;following&#160;holds.&#160;Suppressing<br/>parameter&#160;generation&#160;and&#160;passing&#160;the&#160;parameters&#160;to&#160;sProve&#160;and&#160;sVerify,<br/>
+1.&#160;(sSetup,&#160;sProve,&#160;sVerify,&#160;sSim)&#160;is&#160;a&#160;SNARK.<br/>
+(sSetup,&#160;sProve,&#160;sVerify,&#160;sSim)&#160;is&#160;a&#160;SNARK&#160;for&#160;the&#160;relation&#160;𝑅&#160;=&#160;{(σ<br/>
+),<br/>
+𝑖+𝑘<br/>
+σ&#160;,&#160;𝑡<br/>
+)},&#160;where,&#160;σ<br/>
+=&#160;Update(𝑡<br/>
+,&#160;Update(𝑡<br/>
+𝑖<br/>
+𝑖+1&#160;,&#160;.&#160;.&#160;.&#160;,&#160;𝑡𝑖+𝑘<br/>
+𝑖+𝑘<br/>
+𝑖+𝑘<br/>
+𝑖+𝑘&#160;−1&#160;,&#160;.&#160;.&#160;.&#160;,&#160;Update<br/>
+(𝑡<br/>
+)))&#160;for&#160;any&#160;𝑘.<br/>
+𝑖+1&#160;,&#160;σ𝑖<br/>
+2.&#160;(sSetup,&#160;sProve,&#160;sVerify,&#160;sSim)&#160;is&#160;succinct.<br/>
+Every&#160;honestly&#160;generated&#160;proof&#160;has&#160;size&#160;poly(𝜆)&#160;and&#160;for&#160;any&#160;𝜋,&#160;σ,&#160;we&#160;have<br/>that&#160;sVerify(σ,&#160;𝜋)&#160;runs&#160;in&#160;time&#160;poly(𝜆).<br/>
+4.1.1<br/>
+Incrementally-computable&#160;SNARKs&#160;using&#160;Recursive&#160;Proof&#160;Com-<br/>position<br/>
+Na¨ıve&#160;recursive&#160;composition&#160;is&#160;theoretically&#160;viable,&#160;since,&#160;for&#160;a&#160;SNARK,&#160;proof<br/>verification&#160;is&#160;asymptotically&#160;cheaper&#160;than&#160;merely&#160;verifying&#160;the&#160;corresponding<br/>NP&#160;statement.&#160;However,&#160;it&#160;is&#160;extremely&#160;expensive.&#160;Although&#160;SNARK&#160;verifiers<br/>execution&#160;is&#160;quite&#160;fast&#160;–&#160;in&#160;the&#160;order&#160;of&#160;just&#160;a&#160;few&#160;milliseconds&#160;on&#160;a&#160;desktop<br/>computer,&#160;generating&#160;a&#160;SNARK&#160;proof&#160;to&#160;attest&#160;to&#160;an&#160;accepting&#160;verifier&#160;circuit<br/>is&#160;expensive.&#160;This&#160;is&#160;because,&#160;executing&#160;the&#160;verifiers&#160;still&#160;takes&#160;millions&#160;of&#160;steps<br/>
+10<br/>
+<hr/>
+<a name=11></a>in&#160;computation,&#160;proving&#160;which&#160;is&#160;impractical&#160;even&#160;for&#160;a&#160;single&#160;layer&#160;of&#160;recursion,<br/>as&#160;explained&#160;in&#160;<a href="2020-352s.html#45">[6].</a><br/>
+To&#160;address&#160;this,&#160;we&#160;employ&#160;the&#160;“cycle&#160;of&#160;elliptic&#160;curves”&#160;technique&#160;(as&#160;de-<br/>
+scribed&#160;in&#160;<a href="2020-352s.html#45">[6])&#160;</a>in&#160;which&#160;two&#160;SNARK&#160;constructions&#160;–&#160;classically&#160;called&#160;Tick&#160;and<br/>Tock&#160;–&#160;are&#160;designed&#160;such&#160;that&#160;each&#160;can&#160;efficiently&#160;verify&#160;proofs&#160;from&#160;the&#160;other.<br/>Then,&#160;to&#160;exploit&#160;the&#160;parallelism&#160;mentioned&#160;in&#160;Remark&#160;??,&#160;we&#160;define&#160;the&#160;Tick<br/>and&#160;Tock&#160;SNARKs&#160;to&#160;result&#160;in&#160;a&#160;“binary&#160;tree&#160;of&#160;proofs”&#160;as&#160;follows.&#160;A&#160;Tick<br/>SNARK&#160;is&#160;used&#160;to&#160;certify&#160;state&#160;transitions&#160;at&#160;the&#160;“base”&#160;of&#160;the&#160;tree.&#160;Then,&#160;to<br/>enable&#160;efficient&#160;merging&#160;of&#160;those&#160;proofs,&#160;each&#160;of&#160;them&#160;is&#160;“wrapped”&#160;using&#160;a&#160;Tock<br/>SNARK.&#160;Then,&#160;two&#160;Tock&#160;proofs&#160;are&#160;merged&#160;using&#160;a&#160;Tick&#160;SNARK.<br/>
+Therefore,&#160;note&#160;that,&#160;we&#160;will&#160;need&#160;two&#160;Tick&#160;SNARKs&#160;-&#160;one&#160;for&#160;proving&#160;state<br/>
+transitions&#160;and&#160;another&#160;for&#160;merging&#160;two&#160;Tock&#160;proofs.&#160;And&#160;we&#160;will&#160;need&#160;one<br/>Tock&#160;SNARK&#160;to&#160;wrap&#160;a&#160;Tick&#160;proof&#160;into&#160;a&#160;Tock&#160;proof.&#160;More&#160;formally:<br/>
+1.&#160;The&#160;base&#160;SNARK.&#160;A&#160;Tick-based&#160;SNARK&#160;for&#160;certifying&#160;single&#160;state&#160;tran-<br/>
+sitions,&#160;which&#160;we&#160;will&#160;call&#160;the&#160;“base”&#160;SNARK.<br/>
+Statement:&#160;(σ<br/>
+2<br/>
+1,&#160;σ2)&#160;∈&#160;𝛴&#160;.<br/>
+Witness:&#160;𝑡&#160;∈&#160;T.<br/>
+Computation:&#160;There&#160;exists&#160;𝑡&#160;∈&#160;T&#160;such&#160;that&#160;Update(𝑡,&#160;σ1)&#160;=&#160;σ2.<br/>
+We&#160;will&#160;denote&#160;the&#160;proof&#160;by&#160;σ1&#160;→Tick&#160;σ2.<br/>
+2.&#160;The&#160;merge&#160;SNARK.&#160;A&#160;Tick-based&#160;SNARK&#160;for&#160;merging&#160;two&#160;Tock&#160;proofs,<br/>
+which&#160;we&#160;will&#160;call&#160;the&#160;“merge”&#160;SNARK.<br/>
+Statement:&#160;(σ<br/>
+2<br/>
+1,&#160;σ3)&#160;∈&#160;𝛴&#160;.<br/>
+Witness:&#160;σ2&#160;∈&#160;𝛴&#160;and&#160;Tock-proofs&#160;𝜋1,&#160;𝜋2.<br/>
+Computation:&#160;There&#160;exist&#160;σ2&#160;∈&#160;𝛴&#160;and&#160;Tock-proofs&#160;𝜋1,&#160;𝜋2&#160;such&#160;that<br/>Verify<br/>
+(&#160;(<br/>
+(&#160;(<br/>
+Tock<br/>
+σ1,&#160;σ2),&#160;𝜋1)&#160;and&#160;VerifyTock&#160;σ2,&#160;σ3),&#160;𝜋2)<br/>
+We&#160;will&#160;denote&#160;the&#160;proof&#160;by&#160;σ1&#160;→Tick&#160;σ3.&#160;σ1&#160;to&#160;σ2&#160;and&#160;a&#160;SNARK&#160;proof<br/>certifying&#160;the&#160;existence&#160;of&#160;transitions&#160;from&#160;σ2&#160;to&#160;σ3.<br/>
+3.&#160;The&#160;wrap&#160;SNARK.&#160;A&#160;Tock-based&#160;SNARK&#160;for&#160;wrapping&#160;a&#160;Tick&#160;proof,<br/>
+which&#160;we&#160;will&#160;call&#160;the&#160;“wrap”&#160;SNARK.<br/>
+Statement:&#160;(σ<br/>
+2<br/>
+1,&#160;σ2)&#160;∈&#160;𝛴&#160;.<br/>
+Witness:&#160;A&#160;Tick&#160;proof&#160;𝜋.<br/>
+Computation:&#160;There&#160;exists&#160;a&#160;Tick&#160;proof&#160;𝜋&#160;such&#160;that&#160;Verify<br/>
+(&#160;(<br/>
+Tick<br/>
+σ1,&#160;σ2),&#160;𝜋).<br/>
+We&#160;will&#160;denote&#160;the&#160;proof&#160;by&#160;σ1&#160;→Tock&#160;σ2.This&#160;SNARK&#160;merely&#160;wraps&#160;a<br/>Tick&#160;SNARK&#160;into&#160;a&#160;Tock&#160;SNARK&#160;so&#160;that&#160;another&#160;Tick&#160;SNARK&#160;can&#160;verify<br/>it&#160;efficiently.<br/>
+4.1.2<br/>
+An&#160;example&#160;transition&#160;system<br/>
+To&#160;illustrate&#160;this,&#160;we’ll&#160;show&#160;how&#160;it&#160;can&#160;be&#160;applied&#160;to&#160;prove&#160;statements&#160;in&#160;a&#160;very<br/>simple&#160;transition&#160;system&#160;where&#160;each&#160;state&#160;is&#160;simply&#160;the&#160;hash&#160;H&#160;of&#160;the&#160;previous<br/>
+11<br/>
+<hr/>
+<a name=12></a>state.&#160;Assume&#160;the&#160;current&#160;state&#160;is&#160;0<br/>
+𝑥<br/>
+=&#160;H(H(.&#160;.&#160;.&#160;H(𝑥)&#160;.&#160;.&#160;.&#160;))&#160;for&#160;some&#160;𝑘,&#160;starting<br/>
+&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;<br/>
+|<br/>
+{z<br/>
+}<br/>
+𝑘<br/>
+from&#160;an&#160;initial&#160;state&#160;𝑥.&#160;We&#160;apply&#160;the&#160;above&#160;technique&#160;with&#160;our&#160;state&#160;𝛴&#160;being&#160;the<br/>union&#160;of&#160;domain&#160;and&#160;range&#160;of&#160;H,&#160;𝑇&#160;being&#160;a&#160;singleton&#160;set&#160;containing&#160;an&#160;empty<br/>string,&#160;and&#160;the&#160;update&#160;function&#160;being&#160;Update(𝑡,&#160;𝑥)&#160;=&#160;H(𝑥).<br/>
+This&#160;gives&#160;us&#160;a&#160;SNARK&#160;for&#160;proving&#160;that&#160;there&#160;exists&#160;a&#160;sequence&#160;of&#160;transi-<br/>
+tions&#160;(<br/>
+0<br/>
+𝑡1,&#160;.&#160;.&#160;.&#160;,&#160;𝑡&#160;)&#160;such&#160;that&#160;Update(𝑡&#160;,&#160;Update(𝑡<br/>
+,<br/>
+𝑘<br/>
+𝑘<br/>
+𝑘&#160;−1&#160;,&#160;.&#160;.&#160;.&#160;,&#160;Update&#160;(𝑡1&#160;,&#160;𝑥&#160;)&#160;,&#160;.&#160;.&#160;.&#160;)&#160;)&#160;=&#160;𝑥<br/>
+which&#160;since&#160;Update(𝑡,&#160;𝑦)&#160;=&#160;H(𝑦)&#160;gives&#160;us&#160;exactly&#160;what&#160;we&#160;want.&#160;For&#160;strings<br/>
+𝑥0,&#160;𝑥4&#160;with&#160;H(H(H(H(𝑥0))))&#160;=&#160;𝑥4,&#160;the&#160;tree&#160;of&#160;SNARK&#160;proofs&#160;appears&#160;as&#160;follows:<br/>
+𝑥0&#160;→Tick&#160;𝑥4<br/>
+𝑥0&#160;→Tock&#160;𝑥2<br/>
+𝑥2&#160;→Tock&#160;𝑥4<br/>
+𝑥0&#160;→Tick&#160;𝑥2<br/>
+𝑥2&#160;→Tick&#160;𝑥4<br/>
+𝑥0&#160;→Tock&#160;𝑥1<br/>
+𝑥1&#160;→Tock&#160;𝑥2<br/>
+𝑥2&#160;→Tock&#160;𝑥3<br/>
+𝑥3&#160;→Tock&#160;𝑥4<br/>
+𝑥0&#160;→Tick&#160;𝑥1<br/>
+𝑥1&#160;→Tick&#160;𝑥2<br/>
+𝑥2&#160;→Tick&#160;𝑥3<br/>
+𝑥3&#160;→Tick&#160;𝑥4<br/>
+4.2<br/>
+CODA:&#160;A&#160;Succinct&#160;Blockchain&#160;Using&#160;Incrementally-<br/>computable&#160;SNARKs<br/>
+In&#160;this&#160;section,&#160;we&#160;present&#160;the&#160;Coda&#160;protocol,&#160;a&#160;succinct&#160;blockchain&#160;based<br/>on&#160;incrementally-computable&#160;SNARKs.&#160;Intuitively,&#160;blockchain&#160;updates&#160;can&#160;be<br/>seen&#160;as&#160;a&#160;state&#160;transition&#160;system,&#160;and&#160;thus&#160;incrementally-computable&#160;SNARKs<br/>(which&#160;are&#160;simply&#160;SNARKs&#160;for&#160;state&#160;transition&#160;systems)&#160;can&#160;enable&#160;the&#160;con-<br/>struction&#160;of&#160;succinct&#160;blockchains.<br/>
+4.2.1<br/>
+Our&#160;Construction<br/>
+In&#160;this&#160;section,&#160;we&#160;present&#160;the&#160;Coda&#160;protocol.&#160;Specifically,&#160;we&#160;discuss&#160;the&#160;details<br/>for&#160;generic&#160;Turing-complete&#160;functionalities&#160;that&#160;transform&#160;a&#160;database.&#160;Then,&#160;in<br/>Section&#160;<a href="2020-352s.html#14">5,&#160;</a>we&#160;will&#160;instantiate&#160;the&#160;protocol&#160;with&#160;the&#160;payments&#160;functionality.<br/>
+At&#160;a&#160;high&#160;level,&#160;we&#160;will&#160;treat&#160;a&#160;blockchain&#160;as&#160;a&#160;state&#160;transition&#160;function.<br/>
+Consider,&#160;for&#160;example,&#160;a&#160;UTXO&#160;(Unpaid&#160;Transaction&#160;Output)&#160;model&#160;wherein<br/>every&#160;party&#160;has&#160;an&#160;‘account’&#160;with&#160;some&#160;‘balance’,&#160;like&#160;in&#160;Bitcoin.&#160;The&#160;state&#160;of<br/>the&#160;blockchain&#160;is&#160;a&#160;database&#160;(such&#160;as&#160;a&#160;Merkle&#160;tree)&#160;of&#160;all&#160;the&#160;account&#160;balances.<br/>A&#160;transition&#160;is&#160;transfer&#160;of&#160;some&#160;part&#160;of&#160;the&#160;balance&#160;from&#160;one&#160;account&#160;to&#160;another<br/>account.&#160;While&#160;this&#160;is&#160;just&#160;an&#160;example,&#160;our&#160;protocol&#160;is&#160;generic&#160;and&#160;considers<br/>any&#160;state&#160;set<br/>
+0<br/>
+𝛴<br/>
+and&#160;a&#160;Turing-complete&#160;transition&#160;function&#160;Update0&#160;with&#160;some<br/>
+transition&#160;set&#160;T0;&#160;that&#160;is,&#160;we&#160;begin&#160;with&#160;(&#160;0<br/>
+𝛴&#160;,&#160;T0,&#160;Update0).<br/>
+Then,&#160;the&#160;Coda&#160;protocol&#160;for&#160;(&#160;0<br/>
+𝛴&#160;,&#160;T0,&#160;Update0)&#160;is&#160;constructed&#160;as&#160;follows.&#160;We<br/>
+employ&#160;our&#160;consensus&#160;protocol,&#160;namely&#160;Ouroboros&#160;Samasika,&#160;that&#160;we&#160;present<br/>in&#160;Section&#160;<a href="2020-352s.html#19">7.&#160;</a>We&#160;will&#160;combine&#160;(&#160;0<br/>
+𝛴&#160;,&#160;T0,&#160;Update0)&#160;and&#160;the&#160;consensus&#160;protocol<br/>
+12<br/>
+<hr/>
+<a name=13></a>to&#160;construct&#160;a&#160;new&#160;state&#160;transition&#160;system&#160;(&#160;𝛴&#160;,&#160;T,&#160;Update),&#160;mainly&#160;to&#160;subsume<br/>consensus&#160;verification&#160;in&#160;the&#160;update&#160;function.&#160;An&#160;incrementally-computable<br/>SNARK&#160;for&#160;(&#160;𝛴&#160;,&#160;T,&#160;Update)&#160;is&#160;employed&#160;and&#160;the&#160;proofs&#160;attest&#160;to&#160;the&#160;current<br/>state&#160;being&#160;computed&#160;correctly.&#160;The&#160;blockchain&#160;summary&#160;simply&#160;consists&#160;of<br/>the&#160;state&#160;in&#160;𝛴&#160;and&#160;the&#160;proof.&#160;A&#160;blockchain&#160;summary&#160;producer&#160;will&#160;just&#160;be&#160;a<br/>prover&#160;and&#160;a&#160;full&#160;node&#160;will&#160;only&#160;need&#160;to&#160;perform&#160;proof&#160;verification&#160;to&#160;verify&#160;the<br/>blockchain&#160;correctness.<br/>
+Having&#160;described&#160;the&#160;protocol&#160;at&#160;an&#160;intuitive&#160;level,&#160;we&#160;will&#160;now&#160;discuss&#160;the<br/>
+details.&#160;Given&#160;(&#160;0<br/>
+𝛴&#160;,&#160;T0,&#160;Update0)&#160;and&#160;a&#160;collision-resistant&#160;hash&#160;function&#160;H,&#160;the<br/>
+protocol&#160;components&#160;are&#160;as&#160;follows.<br/>
+The&#160;Coda&#160;Protocol<br/>
+The&#160;Coda&#160;protocol&#160;has&#160;the&#160;following&#160;components.<br/>
+•&#160;Consensus&#160;mechanism&#160;(UpdateConsensus,&#160;VerifyConsensus):&#160;The<br/>
+consensus&#160;mechanism&#160;is&#160;the&#160;Ouroboros&#160;Samasika&#160;protocol&#160;that&#160;we<br/>present&#160;in&#160;Section&#160;<a href="2020-352s.html#19">7.&#160;</a>In&#160;Ouroboros&#160;Samasika&#160;VerifyConsensus&#160;runs<br/>in&#160;time&#160;poly(𝜆),&#160;as&#160;required.<br/>
+•&#160;Blocks:&#160;Consider&#160;a&#160;transition&#160;0<br/>
+0<br/>
+0<br/>
+𝑡<br/>
+∈&#160;𝑇&#160;𝑎𝑢&#160;that&#160;acts&#160;on&#160;a&#160;state&#160;𝜎<br/>
+.&#160;The<br/>
+𝑖<br/>
+𝑖−1<br/>
+corresponding&#160;block<br/>
+𝐵<br/>
+𝐵<br/>
+=&#160;(sn&#160;,&#160;st&#160;,&#160;𝜋&#160;,&#160;𝑑&#160;,&#160;b-pk&#160;,&#160;𝑏-sig&#160;)&#160;is&#160;constructed<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+with&#160;st&#160;=<br/>
+0<br/>
+𝐵<br/>
+0<br/>
+𝜎<br/>
+,&#160;𝜋<br/>
+=&#160;consensusProof&#160;and&#160;𝑑&#160;=&#160;𝑡&#160;.<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖−1<br/>
+𝑖<br/>
+𝑖<br/>
+•&#160;State&#160;transition&#160;system&#160;for&#160;SNARK:&#160;Consider&#160;the&#160;state&#160;transi-<br/>
+tion&#160;system&#160;(<br/>
+0<br/>
+𝛴&#160;,&#160;T,&#160;Update)<br/>
+defined&#160;as&#160;follows:<br/>
+𝛴<br/>
+=<br/>
+{H(𝜎&#160;),<br/>
+consensusState}&#160;0<br/>
+0<br/>
+𝜎&#160;∈&#160;𝛴&#160;,consensusState&#160;.&#160;A&#160;transition&#160;is&#160;a&#160;block.&#160;The&#160;func-<br/>
+tion&#160;Update(𝐵&#160;,&#160;𝜎<br/>
+)&#160;=&#160;𝜎<br/>
+𝑖<br/>
+𝑖−1&#160;)<br/>
+verifies&#160;if&#160;H(st𝑖<br/>
+𝑖−1&#160;,<br/>
+the&#160;signature&#160;veri-<br/>
+fies&#160;in&#160;the&#160;block&#160;verifies&#160;and&#160;that&#160;VerifyConsensus(consensusState𝑖−1,<br/>consensusProof&#160;),&#160;where&#160;consensusState<br/>
+𝐵&#160;con-<br/>
+𝑖<br/>
+𝑖−1&#160;is&#160;part&#160;of&#160;𝜎𝑖−1&#160;and&#160;𝜋𝑖<br/>
+tains&#160;consensusProof&#160;.<br/>
+𝑖<br/>
+•&#160;Blockchain&#160;summary:&#160;The&#160;blockchain&#160;summary&#160;consists&#160;of&#160;a&#160;state<br/>
+in&#160;𝛴&#160;and&#160;a&#160;proof&#160;snark&#160;.<br/>
+𝑖<br/>
+•&#160;VerifyChainSummary(S<br/>
+,&#160;snark&#160;)):&#160;As&#160;mentioned&#160;earlier,&#160;this<br/>
+𝑖−1&#160;=&#160;(&#160;𝜎𝑖<br/>
+𝑖<br/>
+algorithm&#160;simply&#160;verifies&#160;the&#160;proof&#160;snark&#160;against&#160;the&#160;statement&#160;𝜎&#160;.<br/>
+𝑖<br/>
+𝑖<br/>
+•&#160;VerifyBlock(S&#160;,&#160;𝐵&#160;):&#160;This&#160;algorithm,&#160;simply&#160;checks&#160;the&#160;consistencies,<br/>
+𝑖1<br/>
+𝑖<br/>
+namely,&#160;verifying&#160;consensus,&#160;verifying&#160;signature&#160;and&#160;verifying&#160;that<br/>the&#160;state&#160;in&#160;S<br/>
+is&#160;the&#160;hash&#160;of&#160;the&#160;state&#160;in&#160;the&#160;block.<br/>
+𝑖1<br/>
+•&#160;UpdateChainSummary(S<br/>
+):&#160;Let&#160;S<br/>
+𝑖−1&#160;,&#160;𝐵𝑖<br/>
+𝑖−1<br/>
+=&#160;(𝜎𝑖−1,&#160;snark𝑖−1).&#160;This<br/>
+algorithm&#160;runs&#160;the&#160;Update&#160;function&#160;as&#160;Update(𝐵&#160;,&#160;𝜎<br/>
+𝑖<br/>
+𝑖−1&#160;)<br/>
+to&#160;obtain<br/>
+𝜎&#160;.&#160;Then,&#160;it&#160;verifies&#160;the&#160;proof&#160;snark<br/>
+𝑖<br/>
+𝑖−1&#160;.&#160;Finally,&#160;it&#160;runs&#160;the&#160;prover&#160;to<br/>
+obtain&#160;the&#160;new&#160;proof&#160;snark&#160;.<br/>
+𝑖<br/>
+13<br/>
+<hr/>
+<a name=14></a>Figure&#160;3:&#160;The&#160;Coda&#160;protocol.<br/>
+Remark&#160;4.1.&#160;We&#160;assume&#160;that&#160;the&#160;length&#160;of&#160;the&#160;blockchain&#160;does&#160;not&#160;affect&#160;chain<br/>extractability,&#160;because&#160;no&#160;evidence&#160;suggests&#160;otherwise&#160;for&#160;the&#160;constructions&#160;of<br/>SNARKs&#160;that&#160;we&#160;use,&#160;as&#160;also&#160;noted&#160;in&#160;<a href="2020-352s.html#45">[7].</a><br/>
+5<br/>
+The&#160;Coda&#160;Protocol&#160;for&#160;Payments<br/>
+In&#160;this&#160;section,&#160;we&#160;will&#160;focus&#160;on&#160;the&#160;payments&#160;application,&#160;where&#160;each&#160;party&#160;has<br/>an&#160;account&#160;with&#160;some&#160;balance&#160;and&#160;a&#160;transaction&#160;moves&#160;a&#160;part&#160;of&#160;its&#160;balance&#160;to<br/>a&#160;different&#160;party’s&#160;account.<br/>
+In&#160;the&#160;following,&#160;we&#160;will&#160;first&#160;specify&#160;the&#160;payments&#160;application&#160;framework<br/>
+followed&#160;by&#160;the&#160;underlying&#160;SNARK&#160;construction&#160;and&#160;then&#160;present&#160;the&#160;Coda<br/>protocol&#160;for&#160;payments.<br/>
+5.0.1<br/>
+Coda’s&#160;Framework&#160;for&#160;Payments<br/>
+Let&#160;U&#160;be&#160;a&#160;set&#160;of&#160;parties.&#160;The&#160;framework&#160;consists&#160;of&#160;the&#160;following&#160;notions.<br/>
+•&#160;Accounts.<br/>
+Every&#160;party&#160;is&#160;said&#160;to&#160;have&#160;an&#160;account&#160;characterized&#160;by<br/>
+(pk,&#160;balance,&#160;nonce),&#160;with&#160;pk&#160;the&#160;party’s&#160;public&#160;key&#160;for&#160;authorizing&#160;pay-<br/>
+ments,&#160;balance&#160;∈&#160;N,&#160;and&#160;nonce&#160;∈&#160;I&#160;which&#160;functions&#160;to&#160;prevent&#160;transaction<br/>replay.<br/>
+•&#160;Ledger.&#160;We&#160;define&#160;a&#160;ledger&#160;as&#160;the&#160;list&#160;of&#160;all&#160;the&#160;accounts.&#160;We&#160;will&#160;refer&#160;to<br/>
+a&#160;party’s&#160;account&#160;by&#160;L(pk)&#160;and&#160;the&#160;fields&#160;of&#160;the&#160;account,&#160;such&#160;as&#160;balance,<br/>by&#160;L(pk).balance.<br/>
+•&#160;Transaction.&#160;A&#160;transaction&#160;is&#160;a&#160;transfer&#160;of&#160;value&#160;amt&#160;from&#160;a&#160;Sender’s<br/>
+account&#160;L(pk&#160;).balance&#160;to&#160;a&#160;Receiver’s&#160;account&#160;L(pk&#160;).balance.&#160;It&#160;is&#160;repre-<br/>
+𝑠<br/>
+𝑟<br/>
+sented&#160;as&#160;txn&#160;=&#160;(pk&#160;,&#160;pk&#160;,&#160;amt,&#160;nonce&#160;,&#160;sig&#160;),&#160;where&#160;pk&#160;,&#160;pk&#160;are&#160;the&#160;Sender’s<br/>
+𝑠<br/>
+𝑟<br/>
+𝑠<br/>
+𝑠<br/>
+𝑠<br/>
+𝑟<br/>
+and&#160;the&#160;Receiver’s&#160;public&#160;keys,&#160;respectively,&#160;nonce&#160;is&#160;the&#160;nonce&#160;in&#160;the<br/>
+𝑠<br/>
+Sender’s&#160;account&#160;and&#160;sig&#160;is&#160;a&#160;signature&#160;on&#160;(pk&#160;,&#160;amt,&#160;nonce&#160;)&#160;by&#160;the&#160;Sender.<br/>
+𝑠<br/>
+𝑟<br/>
+𝑠<br/>
+•&#160;Transaction&#160;verification.&#160;Given&#160;a&#160;transaction&#160;txn&#160;and&#160;a&#160;ledger&#160;L,&#160;the<br/>
+following&#160;algorithm&#160;verifies&#160;validity&#160;of&#160;the&#160;transaction.<br/>
+VerifyTransaction(txn&#160;=&#160;(pk&#160;,&#160;pk&#160;,&#160;amt,&#160;nonce&#160;,&#160;sig&#160;),&#160;L):<br/>
+𝑠<br/>
+𝑟<br/>
+𝑠<br/>
+𝑠<br/>
+assert&#160;(L(pk&#160;).balance&#160;≥&#160;amt);<br/>
+𝑠<br/>
+assert&#160;(L(pk&#160;).nonce&#160;=&#160;nonce&#160;);<br/>
+𝑠<br/>
+𝑠<br/>
+assert&#160;(VerifySig(pk&#160;,&#160;(pk&#160;,&#160;amt,&#160;nonce&#160;),&#160;sig&#160;)&#160;=&#160;&gt;);<br/>
+𝑠<br/>
+𝑟<br/>
+𝑠<br/>
+𝑠<br/>
+return&#160;&gt;<br/>
+•&#160;Ledger&#160;update.<br/>
+Given&#160;a&#160;ledger&#160;L&#160;and&#160;a&#160;set&#160;of&#160;transactions&#160;{txn&#160;=<br/>
+(pk&#160;,&#160;pk&#160;,&#160;amt,&#160;nonce&#160;,&#160;sig&#160;)},&#160;the&#160;following&#160;algorithm&#160;processes&#160;the&#160;set&#160;by<br/>
+𝑠<br/>
+𝑟<br/>
+𝑠<br/>
+𝑠<br/>
+updating&#160;the&#160;ledger.<br/>
+14<br/>
+<hr/>
+<a name=15></a>UpdateLedger(L,&#160;{txn}):<br/>∀txn&#160;∈&#160;{txn}<br/>
+-&#160;L(pk&#160;).balance&#160;←&#160;L(pk&#160;).balance&#160;−&#160;amt;<br/>
+𝑠<br/>
+𝑠<br/>
+-&#160;L(pk&#160;).balance&#160;←&#160;L(pk&#160;).balance&#160;+&#160;amt;<br/>
+𝑟<br/>
+𝑟<br/>
+-&#160;L(pk&#160;).nonce&#160;←&#160;L(pk&#160;).nonce&#160;+&#160;1;<br/>
+𝑠<br/>
+𝑠<br/>
+return&#160;L<br/>
+5.0.2<br/>
+The&#160;SNARK<br/>
+We&#160;will&#160;now&#160;describe&#160;the&#160;incrementally-computable&#160;SNARK&#160;S&#160;used&#160;for&#160;con-<br/>structing&#160;our&#160;succinct&#160;blockchain.&#160;Recall&#160;that&#160;a&#160;state&#160;transition&#160;system&#160;charac-<br/>terizes&#160;an&#160;incrementally-computable&#160;SNARK&#160;(cf.&#160;Definition&#160;<a href="2020-352s.html#10">4.2).&#160;</a>S&#160;is&#160;specified<br/>in&#160;Figure&#160;<a href="2020-352s.html#15">4.</a><br/>
+SNARK&#160;S<br/>
+Let&#160;H&#160;be&#160;a&#160;collision-resistant&#160;hash&#160;function.&#160;S&#160;is&#160;defined&#160;as&#160;an&#160;incrementally-<br/>computable&#160;SNARK&#160;for&#160;the&#160;following&#160;state&#160;transition&#160;system&#160;(&#160;𝛴&#160;,&#160;T,&#160;Update):<br/>
+•&#160;𝛴&#160;is&#160;the&#160;set&#160;{σ}&#160;of&#160;pairs&#160;of&#160;ledger&#160;hash&#160;values&#160;and&#160;consensus&#160;states<br/>
+𝑖<br/>
+{(ledgerHash&#160;,&#160;consensusState&#160;)}.<br/>
+𝑖<br/>
+𝑖<br/>
+•&#160;T&#160;is&#160;the&#160;set&#160;of&#160;blocks&#160;𝐵&#160;is&#160;of&#160;the&#160;form&#160;(𝑖,&#160;L<br/>
+,<br/>
+𝑖<br/>
+𝑖−1&#160;,<br/>
+consensusProof𝑖<br/>
+{txn&#160;}&#160;,&#160;b-pk&#160;,&#160;𝑏-sig&#160;),&#160;{txn&#160;}&#160;is&#160;a&#160;set&#160;of&#160;transactions&#160;and&#160;b-pk&#160;is&#160;a<br/>
+𝑗<br/>
+𝑗<br/>
+𝑖<br/>
+𝑖<br/>
+𝑗<br/>
+𝑗<br/>
+𝑖<br/>
+public&#160;key&#160;for&#160;verifying&#160;the&#160;signature&#160;𝑏-sig&#160;.<br/>
+𝑖<br/>
+•&#160;The&#160;function&#160;Update(𝑡&#160;,&#160;σ<br/>
+is&#160;defined&#160;as&#160;follows:<br/>
+𝑖<br/>
+𝑖−1&#160;)&#160;→&#160;σ𝑖<br/>
+Update(𝑡&#160;,&#160;σ<br/>
+:<br/>
+𝑖<br/>
+𝑖−1&#160;)&#160;→&#160;σ𝑖<br/>
+assert&#160;(VerifyTransaction(txn&#160;,&#160;L<br/>
+;<br/>
+𝑗<br/>
+𝑖−1&#160;)&#160;=&#160;&gt;)&#160;,<br/>
+∀txn&#160;𝑗<br/>
+assert&#160;(ledgerHash𝑖−1&#160;=&#160;H(L𝑖−1));<br/>assert&#160;(VerifyConsensus(consensusState𝑖−1,<br/>
+consensusProof&#160;)&#160;=&#160;&gt;);<br/>
+𝑖<br/>
+assert&#160;(VerifySig(b-pk&#160;,&#160;𝑚,&#160;𝑏-sig&#160;)&#160;=&#160;&gt;),&#160;where&#160;𝑚&#160;=<br/>
+𝑖<br/>
+𝑖<br/>
+(𝑖,&#160;L<br/>
+,&#160;{txn&#160;}&#160;);<br/>
+𝑖−1&#160;,&#160;consensusProof&#160;𝑖<br/>
+𝑗<br/>
+𝑗<br/>
+L&#160;←&#160;UpdateLedger(L<br/>
+}&#160;);<br/>
+𝑖<br/>
+𝑖−1&#160;,&#160;{txn&#160;𝑗<br/>
+𝑗<br/>
+ledgerHash&#160;←&#160;H(L&#160;);<br/>
+𝑖<br/>
+𝑖<br/>
+consensusState&#160;←&#160;UpdateConsensus(<br/>
+𝑖<br/>
+consensusState<br/>
+);<br/>
+𝑖−1&#160;,&#160;consensusProof&#160;𝑖<br/>
+return&#160;σ&#160;←&#160;(ledgerHash&#160;,&#160;consensusState&#160;)<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+Figure&#160;4:&#160;The&#160;underlying&#160;SNARK&#160;S.<br/>
+15<br/>
+<hr/>
+<a name=16></a>5.0.3<br/>
+Our&#160;Construction<br/>
+Let&#160;(VerifyConsensus,&#160;UpdateConsensus)&#160;be&#160;the&#160;Ouroboros&#160;Samasika&#160;consensus<br/>mechanism.&#160;Let&#160;H&#160;be&#160;a&#160;collision-resistant&#160;hash&#160;function.&#160;The&#160;Coda&#160;protocol&#160;is<br/>defined&#160;as&#160;follows.<br/>
+The&#160;Coda&#160;Protocol&#160;for&#160;Payments<br/>
+The&#160;Coda&#160;protocol&#160;for&#160;payments,&#160;defined&#160;in&#160;the&#160;framework&#160;from&#160;Section<br/><a href="2020-352s.html#14">5.0.1,&#160;</a>is&#160;based&#160;on&#160;the&#160;SNARK&#160;in&#160;Figure&#160;<a href="2020-352s.html#15">4.&#160;</a>It&#160;has&#160;the&#160;following&#160;components.<br/>
+•&#160;A&#160;blockchain&#160;C𝑖−1.&#160;A&#160;blockchain&#160;consists&#160;of&#160;the&#160;hash&#160;of&#160;the&#160;current<br/>
+ledger,&#160;the&#160;current&#160;consensus&#160;state&#160;and&#160;a&#160;SNARK&#160;proof.&#160;That&#160;is,<br/>
+C𝑖−1&#160;=&#160;(ledgerHash𝑖−1,&#160;consensusState𝑖−1,&#160;snark𝑖−1)<br/>
+.<br/>
+•&#160;A&#160;block&#160;𝐵&#160;.&#160;Recall&#160;that&#160;a&#160;block&#160;in&#160;general&#160;is&#160;of&#160;the&#160;form&#160;𝐵&#160;=<br/>
+𝑖<br/>
+𝑖<br/>
+(sn<br/>
+𝐵<br/>
+,&#160;st&#160;,&#160;𝜋<br/>
+,&#160;𝑑&#160;,&#160;b-pk&#160;,&#160;𝑏-sig&#160;),&#160;where&#160;sn&#160;,&#160;b-pk&#160;,&#160;𝑏-sig&#160;are&#160;serial&#160;number,<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+block&#160;proposer’s&#160;public&#160;key&#160;and&#160;a&#160;signature&#160;on&#160;(sn<br/>
+𝐵<br/>
+,&#160;st&#160;,&#160;𝜋<br/>
+,&#160;𝑑&#160;)&#160;by&#160;the<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+block&#160;proposer,&#160;respectively.&#160;st<br/>
+𝐵<br/>
+,&#160;𝜋<br/>
+,&#160;𝑑<br/>
+are&#160;specified&#160;as&#160;follows.<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+–&#160;st&#160;=&#160;L<br/>
+𝑖<br/>
+𝑖−1&#160;;<br/>
+–<br/>
+𝐵<br/>
+𝜋<br/>
+=&#160;consensusProof&#160;;<br/>
+𝑖<br/>
+𝑖<br/>
+–&#160;𝑑&#160;=&#160;{txn&#160;}&#160;.<br/>
+𝑖<br/>
+𝑗<br/>
+𝑗<br/>
+The&#160;algorithms&#160;VerifyBlock,&#160;UpdateChain,&#160;VerifyChain&#160;are&#160;defined&#160;as<br/>
+follows.<br/>
+•&#160;VerifyBlock(S<br/>
+)&#160;→&#160;&gt;/⊥:<br/>
+𝑖−1&#160;,&#160;𝐵𝑖<br/>
+assert&#160;(H(L<br/>
+);<br/>
+𝑖−1&#160;)&#160;=&#160;ledgerHash𝑖−1<br/>
+assert&#160;(VerifyConsensus(consensusState𝑖−1,<br/>
+consensusProof&#160;)&#160;=&#160;&gt;);<br/>
+𝑖<br/>
+∀&#160;𝑗&#160;assert&#160;(VerifyTransaction(txn&#160;,&#160;L<br/>
+𝑗<br/>
+𝑖−1&#160;)&#160;=&#160;&gt;)&#160;;<br/>
+assert&#160;(VerifySig(b-pk&#160;,&#160;𝑚,&#160;sig&#160;)&#160;=&#160;&gt;),<br/>
+𝑖<br/>
+𝑖<br/>
+where&#160;𝑚&#160;=&#160;(sn&#160;,&#160;L<br/>
+,&#160;{txn&#160;}&#160;)<br/>
+𝑖<br/>
+𝑖−1&#160;,&#160;consensusProof&#160;𝑖<br/>
+𝑗<br/>
+𝑗<br/>
+return&#160;&gt;<br/>
+16<br/>
+<hr/>
+<a name=17></a>•&#160;UpdateChainSummary(S<br/>
+)&#160;→&#160;C&#160;:<br/>
+𝑖−1&#160;,&#160;𝐵𝑖<br/>
+𝑖<br/>
+assign&#160;σ𝑖−1&#160;←&#160;(ledgerHash𝑖−1,&#160;consensusState𝑖−1);<br/>
+σ&#160;←&#160;Update(𝐵&#160;,&#160;σ<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖−1&#160;)&#160;;<br/>
+snark&#160;←&#160;sProve(σ&#160;,&#160;(σ<br/>
+));<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖−1&#160;,&#160;𝑡𝑖<br/>
+assign&#160;S&#160;←&#160;(σ&#160;,&#160;snark&#160;);<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+return&#160;S𝑖<br/>
+•&#160;VerifyChainSummary(S&#160;)&#160;→&#160;&gt;/⊥:<br/>
+𝑖<br/>
+assign&#160;σ&#160;←&#160;(ledgerHash&#160;,&#160;consensusState&#160;);<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+return&#160;sVerify(σ&#160;,&#160;snark&#160;)<br/>
+𝑖<br/>
+𝑖<br/>
+Figure&#160;5:&#160;The&#160;Coda&#160;protocol&#160;for&#160;payments.<br/>
+6<br/>
+Snark&#160;Workers<br/>
+In&#160;this&#160;section,&#160;we&#160;will&#160;introduce&#160;two&#160;optimization&#160;techniques,&#160;namely,&#160;‘parallel<br/>scan&#160;state’&#160;and&#160;‘prover&#160;incentives’.&#160;They&#160;both&#160;target&#160;the&#160;following&#160;issue.<br/>
+The&#160;issue.<br/>
+Observe&#160;from&#160;Figure&#160;<a href="2020-352s.html#14">3&#160;</a>that&#160;to&#160;compute&#160;S&#160;,&#160;we&#160;need&#160;S<br/>
+𝑖<br/>
+𝑖−1&#160;.<br/>
+Thus,<br/>
+there&#160;is&#160;a&#160;sequential&#160;dependency&#160;for&#160;SNARK&#160;proof&#160;computation.&#160;As&#160;a&#160;result,&#160;a<br/>na¨ıve&#160;implementation&#160;suffers&#160;from&#160;a&#160;block&#160;time&#160;that&#160;is&#160;at&#160;least&#160;the&#160;time&#160;required<br/>to&#160;compute&#160;the&#160;proof.&#160;Furthermore,&#160;it&#160;suffers&#160;from&#160;high&#160;memory&#160;requirements<br/>for&#160;block&#160;proposers&#160;due&#160;to&#160;high&#160;transaction&#160;latency&#160;(where,&#160;transaction&#160;latency<br/>is&#160;the&#160;time&#160;required&#160;for&#160;a&#160;transaction&#160;to&#160;be&#160;summarized&#160;in&#160;a&#160;SNARK&#160;proof).<br/>
+The&#160;solution.<br/>
+The&#160;goal&#160;is&#160;to&#160;design&#160;techniques&#160;that&#160;maximize&#160;the&#160;through-<br/>
+put.&#160;Specifically,&#160;our&#160;goal&#160;is&#160;to&#160;maximize&#160;the&#160;rate&#160;at&#160;which&#160;transactions&#160;can<br/>be&#160;processed&#160;and&#160;validated&#160;in&#160;the&#160;Coda&#160;protocol&#160;network.&#160;This&#160;enables&#160;more<br/>simultaneous&#160;users&#160;on&#160;the&#160;network.<br/>
+6.1<br/>
+Parallel&#160;Scan&#160;State<br/>
+Recall&#160;that&#160;a&#160;raw&#160;chain&#160;of&#160;blocks&#160;is&#160;inherently&#160;sequential&#160;(i.e.,&#160;cannot&#160;be&#160;par-<br/>allelized&#160;in&#160;general).<br/>
+However,&#160;thanks&#160;to&#160;incremental&#160;computability&#160;of&#160;the<br/>
+SNARK,&#160;the&#160;SNARK&#160;work&#160;can&#160;be&#160;parallelized.&#160;This&#160;is&#160;the&#160;key&#160;observation<br/>that&#160;leads&#160;to&#160;the&#160;notion&#160;of&#160;a&#160;‘parallel&#160;scan&#160;state’,&#160;where&#160;we&#160;decouple&#160;producing<br/>a&#160;block&#160;from&#160;computing&#160;SNARK&#160;proofs.<br/>
+We&#160;maintain&#160;a&#160;special&#160;queue,&#160;called&#160;the&#160;work&#160;queue,&#160;where&#160;we&#160;enqueue&#160;new<br/>
+blocks&#160;as&#160;they&#160;are&#160;proposed.&#160;In&#160;other&#160;words,&#160;it&#160;is&#160;a&#160;queue&#160;of&#160;the&#160;‘SNARK&#160;work’<br/>to&#160;be&#160;performed&#160;by&#160;the&#160;network.<br/>
+17<br/>
+<hr/>
+<a name=18></a><img src="2020-352-18_1.png"/><br/>
+The&#160;network&#160;then&#160;computes&#160;the&#160;SNARK&#160;proofs&#160;in&#160;parallel;&#160;a&#160;tree&#160;of&#160;proofs<br/>
+is&#160;computed&#160;where&#160;the&#160;leaves&#160;correspond&#160;to&#160;the&#160;proofs&#160;proving&#160;validity&#160;of&#160;single<br/>blocks&#160;and&#160;the&#160;other&#160;proofs&#160;simply&#160;attest&#160;to&#160;the&#160;correctness&#160;of&#160;their&#160;children<br/>proofs.&#160;Finally,&#160;the&#160;root&#160;proof&#160;attests&#160;to&#160;correctness&#160;of&#160;all&#160;the&#160;blocks&#160;corre-<br/>sponding&#160;to&#160;the&#160;leaves&#160;of&#160;the&#160;tree.&#160;Consider,&#160;for&#160;example,&#160;a&#160;sequence&#160;of&#160;blocks<br/>
+𝐵&#160;,&#160;𝐵<br/>
+in&#160;the&#160;work&#160;queue.&#160;The&#160;root&#160;proof&#160;attests&#160;to&#160;the&#160;validity&#160;of&#160;each<br/>
+𝑖<br/>
+𝑖+1&#160;,&#160;.&#160;.&#160;.&#160;,&#160;𝐵&#160;𝑗<br/>
+of&#160;the&#160;blocks.&#160;This&#160;root&#160;proof&#160;can&#160;be&#160;combined&#160;with&#160;the&#160;SNARK&#160;proof&#160;for<br/>the&#160;validity&#160;of&#160;S𝑖−1&#160;to&#160;result&#160;in&#160;a&#160;SNARK&#160;proof&#160;that&#160;attests&#160;to&#160;the&#160;validity&#160;of<br/>S&#160;.&#160;This&#160;is&#160;illustrated&#160;in&#160;Figure&#160;<a href="2020-352s.html#18">6.&#160;</a>Note&#160;that&#160;this&#160;tree,&#160;under&#160;the&#160;hood,&#160;works<br/>
+𝑗<br/>
+similarly&#160;to&#160;the&#160;example&#160;transition&#160;system&#160;described&#160;in&#160;Section&#160;<a href="2020-352s.html#11">4.1.2.</a><br/>
+Figure&#160;6:&#160;A&#160;snapshot&#160;of&#160;a&#160;parallel&#160;scan&#160;state.<br/>
+Observe&#160;that,&#160;by&#160;careful&#160;design&#160;of&#160;parallelism,&#160;we&#160;can&#160;ensure&#160;that&#160;the&#160;through-<br/>
+put&#160;completely&#160;keeps&#160;up&#160;with&#160;the&#160;rate&#160;transactions&#160;are&#160;added,&#160;which&#160;is&#160;optimal.<br/>While&#160;the&#160;transaction&#160;latency&#160;in&#160;the&#160;na¨ıve&#160;approach&#160;was&#160;𝑂&#160;(𝑅),&#160;where&#160;𝑅&#160;is&#160;the<br/>rate&#160;at&#160;which&#160;blocks&#160;are&#160;produced,&#160;in&#160;the&#160;proposed&#160;approach,&#160;the&#160;transaction<br/>latency&#160;is&#160;𝑂&#160;(log(𝑅)).&#160;With&#160;a&#160;careful&#160;designing&#160;of&#160;data&#160;structure,&#160;the&#160;storage<br/>requirement&#160;can&#160;be&#160;reduced&#160;from&#160;𝑂&#160;(𝑅)&#160;in&#160;the&#160;na¨ıve&#160;approach&#160;to&#160;2𝑅&#160;−&#160;1&#160;+&#160;𝑂&#160;(1)<br/>in&#160;the&#160;proposed&#160;approach;&#160;we&#160;will&#160;omit&#160;the&#160;details&#160;of&#160;the&#160;data&#160;structure&#160;<a href="2020-352s.html#45">[2].</a><br/>
+6.2<br/>
+Incentivizing&#160;the&#160;Provers<br/>
+A&#160;party&#160;that&#160;generates&#160;SNARK&#160;proofs&#160;is&#160;called&#160;a&#160;snarker.&#160;We&#160;will&#160;describe<br/>prover&#160;incentives&#160;with&#160;the&#160;goal&#160;of&#160;achieving&#160;lowest&#160;possible&#160;transaction&#160;latency<br/>(i.e.,&#160;to&#160;minimize&#160;the&#160;time&#160;gap&#160;between&#160;when&#160;a&#160;block&#160;is&#160;produced&#160;and&#160;when&#160;it<br/>is&#160;absorbed&#160;in&#160;the&#160;blockchain’s&#160;SNARK&#160;proof).<br/>
+The&#160;proposed&#160;incentive&#160;structure&#160;is&#160;the&#160;following.&#160;Every&#160;block&#160;producer&#160;that<br/>
+pushes&#160;a&#160;block&#160;to&#160;the&#160;work&#160;queue&#160;is&#160;required&#160;to&#160;pop&#160;a&#160;block&#160;by&#160;generating&#160;a<br/>proof&#160;validating&#160;the&#160;block.&#160;It&#160;posts&#160;a&#160;fee&#160;request&#160;together&#160;with&#160;the&#160;SNARK<br/>proof&#160;it&#160;generates.&#160;It&#160;also&#160;includes&#160;a&#160;transaction&#160;in&#160;the&#160;same&#160;block&#160;that&#160;pays<br/>the&#160;fee&#160;to&#160;the&#160;prover&#160;that&#160;will&#160;compute&#160;the&#160;snark&#160;for&#160;that&#160;block.&#160;Typically,&#160;the<br/>fees&#160;are&#160;paid&#160;out&#160;from&#160;the&#160;transaction&#160;fees&#160;the&#160;block&#160;producer&#160;would&#160;otherwise<br/>receive.<br/>
+In&#160;essence,&#160;there&#160;is&#160;a&#160;lowest-price&#160;auction&#160;for&#160;each&#160;piece&#160;of&#160;SNARK&#160;work.<br/>
+Block&#160;producers&#160;would&#160;like&#160;to&#160;pay&#160;snarkers&#160;as&#160;little&#160;as&#160;possible&#160;for&#160;their&#160;proofs<br/>and&#160;snarkers&#160;would&#160;like&#160;to&#160;receive&#160;as&#160;high&#160;a&#160;fee&#160;as&#160;possible&#160;for&#160;their&#160;proofs.<br/>Therefore,&#160;enforcing&#160;a&#160;block&#160;producer&#160;to&#160;also&#160;be&#160;a&#160;prover&#160;but&#160;for&#160;a&#160;different<br/>block&#160;enforces&#160;stability&#160;in&#160;the&#160;system.<br/>
+18<br/>
+<hr/>
+<a name=19></a>Note&#160;that&#160;this&#160;notion&#160;is&#160;similar&#160;to&#160;the&#160;aforementioned&#160;na¨ıve&#160;approach&#160;in&#160;that<br/>
+a&#160;block&#160;producer&#160;also&#160;computes&#160;a&#160;SNARK&#160;proof,&#160;but&#160;with&#160;the&#160;difference&#160;that<br/>the&#160;block&#160;producer&#160;computes&#160;proof&#160;for&#160;the&#160;block&#160;in&#160;the&#160;head&#160;of&#160;the&#160;queue.<br/>
+Remark&#160;6.1.&#160;Given&#160;a&#160;proof&#160;and&#160;an&#160;associated&#160;fee&#160;request,&#160;we&#160;require&#160;that&#160;an<br/>adversary&#160;cannot&#160;maul&#160;the&#160;fee&#160;request.&#160;Otherwise,&#160;an&#160;attacker&#160;could&#160;pass-off<br/>a&#160;different&#160;party’s&#160;proof&#160;as&#160;their&#160;own&#160;(by&#160;replacing&#160;the&#160;public&#160;key)&#160;or&#160;modify<br/>someone’s&#160;fee&#160;request.<br/>
+Signatures&#160;of&#160;knowledge&#160;are&#160;a&#160;cryptographic&#160;primitive&#160;that&#160;allows&#160;us&#160;to<br/>
+accomplish&#160;exactly&#160;this,&#160;as&#160;recalled&#160;in&#160;Section&#160;<a href="2020-352s.html#8">3.&#160;</a>In&#160;Coda,&#160;we&#160;use&#160;a&#160;construction<br/>based&#160;on&#160;the&#160;Bowe–Gabizon&#160;simulation-extractable&#160;SNARK&#160;<a href="2020-352s.html#45">[9].</a><br/>
+7<br/>
+Ouroboros&#160;Samasika&#160;–&#160;PoS&#160;Consensus&#160;for&#160;Suc-<br/>cinct&#160;Blockchains<br/>
+One&#160;of&#160;the&#160;main&#160;technical&#160;contributions&#160;of&#160;this&#160;paper&#160;is&#160;the&#160;first&#160;provably-secure<br/>proof-of-stake&#160;consensus&#160;protocol&#160;for&#160;a&#160;succinct&#160;blockchain.&#160;Existing&#160;protocols<br/>are&#160;either&#160;not&#160;adaptively&#160;secure&#160;or&#160;rely&#160;on&#160;a&#160;centralized&#160;trusted&#160;third&#160;party&#160;for<br/>checkpointing&#160;advice&#160;to&#160;nodes&#160;trying&#160;to&#160;bootstrap&#160;or&#160;rely&#160;on&#160;arbitrary&#160;informa-<br/>tion&#160;in&#160;the&#160;history&#160;of&#160;the&#160;protocol&#160;for&#160;chain&#160;selection,&#160;immediately&#160;rendering&#160;the<br/>protocol&#160;incompatible&#160;for&#160;succinct&#160;settings&#160;<a href="2020-352s.html#46">[17,&#160;13,&#160;</a><a href="2020-352s.html#45">4,&#160;12].</a><br/>
+We&#160;construct&#160;a&#160;consensus&#160;protocol&#160;that&#160;is&#160;secure&#160;against&#160;adaptive&#160;corruption<br/>
+and&#160;does&#160;not&#160;require&#160;a&#160;trusted&#160;checkpointing&#160;service&#160;for&#160;bootsrapping,&#160;is&#160;adap-<br/>tively&#160;secure&#160;and,&#160;most&#160;importantly,&#160;succicnt.&#160;That&#160;is,&#160;it&#160;requires&#160;only&#160;succinct<br/>information&#160;to&#160;tell&#160;apart&#160;honest&#160;chains&#160;from&#160;dishonest&#160;ones,&#160;immaterial&#160;of&#160;how<br/>far&#160;in&#160;history&#160;they&#160;had&#160;forked.&#160;Our&#160;starting&#160;point&#160;is&#160;the&#160;Ouroboros&#160;Genesis&#160;<a href="2020-352s.html#45">[4]<br/></a>(sometimes&#160;referred&#160;to&#160;as&#160;Genesis&#160;in&#160;this&#160;paper)&#160;PoS&#160;consensus&#160;protocol.<br/>
+Ouroboros&#160;Genesis&#160;already&#160;enjoys&#160;adaptive&#160;security&#160;and&#160;offers&#160;boostrapping<br/>
+from&#160;Genesis.&#160;However,&#160;the&#160;chain&#160;selection&#160;rules&#160;require&#160;information&#160;about&#160;an<br/>arbitrary&#160;distance&#160;in&#160;a&#160;chain’s&#160;history;&#160;this&#160;is&#160;natural,&#160;since,&#160;an&#160;adversary&#160;might<br/>modify&#160;arbitrary&#160;aspects&#160;of&#160;the&#160;blockchain&#160;to&#160;create&#160;a&#160;fork&#160;and&#160;the&#160;timing&#160;of<br/>the&#160;fork&#160;might&#160;be&#160;learned&#160;by&#160;parties&#160;long&#160;after&#160;it&#160;has&#160;occurred.&#160;For&#160;this&#160;reason,<br/>Ouroboros&#160;Genesis&#160;by&#160;itself&#160;is&#160;not&#160;usable&#160;in&#160;the&#160;succinct&#160;setting.&#160;The&#160;challenge<br/>is&#160;to&#160;somehow&#160;craft&#160;a&#160;constant-sized&#160;summary&#160;of&#160;the&#160;history&#160;that&#160;suffices&#160;in<br/>correctly&#160;choosing&#160;one&#160;chain&#160;from&#160;multiple&#160;candidates.<br/>
+In&#160;this&#160;section,&#160;we&#160;present&#160;Ouroboros&#160;Samasika&#160;wherein&#160;we&#160;resolve&#160;the&#160;above<br/>
+challenge.&#160;Specifically,&#160;we&#160;demonstrate&#160;an&#160;approach&#160;to&#160;succinctly&#160;summarize&#160;the<br/>information&#160;necessary&#160;to&#160;correctly&#160;arbitrate&#160;chains&#160;with&#160;long-range&#160;forks.<br/>
+7.1<br/>
+Intuitive&#160;Description<br/>
+In&#160;this&#160;part&#160;of&#160;the&#160;section,&#160;we&#160;will&#160;particularly&#160;focus&#160;on&#160;the&#160;core&#160;of&#160;a&#160;consen-<br/>sus&#160;protocol,&#160;namely,&#160;the&#160;chain&#160;selection&#160;rules.&#160;The&#160;entire&#160;consensus&#160;protocol<br/>appears&#160;in&#160;detail,&#160;along&#160;with&#160;the&#160;proofs&#160;of&#160;security,&#160;in&#160;Section&#160;<a href="2020-352s.html#24">7.3.</a><br/>
+We&#160;will&#160;begin&#160;by&#160;recalling&#160;the&#160;rules&#160;of&#160;Ouroboros&#160;Genesis.<br/>
+19<br/>
+<hr/>
+<a name=20></a>The&#160;chain&#160;selection&#160;rules&#160;of&#160;Ouroboros&#160;Genesis.<br/>
+There&#160;are&#160;two&#160;chain<br/>
+selection&#160;rules&#160;in&#160;Ouroboros&#160;Genesis.&#160;One&#160;is&#160;when&#160;the&#160;fork&#160;is&#160;a&#160;short-range&#160;one;<br/>in&#160;this&#160;case,&#160;the&#160;rule&#160;is&#160;to&#160;simply&#160;to&#160;choose&#160;the&#160;longest&#160;chain.&#160;The&#160;other&#160;is&#160;when<br/>the&#160;fork&#160;is&#160;a&#160;long-range&#160;one;&#160;in&#160;this&#160;case,&#160;one&#160;may&#160;not&#160;simply&#160;choose&#160;the&#160;longest<br/>chain,&#160;since&#160;an&#160;adversary&#160;could&#160;have&#160;posed&#160;various&#160;attacks&#160;over&#160;time&#160;to&#160;perhaps<br/>skew&#160;the&#160;leader&#160;selection&#160;distribution&#160;and&#160;managed&#160;to&#160;create&#160;a&#160;longer&#160;chain.<br/>Therefore,&#160;for&#160;long-range&#160;forks,&#160;the&#160;rule&#160;is&#160;to&#160;limit&#160;the&#160;comparison&#160;of&#160;chains&#160;to<br/>just&#160;a&#160;few&#160;slots&#160;immediately&#160;following&#160;the&#160;fork.<br/>
+Note&#160;that&#160;the&#160;rule&#160;for&#160;long-range&#160;forks&#160;requires&#160;information&#160;at&#160;arbitrary<br/>
+times&#160;in&#160;the&#160;history.&#160;Clearly,&#160;it&#160;is&#160;not&#160;trivial&#160;to&#160;summarize&#160;the&#160;information<br/>succinctly.<br/>
+We&#160;now&#160;present&#160;the&#160;chain&#160;selection&#160;rules&#160;of&#160;Ouroboros&#160;Samasika.<br/>
+The&#160;chain&#160;selection&#160;rules&#160;of&#160;Ouroboros&#160;Samasika.<br/>
+Similar&#160;to&#160;Genesis,<br/>
+Ouroboros&#160;Samasika&#160;also&#160;has&#160;two&#160;consensus&#160;rules&#160;applicable&#160;depending&#160;on&#160;how<br/>far&#160;in&#160;history&#160;the&#160;fork&#160;has&#160;occurred.<br/>
+Short-range&#160;fork&#160;rule.&#160;Roughly&#160;speaking,&#160;this&#160;rule&#160;is&#160;triggered&#160;whenever&#160;the<br/>
+fork&#160;is&#160;in&#160;such&#160;a&#160;way&#160;that&#160;the&#160;adversary&#160;has&#160;not&#160;yet&#160;been&#160;able&#160;to&#160;modify<br/>the&#160;block&#160;density&#160;distribution&#160;and&#160;the&#160;rule&#160;is&#160;to&#160;simply&#160;choose&#160;the&#160;longest<br/>chain.&#160;While&#160;the&#160;action&#160;of&#160;the&#160;rule&#160;is&#160;the&#160;same&#160;as&#160;in&#160;Ouroboros&#160;Genesis,<br/>the&#160;predicate&#160;for&#160;deciding&#160;whether&#160;a&#160;given&#160;fork&#160;is&#160;a&#160;short-range&#160;one&#160;or&#160;not<br/>is&#160;slightly&#160;different.&#160;Since&#160;the&#160;main&#160;contribution&#160;is&#160;the&#160;long-range&#160;fork<br/>rule,&#160;we&#160;defer&#160;the&#160;exact&#160;description&#160;of&#160;the&#160;predicate&#160;to&#160;Appendix&#160;<a href="2020-352s.html#40">7.7.</a><br/>
+Long-range&#160;fork&#160;rule.&#160;This&#160;rule&#160;is&#160;applied&#160;for&#160;forks&#160;that&#160;occurred&#160;more&#160;than<br/>
+𝑘&#160;blocks&#160;ago.&#160;Before&#160;we&#160;describe&#160;the&#160;rule&#160;itself,&#160;following&#160;is&#160;the&#160;intuition.<br/>
+Firstly,&#160;recall&#160;the&#160;reason&#160;why&#160;simply&#160;the&#160;longest&#160;chain&#160;rule&#160;might&#160;not<br/>choose&#160;the&#160;right&#160;chain&#160;in&#160;this&#160;case;&#160;after&#160;an&#160;adversary&#160;creates&#160;a&#160;fork,<br/>over&#160;time,&#160;it&#160;might&#160;skew&#160;the&#160;leader&#160;selection&#160;distribution&#160;leading&#160;to&#160;a<br/>longer&#160;adversarial&#160;chain.&#160;Due&#160;to&#160;this,&#160;we&#160;can&#160;only&#160;rely&#160;on&#160;the&#160;density<br/>difference&#160;in&#160;the&#160;first&#160;few&#160;slots&#160;following&#160;the&#160;fork&#160;(which&#160;is&#160;indeed&#160;what<br/>Ouroboros&#160;Genesis&#160;utilizes).&#160;The&#160;challenge&#160;is&#160;to&#160;somehow&#160;“carry&#160;forward”<br/>the&#160;summary&#160;of&#160;that&#160;density&#160;difference,&#160;even&#160;when&#160;the&#160;fork&#160;position&#160;–&#160;and<br/>hence&#160;the&#160;slot&#160;range&#160;in&#160;question&#160;–&#160;is&#160;not&#160;known&#160;ahead&#160;of&#160;time.<br/>
+The&#160;idea.<br/>
+The&#160;idea&#160;is&#160;to&#160;consider&#160;a&#160;moving&#160;window&#160;of&#160;slots&#160;and&#160;only<br/>
+store&#160;the&#160;minimum&#160;of&#160;all&#160;the&#160;densities&#160;observed&#160;so&#160;far&#160;in&#160;that&#160;window.&#160;Ob-<br/>serve&#160;that&#160;this&#160;idea&#160;almost&#160;resolves&#160;the&#160;challenge:&#160;for&#160;a&#160;dishonest&#160;chain,<br/>even&#160;if&#160;the&#160;adversary&#160;manages&#160;to&#160;increase&#160;the&#160;chain&#160;density,&#160;the&#160;minimum<br/>density&#160;value&#160;points&#160;to&#160;the&#160;window&#160;following&#160;the&#160;fork,&#160;providing&#160;the&#160;re-<br/>quired&#160;summary.&#160;On&#160;the&#160;other&#160;hand,&#160;for&#160;the&#160;honest&#160;chain,&#160;there&#160;is&#160;not&#160;a<br/>huge&#160;fluctuation&#160;in&#160;the&#160;densities&#160;and,&#160;due&#160;to&#160;majority&#160;stake&#160;on&#160;the&#160;chain,<br/>the&#160;minimum&#160;density&#160;value&#160;across&#160;the&#160;chain&#160;is&#160;likely&#160;to&#160;be&#160;higher&#160;than<br/>that&#160;for&#160;the&#160;dishonest&#160;chain.<br/>
+20<br/>
+<hr/>
+<a name=21></a>While&#160;this&#160;almost&#160;completely&#160;resolves&#160;the&#160;challenge,&#160;there&#160;is&#160;one&#160;other&#160;part<br/>to&#160;the&#160;challenge&#160;we&#160;still&#160;need&#160;to&#160;address.&#160;Namely,&#160;how&#160;long&#160;the&#160;window<br/>should&#160;be&#160;and&#160;how&#160;it&#160;should&#160;slide.&#160;This&#160;is&#160;critical,&#160;as&#160;it&#160;is&#160;constrained<br/>by&#160;two&#160;conflicting&#160;requirements:&#160;(1)&#160;The&#160;max-length&#160;of&#160;the&#160;window,&#160;since<br/>post&#160;a&#160;certain&#160;point&#160;after&#160;the&#160;fork,&#160;no&#160;guarantees&#160;can&#160;be&#160;made&#160;on&#160;the&#160;block<br/>densities&#160;in&#160;the&#160;adversarial&#160;chain&#160;and&#160;(2)&#160;The&#160;min-length&#160;of&#160;the&#160;window,<br/>since&#160;some&#160;minimum&#160;number&#160;of&#160;samples&#160;are&#160;required&#160;to&#160;tell&#160;apart&#160;the&#160;given<br/>two&#160;distributions.&#160;Let&#160;us&#160;call&#160;the&#160;window&#160;of&#160;the&#160;critical&#160;length&#160;following<br/>the&#160;fork,&#160;that&#160;satisfies&#160;both&#160;the&#160;constrains&#160;as&#160;the&#160;“critical&#160;window&#160;”.&#160;So<br/>the&#160;challenge&#160;is&#160;to&#160;design&#160;the&#160;window&#160;length&#160;and&#160;its&#160;movement&#160;so&#160;that&#160;no<br/>matter&#160;where&#160;the&#160;fork&#160;is&#160;positioned,&#160;the&#160;moving&#160;window&#160;will&#160;capture&#160;the<br/>entire&#160;critical&#160;window&#160;in&#160;one&#160;shot.&#160;The&#160;idea&#160;is&#160;to&#160;have&#160;the&#160;window&#160;length<br/>slightly&#160;greater&#160;than&#160;the&#160;critical&#160;window&#160;length.&#160;As&#160;far&#160;as&#160;moving&#160;of&#160;the<br/>window&#160;is&#160;considered,&#160;firstly&#160;note&#160;that&#160;a&#160;na¨ıve&#160;shifting&#160;window&#160;(where&#160;the<br/>next&#160;shift&#160;moves&#160;the&#160;beginning&#160;of&#160;the&#160;window&#160;to&#160;after&#160;its&#160;current&#160;end)<br/>may&#160;not&#160;capture&#160;the&#160;entire&#160;critical&#160;window&#160;in&#160;any&#160;given&#160;position,&#160;since&#160;a<br/>fork&#160;can&#160;occur&#160;at&#160;arbitrary&#160;slots.&#160;The&#160;idea&#160;is&#160;to&#160;have&#160;the&#160;window&#160;shift<br/>by&#160;a&#160;fraction&#160;of&#160;its&#160;size.&#160;We&#160;call&#160;the&#160;resulting&#160;window&#160;as&#160;the&#160;“𝜈-shifting<br/>
+ω-window”,&#160;where&#160;ω&#160;is&#160;the&#160;window&#160;length&#160;and&#160;𝜈&#160;is&#160;the&#160;length&#160;by&#160;which<br/>
+it&#160;shifts&#160;(cf.&#160;Definition&#160;<a href="2020-352s.html#26">1).&#160;</a>With&#160;careful&#160;calibration&#160;of&#160;𝜈&#160;and&#160;ω,&#160;we&#160;can<br/>ensure&#160;that&#160;the&#160;window&#160;captures&#160;the&#160;critical&#160;window.<br/>
+This&#160;intuition&#160;is&#160;formally&#160;proven&#160;later&#160;in&#160;Theorem&#160;<a href="2020-352s.html#36">2.</a><br/>
+Below,&#160;we&#160;formally&#160;describe&#160;the&#160;chain&#160;selection&#160;rules.<br/>
+Our&#160;new&#160;chain<br/>
+selection&#160;rule,&#160;formally&#160;specified&#160;as&#160;algorithm&#160;maxvalid-sc(·)&#160;(see&#160;Figure&#160;<a href="2020-352s.html#22">7),<br/></a>surgically&#160;adapts&#160;the&#160;chain&#160;selection&#160;rule&#160;of&#160;Ouroboros&#160;Genesis,&#160;namely<br/>maxvalid-bg(·)&#160;(see&#160;Figure&#160;<a href="2020-352s.html#47">20),&#160;</a>but&#160;by&#160;replacing&#160;the&#160;long-range&#160;fork&#160;rule<br/>with&#160;a&#160;new&#160;one.&#160;We&#160;will&#160;continue&#160;all&#160;the&#160;discussions&#160;by&#160;referring&#160;to&#160;the<br/>underlying&#160;blockchains&#160;of&#160;chain&#160;summaries.&#160;We&#160;will&#160;note&#160;that&#160;the&#160;only<br/>information&#160;about&#160;the&#160;underlying&#160;blockchains&#160;needed&#160;in&#160;any&#160;part&#160;of&#160;the<br/>consensus&#160;mechanism&#160;is&#160;a&#160;fixed&#160;number&#160;of&#160;blocks&#160;in&#160;the&#160;immediate&#160;history.<br/>Therefore,&#160;the&#160;consensus&#160;verification&#160;is&#160;succinct.<br/>
+Here,&#160;Cloc&#160;is&#160;the&#160;local&#160;chain,&#160;N&#160;=&#160;{C1,&#160;.&#160;.&#160;.&#160;,&#160;C&#160;}&#160;is&#160;the&#160;list&#160;of&#160;chains&#160;to<br/>
+𝑀<br/>
+choose&#160;from.&#160;The&#160;function&#160;isShortRange(C,&#160;C0)&#160;outputs&#160;whether&#160;or&#160;not<br/>the&#160;chains&#160;fork&#160;in&#160;the&#160;“short&#160;range”&#160;or&#160;not.&#160;The&#160;function&#160;getMinDen(C)<br/>outputs&#160;the&#160;minimum&#160;of&#160;all&#160;the&#160;window&#160;densities&#160;observed&#160;thus&#160;far&#160;in&#160;C;<br/>it&#160;is&#160;formally&#160;defined&#160;in&#160;Figure&#160;<a href="2020-352s.html#33">16.</a><br/>
+21<br/>
+<hr/>
+<a name=22></a>Algorithm&#160;maxvalid-sc(Cloc,&#160;N&#160;=&#160;{C1,&#160;.&#160;.&#160;.&#160;,&#160;C&#160;},&#160;𝑘)<br/>
+𝑀<br/>
+//&#160;Compare&#160;Cloc&#160;with&#160;each&#160;candidate&#160;chain&#160;in&#160;N<br/>
+1.&#160;Set&#160;Cmax&#160;←&#160;Cloc<br/>
+2.&#160;for&#160;𝑖&#160;=&#160;1,&#160;.&#160;.&#160;.&#160;,&#160;𝑀&#160;do<br/>
+if&#160;isShortRange(C&#160;,&#160;C<br/>
+𝑖<br/>
+max)&#160;then&#160;//&#160;Short-range&#160;fork<br/>
+if&#160;|C&#160;|&#160;&gt;&#160;|C<br/>
+𝑖<br/>
+max&#160;|&#160;then<br/>
+Set&#160;Cmax&#160;←&#160;C𝑖<br/>
+end&#160;if<br/>
+else&#160;//Long-range&#160;fork<br/>
+if&#160;getMinDen(C&#160;)&#160;&gt;&#160;getMinDen(C<br/>
+𝑖<br/>
+max)&#160;then<br/>
+Set&#160;Cmax&#160;←&#160;C𝑖<br/>
+end&#160;if<br/>
+end&#160;if<br/>
+end&#160;for<br/>
+3.&#160;return&#160;Cmax<br/>
+Figure&#160;7:&#160;The&#160;new&#160;chain&#160;selection&#160;rule.<br/>
+7.2<br/>
+Background<br/>
+We&#160;introduce&#160;many&#160;relevant&#160;concepts&#160;from&#160;Ouroboros&#160;Genesis&#160;which&#160;remain<br/>the&#160;same&#160;in&#160;our&#160;setting&#160;too.&#160;We&#160;begin&#160;by&#160;recalling&#160;a&#160;summary&#160;of&#160;the&#160;Ouroboros<br/>family&#160;of&#160;protocols.<br/>
+The&#160;Ouroboros&#160;family&#160;of&#160;consensus&#160;protocols.<br/>
+Kiayias&#160;et&#160;al.&#160;proposed<br/>
+the&#160;first&#160;proof-of-stake&#160;(PoS)&#160;protocol&#160;Ouroboros&#160;<a href="2020-352s.html#46">[17]&#160;</a>with&#160;rigorous&#160;security<br/>guarantees.&#160;However,&#160;the&#160;adversarial&#160;model&#160;only&#160;considered&#160;synchronous&#160;net-<br/>works.&#160;Here,&#160;the&#160;protocol&#160;execution&#160;is&#160;divided&#160;into&#160;time&#160;units&#160;called&#160;slots&#160;and<br/>groups&#160;of&#160;slots&#160;form&#160;epochs.<br/>
+The&#160;adversarial&#160;model&#160;was&#160;strengthened&#160;in&#160;the&#160;follow-up&#160;work&#160;Ouroboros<br/>
+Praos&#160;<a href="2020-352s.html#46">[13]&#160;</a>by&#160;considering&#160;the&#160;semi-synchronous&#160;setting&#160;(where,&#160;the&#160;protocol<br/>execution&#160;is&#160;still&#160;divided&#160;into&#160;slots&#160;and&#160;epochs,&#160;but&#160;the&#160;network&#160;could&#160;experience<br/>a&#160;maximum&#160;delay&#160;of&#160;𝛥&#160;slots&#160;in&#160;delivering&#160;messages.)&#160;This&#160;work&#160;introduced&#160;the<br/>notion&#160;of&#160;“empty&#160;slots”&#160;as&#160;an&#160;artificial&#160;way&#160;to&#160;provide&#160;short&#160;periods&#160;of&#160;silence<br/>for&#160;parties&#160;to&#160;catch&#160;up&#160;in&#160;the&#160;cases&#160;of&#160;message&#160;delivery&#160;delays.&#160;An&#160;important<br/>point&#160;to&#160;note&#160;about&#160;the&#160;Ouroboros&#160;Praos&#160;is&#160;its&#160;chain&#160;selection&#160;rule.&#160;Whenever<br/>there&#160;are&#160;two&#160;chains&#160;that&#160;have&#160;forked&#160;‘recently’&#160;(i.e.,&#160;when&#160;there&#160;is&#160;a&#160;so-called<br/>‘short-range&#160;fork&#160;’),&#160;it&#160;chooses&#160;the&#160;longer&#160;chain.&#160;On&#160;the&#160;other&#160;hand,&#160;i.e.,&#160;if&#160;the<br/>
+22<br/>
+<hr/>
+<a name=23></a>fork&#160;is&#160;far&#160;back&#160;in&#160;history&#160;(or&#160;when&#160;there&#160;is&#160;a&#160;so-called&#160;‘long-range&#160;fork&#160;’),&#160;then<br/>it&#160;simply&#160;relies&#160;on&#160;a&#160;trusted&#160;external&#160;service&#160;(called&#160;the&#160;checkpointing&#160;service)<br/>to&#160;provide&#160;the&#160;advice&#160;on&#160;the&#160;honest&#160;chain.&#160;Clearly,&#160;this&#160;introduces&#160;a&#160;strong<br/>element&#160;of&#160;centralization&#160;which&#160;is&#160;tackled&#160;in&#160;the&#160;follow&#160;up&#160;project.<br/>
+Finally,&#160;Ouroboros&#160;Genesis&#160;overcame&#160;the&#160;Ouroboros&#160;Praos’s&#160;drawback<br/>
+of&#160;relying&#160;on&#160;an&#160;external&#160;service&#160;for&#160;resolving&#160;long-range&#160;forks&#160;by&#160;providing&#160;an<br/>additional&#160;chain&#160;selection&#160;rule&#160;<a href="2020-352s.html#45">[4].&#160;</a>Specifically,&#160;the&#160;rule&#160;considers&#160;a&#160;short&#160;range&#160;𝑠<br/>of&#160;slots&#160;soon&#160;after&#160;the&#160;long-range&#160;fork&#160;and&#160;chooses&#160;the&#160;chain&#160;with&#160;higher&#160;density<br/>in&#160;those&#160;𝑠&#160;slots.<br/>
+Modeling&#160;time:&#160;Slots,&#160;epochs&#160;and&#160;empty&#160;slots.<br/>
+The&#160;protocol&#160;execution<br/>
+time&#160;is&#160;divided&#160;into&#160;epochs&#160;which&#160;are&#160;further&#160;divided&#160;into&#160;slots.&#160;There&#160;are&#160;𝑅<br/>slots&#160;in&#160;an&#160;epoch.&#160;Like&#160;in&#160;Ouroboros&#160;Praos&#160;and&#160;Ouroboros&#160;Genesis,&#160;some&#160;slots<br/>can&#160;be&#160;“empty”&#160;(i.e.,&#160;without&#160;any&#160;block&#160;associated&#160;with&#160;them).&#160;Specifically,&#160;a<br/>consensus&#160;parameter,&#160;𝑓&#160;,&#160;denotes&#160;the&#160;probability&#160;that&#160;any&#160;given&#160;slot&#160;has&#160;a&#160;block<br/>producer&#160;assigned&#160;to&#160;it.&#160;If&#160;no&#160;block&#160;producer&#160;is&#160;assigned&#160;to&#160;a&#160;slot,&#160;then&#160;the&#160;slot<br/>is&#160;empty&#160;(i.e.,&#160;without&#160;a&#160;block).<br/>
+Types&#160;of&#160;parties.<br/>
+We&#160;categorize&#160;parties&#160;in&#160;a&#160;way&#160;that&#160;models&#160;various&#160;real-life<br/>
+scenarios,&#160;such&#160;as,&#160;newly&#160;joining&#160;parties&#160;and&#160;parties&#160;with&#160;temporary&#160;connectiv-<br/>ity/availability&#160;issues,&#160;as&#160;detailed&#160;fully&#160;in&#160;<a href="2020-352s.html#45">[4].&#160;</a>The&#160;model&#160;defines&#160;three&#160;kinds&#160;of<br/>parties&#160;as&#160;follows.&#160;Alert&#160;parties&#160;are&#160;parties&#160;that&#160;have&#160;access&#160;to&#160;all&#160;the&#160;required<br/>resources,&#160;and&#160;are&#160;also&#160;synchronized.&#160;These&#160;parties&#160;enjoy&#160;full&#160;security&#160;guar-<br/>antees&#160;and&#160;we&#160;will&#160;require&#160;a&#160;lower&#160;bound&#160;on&#160;their&#160;stake&#160;(see&#160;below)&#160;to&#160;ensure<br/>security.&#160;Potentially&#160;active&#160;parties&#160;(or&#160;active,&#160;for&#160;short)&#160;are&#160;all&#160;parties&#160;that,<br/>broadly&#160;speaking,&#160;might&#160;potentially&#160;act&#160;in&#160;the&#160;current&#160;time&#160;slot&#160;of&#160;the&#160;protocol<br/>execution.&#160;This&#160;includes&#160;honest&#160;parties&#160;that&#160;have&#160;access&#160;to&#160;all&#160;the&#160;required&#160;re-<br/>sources&#160;as&#160;well&#160;as&#160;adversarial&#160;parties.&#160;Inactive&#160;parties&#160;are&#160;all&#160;other&#160;parties,&#160;such<br/>as&#160;honest&#160;parties&#160;that&#160;cannot&#160;access&#160;some&#160;of&#160;the&#160;necessary&#160;resources&#160;to&#160;engage<br/>with&#160;the&#160;protocol,&#160;e.g.,&#160;their&#160;network&#160;connection.<br/>
+Stake&#160;distributions.<br/>
+The&#160;protocol&#160;is&#160;assumed&#160;to&#160;maintain&#160;the&#160;following&#160;ra-<br/>
+tios:<br/>
+•&#160;𝛼&#160;≥&#160;1/2&#160;is&#160;the&#160;ratio&#160;of&#160;the&#160;alert&#160;stake&#160;to&#160;the&#160;active&#160;stake.<br/>
+•&#160;𝛽&#160;is&#160;the&#160;ratio&#160;of&#160;the&#160;active&#160;stake&#160;to&#160;the&#160;entire&#160;stake.<br/>
+Epoch&#160;randomness&#160;and&#160;leader&#160;selection&#160;distributions.<br/>
+Stake&#160;distribu-<br/>
+tion&#160;considered&#160;in&#160;an&#160;epoch&#160;ep&#160;is&#160;actually&#160;the&#160;stake&#160;distribution&#160;at&#160;the&#160;last&#160;slot<br/>of&#160;ep&#160;−&#160;2.&#160;Besides&#160;stake&#160;distribution,&#160;the&#160;notion&#160;of&#160;epoch&#160;randomness&#160;influences<br/>leader&#160;selection&#160;distribution&#160;in&#160;any&#160;epoch.&#160;Specifically,&#160;epoch&#160;randomness&#160;is<br/>derived&#160;as&#160;a&#160;function&#160;of&#160;certain&#160;blocks&#160;information&#160;from&#160;the&#160;first&#160;two-thirds&#160;of<br/>ep&#160;−&#160;1.<br/>
+An&#160;important&#160;remark&#160;which&#160;we&#160;will&#160;use&#160;in&#160;our&#160;proofs&#160;is&#160;the&#160;following&#160;fact:<br/>
+Consider&#160;a&#160;fork&#160;at&#160;sl∗,&#160;where&#160;a&#160;dishonest&#160;chain&#160;forks&#160;from&#160;an&#160;honest&#160;chain.&#160;For<br/>
+23<br/>
+<hr/>
+<a name=24></a>𝑅/3&#160;slots&#160;following&#160;sl∗,&#160;the&#160;epoch&#160;randomness&#160;and&#160;leader&#160;selection&#160;distributions<br/>
+are&#160;guaranteed&#160;to&#160;be&#160;unskewed.&#160;However,&#160;in&#160;the&#160;slots&#160;following&#160;the&#160;𝑅/3&#160;slots,<br/>no&#160;such&#160;guarantee&#160;can&#160;be&#160;placed&#160;on&#160;the&#160;distribution&#160;in&#160;the&#160;dishonest&#160;chain.<br/>
+4<br/>
+Notations.<br/>
+For&#160;a&#160;chain&#160;C&#160;and&#160;an&#160;interval&#160;of&#160;slots&#160;𝐼&#160;=&#160;[sl&#160;,&#160;sl&#160;]&#160;=&#160;{sl&#160;,&#160;.&#160;.&#160;.&#160;,&#160;sl&#160;},<br/>
+𝑖<br/>
+𝑗<br/>
+𝑖<br/>
+𝑗<br/>
+we&#160;denote&#160;by&#160;C[𝐼]&#160;=&#160;C[sl&#160;,&#160;sl&#160;]&#160;the&#160;sequence&#160;of&#160;blocks&#160;in&#160;C&#160;such&#160;that&#160;their&#160;slot<br/>
+𝑖<br/>
+𝑗<br/>
+numbers&#160;fall&#160;into&#160;the&#160;interval&#160;𝐼.&#160;We&#160;replace&#160;the&#160;brackets&#160;in&#160;this&#160;notation&#160;with<br/>parentheses&#160;to&#160;denote&#160;intervals&#160;that&#160;do&#160;not&#160;include&#160;endpoints;&#160;e.g.,&#160;(sl&#160;,&#160;sl&#160;]&#160;=<br/>
+𝑖<br/>
+𝑗<br/>
+{sl<br/>
+}.&#160;Finally,&#160;we&#160;denote&#160;by&#160;|C[𝐼]&#160;|&#160;the&#160;number&#160;of&#160;blocks&#160;in&#160;C[𝐼].&#160;We<br/>
+𝑖+1&#160;,&#160;.&#160;.&#160;.&#160;,&#160;sl&#160;𝑗<br/>
+typically&#160;denote&#160;a&#160;party&#160;by&#160;𝑃.<br/>
+7.3<br/>
+The&#160;New&#160;Chain&#160;Selection&#160;Rules<br/>
+In&#160;this&#160;section,&#160;we&#160;describe&#160;the&#160;proposed&#160;chain&#160;selection&#160;rule&#160;for&#160;the&#160;succinct<br/>setting.&#160;The&#160;description&#160;is&#160;structured&#160;so&#160;as&#160;to&#160;clearly&#160;highlight&#160;(in&#160;blue)&#160;the&#160;dif-<br/>ferences&#160;from&#160;the&#160;corresponding&#160;Ouroboros&#160;Genesis&#160;protocols&#160;and&#160;algorithms.<br/>Algorithms/protocols&#160;that&#160;are&#160;completely&#160;novel&#160;to&#160;Ouroboros&#160;Samasika&#160;have<br/>only&#160;their&#160;names&#160;highlighted;&#160;the&#160;description&#160;is&#160;not&#160;highlighted&#160;for&#160;readability.<br/>Moreover,&#160;in&#160;protocol&#160;descriptions,&#160;the&#160;details&#160;that&#160;are&#160;common&#160;to&#160;Ouroboros<br/>Samasika&#160;and&#160;Ouroboros&#160;Genesis&#160;are&#160;mentioned&#160;but&#160;not&#160;delved&#160;deep&#160;into,&#160;so&#160;as<br/>to&#160;(a)&#160;stay&#160;focused&#160;on&#160;the&#160;main&#160;contribution&#160;and&#160;(b)&#160;maintain&#160;a&#160;pseudocode<br/>level&#160;of&#160;description.<br/>
+We&#160;defer&#160;the&#160;reader&#160;to&#160;<a href="2020-352s.html#45">[4]&#160;</a>for&#160;the&#160;details&#160;common&#160;to<br/>
+Ouroboros&#160;Samasika&#160;and&#160;Ouroboros&#160;Genesis.&#160;The&#160;formal&#160;chain&#160;selection&#160;al-<br/>gorithm&#160;maxvalid-sc&#160;was&#160;presented&#160;in&#160;Figure&#160;<a href="2020-352s.html#22">7.</a><br/>
+7.3.1<br/>
+The&#160;short-range&#160;chain&#160;selection&#160;rule<br/>
+Recall&#160;that&#160;a&#160;fork&#160;is&#160;a&#160;short-range&#160;one&#160;when&#160;it&#160;can&#160;be&#160;guaranteed&#160;that&#160;an<br/>adversary&#160;has&#160;not&#160;yet&#160;modified&#160;the&#160;block&#160;density&#160;distribution.&#160;maxvalid-sc&#160;calls<br/>the&#160;predicate&#160;isShortRange&#160;that&#160;outputs&#160;whether&#160;a&#160;given&#160;range&#160;is&#160;short-range<br/>one&#160;or&#160;not&#160;in&#160;this&#160;sense.&#160;The&#160;predicate&#160;is&#160;described&#160;as&#160;follows.<br/>
+24<br/>
+<hr/>
+<a name=25></a>Algorithm&#160;isShortRange(C1,&#160;C2)<br/>
+1.&#160;Let&#160;prevLockcp&#160;and&#160;prevLockcp&#160;be&#160;the&#160;prevLockcp&#160;components&#160;in&#160;the<br/>
+1<br/>
+2<br/>
+last&#160;blocks&#160;of&#160;C1,&#160;C2,&#160;respectively.<br/>
+2.&#160;if&#160;prevLockcp&#160;=&#160;prevLockcp&#160;then<br/>
+1<br/>
+2<br/>
+3.<br/>
+return&#160;&gt;<br/>
+4.&#160;else<br/>
+5.<br/>
+return&#160;⊥<br/>
+Figure&#160;8:&#160;The&#160;algorithm&#160;to&#160;determine&#160;when&#160;a&#160;given&#160;fork&#160;is&#160;a&#160;short-range&#160;one&#160;or<br/>not.<br/>
+Below&#160;in&#160;Figure&#160;<a href="2020-352s.html#28">12&#160;</a>is&#160;the&#160;protocol&#160;executed&#160;to&#160;select&#160;a&#160;new&#160;chain,&#160;denoted<br/>
+as&#160;SelectChain.<br/>
+Protocol&#160;SelectChain(𝑃,&#160;sid,&#160;Cloc,&#160;N&#160;=&#160;{C1,&#160;.&#160;.&#160;.&#160;,&#160;C&#160;},&#160;𝑘)<br/>
+𝑀<br/>
+//&#160;Step&#160;1:&#160;Discard&#160;invalid&#160;chains<br/>
+1.&#160;Initialize&#160;Nvalid&#160;←&#160;∅<br/>
+2.&#160;for&#160;𝑖&#160;=&#160;1,&#160;.&#160;.&#160;.&#160;,&#160;𝑀&#160;do<br/>
+Invoke&#160;Protocol&#160;IsValidChain(𝑃,&#160;sid,&#160;Cloc,&#160;C&#160;,&#160;𝑘);&#160;if&#160;it&#160;returns&#160;&gt;&#160;then<br/>
+𝑖<br/>
+update&#160;Nvalid&#160;←&#160;Nvalid&#160;∪&#160;{C&#160;}<br/>
+𝑖<br/>
+end&#160;for<br/>
+//&#160;Step&#160;2:&#160;Apply&#160;chain&#160;selection&#160;rule&#160;on&#160;valid&#160;chains<br/>
+3.&#160;Execute&#160;Algorithm&#160;maxvalid-sc(Cloc,&#160;Nvalid,&#160;𝑘).&#160;Denote&#160;the&#160;output<br/>
+chain&#160;by&#160;Cmax.<br/>
+4.&#160;Set&#160;Cloc&#160;←&#160;Cmax.&#160;Output&#160;Cloc.<br/>
+Output:&#160;Output&#160;Cloc.<br/>
+Figure&#160;9:&#160;The&#160;protocol&#160;for&#160;parties&#160;to&#160;select&#160;a&#160;chain&#160;when&#160;there&#160;is&#160;more&#160;than<br/>one.<br/>
+7.4<br/>
+The&#160;Window&#160;Min-density<br/>
+The&#160;core&#160;concept&#160;in&#160;the&#160;new&#160;chain&#160;selection&#160;rule&#160;is&#160;that&#160;of&#160;the&#160;window&#160;min-<br/>density.&#160;As&#160;mentioned&#160;earlier&#160;in&#160;this&#160;section,&#160;the&#160;idea&#160;is&#160;to&#160;consider&#160;a&#160;shifting<br/>
+25<br/>
+<hr/>
+<a name=26></a>window&#160;and&#160;to&#160;always&#160;maintain&#160;a&#160;minimum&#160;of&#160;densities&#160;in&#160;all&#160;the&#160;windows&#160;so<br/>far.<br/>
+More&#160;formally,&#160;we&#160;employ&#160;a&#160;𝜈-shifting&#160;ω-window&#160;(see&#160;Definition&#160;<a href="2020-352s.html#26">1),&#160;</a>wherein<br/>
+a&#160;ω-long&#160;window&#160;shifts&#160;at&#160;a&#160;time&#160;by&#160;𝜈&#160;slots.<br/>
+Definition&#160;1&#160;(𝜈-shifting&#160;ω-window).&#160;For&#160;𝜈,&#160;ω&#160;∈&#160;N&#160;and&#160;0&#160;&lt;&#160;𝜈&#160;&lt;&#160;ω,&#160;a&#160;𝜈-shifting<br/>
+ω-window&#160;over&#160;a&#160;sequence&#160;of&#160;slots&#160;sl1,&#160;sl2,&#160;.&#160;.&#160;.&#160;is&#160;characterized&#160;by&#160;an&#160;algorithm<br/>
+shiftWindow&#160;that&#160;takes&#160;as&#160;input&#160;a&#160;variable&#160;(or&#160;a&#160;set&#160;of&#160;variables)&#160;which&#160;is&#160;a&#160;func-<br/>tion&#160;of&#160;slots&#160;in&#160;the&#160;interval&#160;[sl𝑖+1,&#160;sl𝑖+ω]&#160;and&#160;assigns/updates&#160;it&#160;with&#160;a&#160;function&#160;of<br/>the&#160;slots&#160;[sl<br/>
+,&#160;sl<br/>
+].&#160;We&#160;call&#160;𝜈&#160;the&#160;shift&#160;parameter&#160;and&#160;ω&#160;the&#160;window-length<br/>
+𝑖+1+𝜈<br/>
+𝑖+ω+𝜈<br/>
+parameter.<br/>
+The&#160;shift&#160;parameter&#160;𝜈&#160;and&#160;the&#160;window-length&#160;parameter&#160;ω&#160;are&#160;set&#160;as&#160;follows.<br/>
+Let&#160;𝑠CG&#160;be&#160;the&#160;chain&#160;growth&#160;parameter&#160;ensured&#160;by&#160;the&#160;short-range&#160;chain&#160;selec-<br/>tion&#160;rule&#160;(which&#160;is&#160;equivalent&#160;to&#160;the&#160;chain&#160;selection&#160;rule&#160;of&#160;Ouroboros&#160;Genesis)<br/>(cf.&#160;Theorem&#160;2&#160;in&#160;<a href="2020-352s.html#45">[4]).</a><br/>
+The&#160;starting&#160;point&#160;for&#160;Ouroboros&#160;Samasika&#160;is&#160;Ouroboros&#160;Genesis.&#160;In&#160;Ouroboros<br/>
+Genesis,&#160;a&#160;(non-shifting)&#160;window&#160;of&#160;size&#160;of&#160;the&#160;order&#160;𝑠CG&#160;was&#160;considered&#160;imme-<br/>diately&#160;after&#160;the&#160;fork.&#160;In&#160;Ouroboros&#160;Samasika,&#160;due&#160;to&#160;succinctness,&#160;we&#160;consider<br/>the&#160;window&#160;positioning&#160;independent&#160;of&#160;the&#160;fork&#160;position.&#160;However,&#160;we&#160;do&#160;need<br/>to&#160;consider&#160;a&#160;window&#160;almost&#160;close&#160;to&#160;the&#160;fork.&#160;For&#160;this&#160;reason,&#160;we&#160;consider&#160;a<br/>window&#160;of&#160;size&#160;slightly&#160;larger&#160;than&#160;𝑠CG&#160;(see&#160;<a href="2020-352s.html#26">(1))&#160;</a>and&#160;shift&#160;it&#160;slightly&#160;by&#160;𝜈&#160;slots<br/>as&#160;time&#160;progresses&#160;(see&#160;<a href="2020-352s.html#26">(2))&#160;</a>to&#160;capture&#160;a&#160;window&#160;close&#160;to&#160;the&#160;fork.&#160;For&#160;imple-<br/>mentation&#160;purposes,&#160;one&#160;can&#160;imagine&#160;𝑛&#160;sub-windows,&#160;each&#160;of&#160;length&#160;𝜈&#160;slots,<br/>
+𝑠<br/>
+making&#160;up&#160;a&#160;window&#160;(see&#160;<a href="2020-352s.html#26">(3)).</a><br/>
+ω&#160;=&#160;(1&#160;+&#160;𝜖&#160;)𝑠<br/>
+𝑠<br/>
+CG,<br/>
+(1)<br/>
+𝜈&#160;=&#160;𝜖&#160;𝑠<br/>
+𝑠<br/>
+CG,<br/>
+(2)<br/>
+𝑛<br/>
+=&#160;(1/𝜖&#160;)&#160;+&#160;1,<br/>
+(3)<br/>
+𝑠<br/>
+𝑠<br/>
+while&#160;ensuring&#160;that&#160;𝜈&#160;and&#160;1/𝜖&#160;are&#160;whole&#160;numbers&#160;and&#160;that&#160;𝜖&#160;&gt;&#160;0.&#160;For&#160;intuition,<br/>
+𝑠<br/>
+𝑠<br/>
+here&#160;is&#160;an&#160;example:&#160;Let&#160;𝑠CG&#160;=&#160;6&#160;slots.&#160;Let&#160;𝜖&#160;=&#160;1/3.&#160;Then,&#160;the&#160;window&#160;is&#160;of&#160;size<br/>
+𝑠<br/>
+ω&#160;=&#160;8&#160;slots,&#160;with&#160;the&#160;shift&#160;being&#160;𝜈&#160;=&#160;2&#160;slots&#160;long&#160;(See&#160;Figure&#160;<a href="2020-352s.html#27">10).</a><br/>
+26<br/>
+<hr/>
+<a name=27></a><img src="2020-352-27_1.jpg"/><br/>
+Figure&#160;10:&#160;An&#160;example&#160;of&#160;the&#160;shifting&#160;window&#160;with&#160;𝑠CG&#160;=&#160;6&#160;slots&#160;and&#160;𝜖&#160;=&#160;1/3.<br/>
+𝑠<br/>
+Therefore,&#160;the&#160;window&#160;size&#160;ω&#160;=&#160;8&#160;slots&#160;and&#160;the&#160;shift&#160;size&#160;𝜈&#160;=&#160;2&#160;slots.&#160;The&#160;first<br/>shift&#160;occurs&#160;when&#160;the&#160;current&#160;time&#160;is&#160;𝑡2,&#160;the&#160;second&#160;at&#160;𝑡3,&#160;and&#160;so&#160;on.<br/>
+We&#160;present&#160;an&#160;example&#160;implementation&#160;algorithm&#160;in&#160;Figures&#160;<a href="2020-352s.html#27">11&#160;</a>and&#160;<a href="2020-352s.html#28">13.&#160;</a>We<br/>
+denote&#160;the&#160;window&#160;min-density&#160;by&#160;minDen.&#160;As&#160;mentioned&#160;earlier,&#160;we&#160;maintain<br/>
+𝑛<br/>
+sub-windows,&#160;each&#160;of&#160;size&#160;𝜈&#160;slots;&#160;namely,&#160;pDen<br/>
+.&#160;We&#160;also&#160;main-<br/>
+𝑠<br/>
+1,&#160;.&#160;.&#160;.&#160;,&#160;pDen𝑛𝑠<br/>
+tain&#160;an&#160;additional&#160;sub-window&#160;pDencurr&#160;also&#160;of&#160;size&#160;𝜈&#160;slots,&#160;to&#160;keep&#160;track&#160;of&#160;the<br/>density&#160;in&#160;the&#160;ongoing&#160;sub-window&#160;before&#160;there&#160;is&#160;a&#160;shift.&#160;The&#160;sequence&#160;of&#160;all<br/>
+−−→<br/>
+these&#160;parameters&#160;is&#160;denoted&#160;by&#160;Den&#160;=&#160;(pDen1,&#160;.&#160;.&#160;.&#160;,&#160;pDen&#160;,&#160;pDen<br/>
+𝑛<br/>
+curr,&#160;minDen).<br/>
+𝑠<br/>
+Algorithm&#160;isWindowStop(sl,&#160;𝜈)<br/>
+1.&#160;if&#160;(sl&#160;%&#160;𝜈)&#160;=&#160;0<br/>
+2.<br/>
+return&#160;&gt;<br/>
+3.&#160;else<br/>
+4.<br/>
+return&#160;⊥<br/>
+Figure&#160;11:&#160;The&#160;algorithm&#160;to&#160;check&#160;if&#160;the&#160;end&#160;of&#160;the&#160;window&#160;is&#160;reached.<br/>
+Protocol&#160;SelectChain(𝑃,&#160;sid,&#160;Cloc,&#160;N&#160;=&#160;{C1,&#160;.&#160;.&#160;.&#160;,&#160;C&#160;},&#160;𝑘)<br/>
+𝑀<br/>
+//&#160;Step&#160;1:&#160;Discard&#160;invalid&#160;chains<br/>
+1.&#160;Initialize&#160;Nvalid&#160;←&#160;∅<br/>
+2.&#160;for&#160;𝑖&#160;=&#160;1,&#160;.&#160;.&#160;.&#160;,&#160;𝑀&#160;do<br/>
+Invoke&#160;Protocol&#160;IsValidChain(𝑃,&#160;sid,&#160;Cloc,&#160;C&#160;,&#160;𝑘);&#160;if&#160;it&#160;returns&#160;&gt;&#160;then<br/>
+𝑖<br/>
+update&#160;Nvalid&#160;←&#160;Nvalid&#160;∪&#160;{C&#160;}<br/>
+𝑖<br/>
+end&#160;for<br/>
+27<br/>
+<hr/>
+<a name=28></a>//&#160;Step&#160;2:&#160;Apply&#160;chain&#160;selection&#160;rule&#160;on&#160;valid&#160;chains<br/>
+3.&#160;Execute&#160;Algorithm&#160;maxvalid-sc(Cloc,&#160;Nvalid,&#160;𝑘).&#160;Denote&#160;the&#160;output<br/>
+chain&#160;by&#160;Cmax.<br/>
+4.&#160;Set&#160;Cloc&#160;←&#160;Cmax.&#160;Output&#160;Cloc.<br/>
+Output:&#160;Output&#160;Cloc.<br/>
+Figure&#160;12:&#160;The&#160;protocol&#160;that&#160;chooses&#160;a&#160;chain&#160;using&#160;maxvalid-sc.<br/>
+−−→<br/>
+Algorithm&#160;shiftWindow(Den)<br/>
+−−→<br/>
+Let&#160;Den&#160;=&#160;(pDen1,&#160;.&#160;.&#160;.&#160;,&#160;pDen&#160;,&#160;pDen<br/>
+𝑛<br/>
+curr,&#160;minDen).<br/>
+𝑠<br/>
+1.&#160;Set&#160;minDen&#160;←&#160;min(minDen,&#160;minDen&#160;−&#160;pDen&#160;+<br/>
+)<br/>
+1<br/>
+pDencurr<br/>
+2.&#160;for&#160;𝑖&#160;=&#160;1&#160;to&#160;𝑛&#160;−&#160;1<br/>
+𝑠<br/>
+3.<br/>
+Set&#160;pDen&#160;←&#160;pDen<br/>
+𝑖<br/>
+𝑖+1<br/>
+4.&#160;end&#160;for<br/>
+5.&#160;Set&#160;pDen<br/>
+←&#160;pDen<br/>
+←&#160;0<br/>
+𝑛<br/>
+curr&#160;and&#160;pDencurr<br/>
+𝑠<br/>
+6.&#160;return&#160;(pDen1,&#160;.&#160;.&#160;.&#160;,&#160;pDen&#160;,&#160;pDen<br/>
+𝑛<br/>
+curr,&#160;minDen)<br/>
+𝑠<br/>
+Figure&#160;13:&#160;The&#160;algorithm&#160;to&#160;shift&#160;the&#160;window.<br/>
+Remark&#160;7.1&#160;(Divisibility&#160;of&#160;window&#160;length&#160;by&#160;the&#160;shift).&#160;The&#160;requirement&#160;of<br/>the&#160;shift&#160;length&#160;𝜈&#160;completely&#160;dividing&#160;the&#160;window&#160;length&#160;ω&#160;is&#160;only&#160;to&#160;have&#160;clean<br/>algorithm&#160;descriptions.&#160;All&#160;the&#160;arguments&#160;hold&#160;even&#160;if&#160;it&#160;is&#160;not&#160;the&#160;case.<br/>
+7.5<br/>
+Adopting&#160;the&#160;New&#160;Chain&#160;Selection&#160;Rule<br/>
+We&#160;now&#160;discuss&#160;how&#160;the&#160;modifications&#160;introduced&#160;in&#160;the&#160;maxvalid-sc&#160;algorithm<br/>of&#160;Ouroboros&#160;Genesis&#160;percolates&#160;to&#160;the&#160;other&#160;consensus&#160;sub-protocols.<br/>
+−−→<br/>
+The&#160;Den&#160;=&#160;(pDen1,&#160;.&#160;.&#160;.&#160;,&#160;pDen&#160;,&#160;pDen<br/>
+𝑛<br/>
+curr,&#160;minDen)&#160;parameters&#160;are&#160;first&#160;set<br/>
+𝑠<br/>
+when&#160;the&#160;Genesis&#160;block&#160;is&#160;generated&#160;by&#160;running&#160;the&#160;Initialization-Genesis&#160;proto-<br/>col.&#160;A&#160;party&#160;that&#160;has&#160;been&#160;registered&#160;with&#160;all&#160;its&#160;resources&#160;becomes&#160;operational<br/>by&#160;invoking&#160;this&#160;protocol.<br/>
+28<br/>
+<hr/>
+<a name=29></a>Algorithm&#160;Initialization-Genesis(𝑃,&#160;sid,&#160;𝑅,&#160;𝑛&#160;,&#160;ω)<br/>
+𝑠<br/>
+1.&#160;Send&#160;(KeyGen,&#160;sid,&#160;𝑃)&#160;to&#160;FVRF&#160;and&#160;FKES;&#160;receiving&#160;(VerificationKey,&#160;sid,<br/>
+vrf<br/>
+kes<br/>
+𝑣<br/>
+)&#160;and&#160;(VerificationKey,&#160;sid,&#160;𝑣<br/>
+),&#160;respectively.<br/>
+𝑝<br/>
+𝑝<br/>
+2.&#160;if&#160;𝜏&#160;=&#160;0&#160;then<br/>
+3.<br/>
+Send&#160;(ver&#160;keys<br/>
+vrf<br/>
+kes<br/>
+,&#160;sid,&#160;𝑃,&#160;𝑣<br/>
+,&#160;𝑣<br/>
+)&#160;to&#160;F<br/>
+𝑝<br/>
+𝑝<br/>
+INIT&#160;to&#160;claim&#160;stake&#160;from&#160;the<br/>
+genesis&#160;block.<br/>
+4.<br/>
+Invoke&#160;FinishRound(𝑃)&#160;and&#160;invoke&#160;UpdateTime(𝑃)&#160;to&#160;update<br/>
+𝜏,&#160;ep,&#160;sl.<br/>
+5.<br/>
+while&#160;𝜏&#160;=&#160;0&#160;do<br/>
+6.<br/>
+Call&#160;UpdateTime(𝑃)&#160;to&#160;update&#160;𝜏,&#160;ep,&#160;and&#160;sl&#160;and&#160;give&#160;up&#160;the<br/>
+activation<br/>
+7.<br/>
+end&#160;while<br/>
+8.&#160;end&#160;if<br/>
+//&#160;The&#160;following&#160;is&#160;executed&#160;if&#160;this&#160;is&#160;a&#160;non-genesis&#160;round.<br/>
+9.&#160;if&#160;𝜏&#160;&gt;&#160;0&#160;then<br/>
+10.<br/>
+Set&#160;each&#160;of&#160;the&#160;variables&#160;{pDen<br/>
+}<br/>
+1,&#160;.&#160;.&#160;.&#160;,&#160;pDen<br/>
+,&#160;pDen<br/>
+to<br/>
+𝑛<br/>
+curr<br/>
+∅.&#160;Also,<br/>
+𝑠<br/>
+set&#160;minDen&#160;←&#160;ω.<br/>
+−−→<br/>
+11.<br/>
+Set&#160;Den&#160;=&#160;(pDen1,&#160;.&#160;.&#160;.&#160;,&#160;pDen&#160;,&#160;pDen<br/>
+𝑛<br/>
+curr,&#160;minDen).<br/>
+𝑠<br/>
+12.<br/>
+if&#160;FINIT&#160;signals&#160;an&#160;error&#160;then<br/>
+13.<br/>
+Halt&#160;the&#160;execution.<br/>
+14.<br/>
+end&#160;if<br/>
+15.<br/>
+Send&#160;(genblock&#160;req,&#160;sid,&#160;𝑃)&#160;to&#160;FINIT.<br/>
+−−→<br/>
+16.<br/>
+Receive&#160;from&#160;FINIT&#160;the&#160;response&#160;(genblock,&#160;sid,&#160;G0&#160;=&#160;(S1,&#160;𝜂1,&#160;Den)),<br/>
+where<br/>
+vrf<br/>
+kes<br/>
+vrf<br/>
+kes<br/>
+S1&#160;=&#160;(&#160;(𝑈1,&#160;𝑣<br/>
+))<br/>
+1<br/>
+,&#160;𝑣1&#160;,&#160;𝑠1),&#160;.&#160;.&#160;.&#160;,&#160;(𝑈&#160;,&#160;𝑣<br/>
+,&#160;𝑣<br/>
+,&#160;𝑠<br/>
+.<br/>
+𝑛<br/>
+𝑛<br/>
+𝑛<br/>
+𝑛<br/>
+17.<br/>
+Set&#160;CP&#160;=&#160;(prevLockcp,&#160;currStartcp,&#160;currStartcp),&#160;where,&#160;prevLockcp&#160;←<br/>
+∅,&#160;currStartcp&#160;←&#160;G0,&#160;currStartcp&#160;←&#160;G0.&#160;Also&#160;set&#160;G&#160;←&#160;(G0||CP).<br/>
+18.<br/>
+Set&#160;C<br/>
+ep<br/>
+ep<br/>
+loc&#160;←&#160;G.<br/>
+Also,&#160;Set&#160;𝑇<br/>
+←&#160;2ℓVRF&#160;𝜙&#160;(𝛼&#160;)&#160;the&#160;threshold<br/>
+𝑝<br/>
+𝑓<br/>
+𝑝<br/>
+for&#160;stakeholder<br/>
+ep<br/>
+𝑃<br/>
+for&#160;epoch&#160;ep,&#160;where&#160;𝛼<br/>
+is&#160;the&#160;relative&#160;stake&#160;of<br/>
+𝑝<br/>
+stakeholder&#160;𝑃&#160;in&#160;Sep&#160;and&#160;ℓVRF&#160;denotes&#160;the&#160;output&#160;length&#160;of&#160;FVRF.<br/>Finally,&#160;send&#160;(HELLO<br/>
+vrf<br/>
+kes<br/>
+,&#160;sid,&#160;𝑃,&#160;𝑣<br/>
+,&#160;𝑣<br/>
+)&#160;to&#160;F&#160;new&#160;.<br/>
+𝑝<br/>
+𝑝<br/>
+N-MC<br/>
+19.&#160;end&#160;if<br/>
+29<br/>
+<hr/>
+<a name=30></a>20.&#160;Set&#160;isInit&#160;←&#160;&gt;,&#160;𝑡on&#160;←&#160;𝜏,&#160;and&#160;𝑡work&#160;←&#160;0.<br/>
+Global<br/>
+variables:<br/>
+The<br/>
+protocol<br/>
+stores<br/>
+the<br/>
+list<br/>
+of<br/>
+variables<br/>
+vrf<br/>
+kes<br/>
+ep<br/>
+𝑣<br/>
+,&#160;𝑣<br/>
+,&#160;𝜏,&#160;ep,&#160;sl,&#160;C<br/>
+,&#160;isInit,&#160;and&#160;𝑡<br/>
+𝑝<br/>
+𝑝<br/>
+loc,&#160;𝑇𝑝<br/>
+on&#160;to&#160;make&#160;each&#160;of&#160;them&#160;accessible<br/>
+by&#160;all&#160;protocol&#160;parts.<br/>
+Figure&#160;14:&#160;The&#160;initialization&#160;protocol&#160;of&#160;Ouroboros&#160;Samasika&#160;(run&#160;only&#160;the&#160;first<br/>time&#160;a&#160;party&#160;joins).<br/>
+30<br/>
+<hr/>
+<a name=31></a>Protocol&#160;StakingProcedure(𝑃,&#160;sid,&#160;𝑘,&#160;ep,&#160;sl,&#160;buffer,&#160;Cloc)<br/>
+The&#160;following&#160;steps&#160;are&#160;executed&#160;in&#160;an&#160;(MAINTAIN-LEDGER,&#160;sid,&#160;minerID)-<br/>interruptible&#160;manner:<br/>
+1.&#160;Send&#160;(EvalProve,&#160;sid,&#160;nonce&#160;kslkNONCE)&#160;to&#160;F<br/>
+𝑗<br/>
+VRF,&#160;denote&#160;the&#160;response<br/>
+from&#160;FVRF&#160;by&#160;(Evaluated,&#160;sid,&#160;𝑦&#160;,&#160;𝜋&#160;).&#160;Also,&#160;send&#160;(EvalProve,&#160;sid,&#160;nonce<br/>
+𝜌<br/>
+𝜌<br/>
+𝑗<br/>
+kslkTEST))&#160;to&#160;FVRF,&#160;denote&#160;the&#160;response&#160;from&#160;FVRF&#160;by&#160;(Evaluated,&#160;sid,<br/>𝑦,&#160;𝜋).<br/>
+2.&#160;if<br/>
+ep<br/>
+𝑦&#160;&lt;&#160;𝑇<br/>
+then<br/>
+//&#160;Generate&#160;a&#160;new&#160;block<br/>
+𝑝<br/>
+3.<br/>
+Set&#160;buffer0&#160;←&#160;buffer&#160;®<br/>
+base-tx<br/>
+,&#160;𝑁&#160;←&#160;txn&#160;𝑝<br/>
+and&#160;st&#160;←&#160;blockify<br/>
+(&#160;®<br/>
+OG&#160;𝑁&#160;)<br/>
+4.<br/>
+repeat<br/>
+5.<br/>
+Parse&#160;buffer0&#160;as&#160;sequence&#160;(txn1,&#160;.&#160;.&#160;.&#160;,&#160;txn𝑛)<br/>
+6.<br/>
+for&#160;𝑖&#160;=&#160;1&#160;to&#160;𝑛&#160;do<br/>
+7.<br/>
+if&#160;ValidTx<br/>
+®<br/>
+OG&#160;(txn𝑖,&#160;stkst)&#160;=&#160;1&#160;then<br/>
+8.<br/>
+Set&#160;®<br/>
+𝑁<br/>
+←&#160;®<br/>
+𝑁&#160;ktxn𝑖,&#160;remove&#160;txn𝑖&#160;from&#160;buffer0&#160;and&#160;set<br/>
+st&#160;←&#160;blockify<br/>
+(&#160;®<br/>
+OG&#160;𝑁&#160;)<br/>
+9.<br/>
+end&#160;if<br/>
+10.<br/>
+end&#160;for<br/>
+11.<br/>
+until&#160;®<br/>
+𝑁&#160;does&#160;not&#160;increase&#160;anymore<br/>
+12.<br/>
+Set&#160;crt&#160;=&#160;(𝑃,&#160;𝑦,&#160;𝜋),&#160;𝜌&#160;=&#160;(𝑦&#160;,&#160;𝜋&#160;)&#160;and&#160;ℎ&#160;←&#160;H(head(C<br/>
+𝜌<br/>
+𝜌<br/>
+loc))&#160;and<br/>
+send&#160;(USign,&#160;sid,&#160;𝑃,&#160;(ℎ,&#160;st,&#160;sl,&#160;crt,&#160;𝜌),&#160;sl)&#160;to&#160;FKES;&#160;denote&#160;the&#160;response<br/>by&#160;(Signature,&#160;sid,&#160;(ℎ,&#160;st,&#160;sl,&#160;crt,&#160;𝜌),&#160;sl,&#160;𝜎).<br/>
+13.<br/>
+Update&#160;min-density&#160;variables&#160;as&#160;follows:<br/>
+−−→<br/>
+−−→<br/>
+−−→<br/>
+•&#160;Execute&#160;Den&#160;←&#160;getDen(Cloc),&#160;where&#160;Den&#160;=&#160;(pDen1,&#160;.&#160;.&#160;.&#160;,&#160;pDen&#160;,<br/>
+𝑛𝑠<br/>
+pDencurr,&#160;minDen).<br/>
+•&#160;pDen<br/>
+←<br/>
++<br/>
+curr<br/>
+pDencurr<br/>
+1<br/>
+31<br/>
+<hr/>
+<a name=32></a>•&#160;if&#160;isWindowStop(sl,&#160;𝜈)&#160;then<br/>
+−−→<br/>
+−−→<br/>
+•<br/>
+Den&#160;←&#160;shiftWindow(Den)<br/>
+•&#160;end&#160;if<br/>
+−−→<br/>
+14.<br/>
+Set<br/>
+0<br/>
+𝐵<br/>
+←&#160;(ℎ,&#160;st,&#160;sl,&#160;crt,&#160;𝜌,&#160;𝜎,&#160;Den)<br/>
+15.<br/>
+Update&#160;the&#160;checkpoints&#160;CP&#160;as&#160;follows:<br/>
+16.<br/>
+if&#160;slot&#160;sl&#160;=&#160;1,&#160;i.e.,&#160;the&#160;first&#160;one&#160;in&#160;the&#160;current&#160;epoch&#160;then<br/>
+•&#160;Set&#160;currStartcp&#160;←&#160;𝐵<br/>
+•&#160;Set&#160;prevLockcp&#160;←&#160;currStartcp<br/>
+•&#160;Set&#160;currStartcp&#160;←&#160;𝐵<br/>
+17.<br/>
+else&#160;if&#160;1&#160;&lt;&#160;sl&#160;≤&#160;2&#160;∗&#160;𝑅&#160;then<br/>
+3<br/>
+18.<br/>
+currStartcp&#160;←&#160;𝐵<br/>
+19.<br/>
+end&#160;if<br/>
+20.<br/>
+Set<br/>
+0<br/>
+𝐵&#160;←&#160;(&#160;𝐵&#160;|&#160;|CP)&#160;and&#160;update&#160;Cloc&#160;←&#160;Cloc&#160;k&#160;𝐵.<br/>
+Multicast&#160;the<br/>
+extended&#160;chain&#160;and&#160;wait.<br/>
+21.<br/>
+Send&#160;(MULTICAST,&#160;sid,&#160;Cloc)&#160;to&#160;F&#160;bc<br/>
+and&#160;proceed&#160;from&#160;here<br/>
+N-MC<br/>
+upon&#160;next&#160;activation&#160;of&#160;this&#160;procedure.<br/>
+22.&#160;else<br/>
+23.<br/>
+Evolve&#160;the&#160;KES&#160;signing&#160;key&#160;by&#160;sending&#160;(USign,&#160;sid,&#160;𝑃,&#160;0,&#160;sl)&#160;to&#160;FKES<br/>
+and&#160;set&#160;the&#160;anchor&#160;at&#160;end&#160;of&#160;procedure&#160;to&#160;resume&#160;on&#160;next&#160;maintenance<br/>activation.<br/>
+24.&#160;end&#160;if<br/>
+Figure&#160;15:&#160;The&#160;Ouroboros&#160;Samasika&#160;staking&#160;procedure.<br/>
+In&#160;Figure&#160;<a href="2020-352s.html#32">7.5,&#160;</a>we&#160;demonstrate&#160;where&#160;in&#160;the&#160;protocol&#160;architecture&#160;to&#160;maintain<br/>
+−−→<br/>
+and&#160;update&#160;the&#160;window&#160;min-density&#160;Den&#160;parameters.&#160;Specifically,&#160;we&#160;will&#160;have<br/>every&#160;block&#160;hold&#160;the&#160;current&#160;values&#160;of&#160;these&#160;parameters.&#160;For&#160;any&#160;block,&#160;the<br/>parameters&#160;are&#160;generated&#160;by&#160;the&#160;slot&#160;leader.&#160;Specifically,&#160;the&#160;slot&#160;leader&#160;begins<br/>
+−−→<br/>
+by&#160;retrieving&#160;Den&#160;for&#160;the&#160;last&#160;block&#160;in&#160;the&#160;chain&#160;the&#160;party&#160;is&#160;about&#160;to&#160;extend.<br/>Then,&#160;the&#160;party&#160;updates&#160;the&#160;parameters&#160;(using&#160;algorithms&#160;shiftWindow(·)&#160;and<br/>isWindowStop(·,&#160;·)).<br/>
+Algorithm&#160;getMinDen(C)<br/>
+32<br/>
+<hr/>
+<a name=33></a>Let&#160;𝐵last&#160;be&#160;the&#160;last&#160;block&#160;in&#160;C.<br/>
+1.&#160;if&#160;𝐵last&#160;=&#160;G&#160;then&#160;//&#160;i.e.,&#160;if&#160;𝐵last&#160;is&#160;the&#160;genesis&#160;block<br/>
+2.<br/>
+return&#160;0<br/>
+3.&#160;else<br/>
+4.<br/>
+Parse&#160;𝐵last&#160;to&#160;obtain&#160;the&#160;parameter&#160;minDen.<br/>
+5.<br/>
+return&#160;minDen<br/>
+Figure&#160;16:&#160;The&#160;protocol&#160;to&#160;obtain&#160;the&#160;current&#160;window&#160;min-density&#160;of&#160;a&#160;given<br/>chain.<br/>
+7.6<br/>
+Proofs&#160;of&#160;Security<br/>
+In&#160;this&#160;section,&#160;we&#160;prove&#160;security&#160;of&#160;the&#160;Ouroboros&#160;Samasika&#160;protocol.&#160;We&#160;begin<br/>with&#160;some&#160;preliminaries&#160;which&#160;will&#160;be&#160;useful&#160;in&#160;the&#160;proofs.<br/>
+7.6.1<br/>
+Preliminaries<br/>
+In&#160;various&#160;parts&#160;of&#160;the&#160;proofs,&#160;we&#160;need&#160;to&#160;estimate&#160;the&#160;expected&#160;number&#160;of<br/>blocks&#160;for&#160;a&#160;given&#160;characteristic&#160;string.&#160;Below,&#160;we&#160;define&#160;and&#160;design&#160;various<br/>tools&#160;that&#160;will&#160;facilitate&#160;the&#160;estimations.<br/>
+Many&#160;of&#160;the&#160;arguments&#160;employ&#160;the&#160;Azuma’s&#160;inequality&#160;(cf.&#160;<a href="2020-352s.html#46">[18],&#160;</a>Section&#160;4)<br/>
+stated&#160;below.<br/>
+Lemma&#160;1&#160;(Azuma’s&#160;inequality&#160;(Azuma;&#160;Hoeffding)).&#160;Let&#160;𝑋0,&#160;.&#160;.&#160;.&#160;,&#160;𝑋&#160;be&#160;a&#160;se-<br/>
+𝑛<br/>
+quence&#160;of&#160;real-valued&#160;random&#160;variables&#160;so&#160;that,&#160;for&#160;all&#160;𝑡,&#160;|&#160;𝑋<br/>
+|&#160;≤&#160;𝑐&#160;for&#160;some<br/>
+𝑡&#160;+1&#160;−&#160;𝑋𝑡<br/>
+constant&#160;𝑐.&#160;If&#160;E[𝑋<br/>
+]&#160;≤&#160;𝑋&#160;for&#160;all&#160;𝑡&#160;then&#160;for&#160;every&#160;𝛬&#160;≥&#160;0<br/>
+𝑡&#160;+1&#160;|&#160;𝑋0&#160;,&#160;.&#160;.&#160;.&#160;,&#160;𝑋𝑡<br/>
+𝑡<br/>
+<br/>
+2&#160;<br/>
+𝛬<br/>
+Pr[𝑋&#160;−&#160;𝑋<br/>
+−<br/>
+.<br/>
+𝑛<br/>
+0&#160;≥&#160;𝛬]&#160;≤&#160;exp<br/>
+2<br/>
+2<br/>
+𝑛𝑐<br/>
+Alternatively,&#160;if&#160;E[𝑋<br/>
+]&#160;≥&#160;𝑋&#160;for&#160;all&#160;𝑡&#160;then&#160;for&#160;every&#160;𝛬&#160;≥&#160;0<br/>
+𝑡&#160;+1&#160;|&#160;𝑋0&#160;,&#160;.&#160;.&#160;.&#160;,&#160;𝑋𝑡<br/>
+𝑡<br/>
+<br/>
+2&#160;<br/>
+𝛬<br/>
+Pr[𝑋&#160;−&#160;𝑋<br/>
+−<br/>
+.<br/>
+𝑛<br/>
+0&#160;≤&#160;−𝛬]&#160;≤&#160;exp<br/>
+2<br/>
+2<br/>
+𝑛𝑐<br/>
+Another&#160;large&#160;deviation&#160;bound&#160;that&#160;we&#160;use&#160;in&#160;our&#160;probabilistic&#160;arguments&#160;is<br/>
+the&#160;Chernoff&#160;bound,&#160;recalled&#160;below.<br/>
+Theorem&#160;1&#160;(Chernoff&#160;bound.).&#160;Let&#160;𝑋1,&#160;.&#160;.&#160;.&#160;,&#160;𝑋&#160;be&#160;independent&#160;random&#160;vari-<br/>
+𝑛<br/>
+ables&#160;with&#160;E[𝑋&#160;]&#160;=&#160;𝑝&#160;and&#160;𝑋&#160;∈&#160;[0,&#160;1].&#160;Let&#160;𝑋&#160;=&#160;Í𝑛&#160;𝑋&#160;and&#160;𝜇&#160;=&#160;Í𝑛&#160;𝑝&#160;=<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖=1<br/>
+𝑖<br/>
+𝑖=1<br/>
+𝑖<br/>
+E[&#160;𝑋].<br/>
+33<br/>
+<hr/>
+<a name=34></a>Then,&#160;for&#160;all&#160;𝛬&#160;≥&#160;0,<br/>
+2<br/>
+−&#160;𝛬<br/>
+𝜇<br/>
+𝑃𝑟&#160;[&#160;𝑋&#160;≥&#160;(1&#160;+&#160;𝛬)&#160;𝜇]&#160;≤&#160;𝑒&#160;2+𝛬<br/>
+2<br/>
+−&#160;𝛬<br/>
+𝜇<br/>
+𝑃𝑟&#160;[&#160;𝑋&#160;≥&#160;(1&#160;+&#160;𝛬)&#160;𝜇]&#160;≤&#160;𝑒&#160;2+𝛬<br/>
+Definition&#160;2&#160;(The&#160;super-binomial&#160;martingale&#160;conditions).&#160;Consider&#160;a&#160;family<br/>of&#160;random&#160;variables&#160;𝑋1,&#160;.&#160;.&#160;.&#160;,&#160;𝑋&#160;taking&#160;values&#160;in&#160;{0,&#160;1}𝑛.&#160;We&#160;say&#160;that&#160;they&#160;sat-<br/>
+𝑛<br/>
+isfy&#160;the&#160;𝛾-super-binomial&#160;martingale&#160;conditions&#160;(or,&#160;simply,&#160;the&#160;𝛾-martingale<br/>conditions)&#160;if<br/>
+Pr[𝑋&#160;=&#160;0&#160;|&#160;𝑋<br/>
+𝑘<br/>
+1,&#160;.&#160;.&#160;.&#160;,&#160;𝑋𝑘−1]&#160;≥&#160;𝛾,&#160;and&#160;hence<br/>
+Pr[𝑋&#160;=&#160;1&#160;|&#160;𝑋<br/>
+𝑘<br/>
+1,&#160;.&#160;.&#160;.&#160;,&#160;𝑋𝑘−1]&#160;≤&#160;1&#160;−&#160;𝛾.<br/>
+We&#160;may&#160;naturally&#160;apply&#160;the&#160;same&#160;terminology&#160;to&#160;infinite&#160;sequences&#160;of&#160;variables<br/>taking&#160;values&#160;in&#160;{0,&#160;1}.<br/>
+Corollary&#160;1&#160;(Corollary&#160;of&#160;the&#160;Azuma’s&#160;inequality&#160;(cf.&#160;Lemma&#160;7&#160;in&#160;<a href="2020-352s.html#45">[4]))</a>.&#160;Let<br/>
+𝑋1,&#160;.&#160;.&#160;.&#160;,&#160;𝑋<br/>
+satisfy&#160;the&#160;𝛾-super-binomial&#160;martingale&#160;conditions&#160;with&#160;𝛾&#160;≥&#160;1/2.<br/>
+𝑛<br/>
+Then,&#160;for&#160;any&#160;𝛿&#160;&gt;&#160;0,<br/>
+Pr[#<br/>
+2<br/>
+0&#160;(&#160;𝑋&#160;)&#160;≤&#160;(1&#160;−&#160;𝛿)&#160;𝛾𝑛]&#160;≤&#160;exp(−𝛿&#160;𝑛/2)<br/>
+and<br/>
+Pr[#<br/>
+2<br/>
+1&#160;(&#160;𝑋&#160;)&#160;≥&#160;(1&#160;+&#160;𝛿)&#160;(1&#160;−&#160;𝛾)𝑛]&#160;≤&#160;exp(−𝛿&#160;𝑛/2)<br/>
+where,&#160;#0&#160;(𝑋)&#160;=&#160;|{𝑖&#160;|𝑋&#160;=&#160;0}|&#160;and&#160;#<br/>
+=&#160;1}|.<br/>
+𝑖<br/>
+1&#160;(&#160;𝑋&#160;)&#160;=&#160;|&#160;{𝑖&#160;|&#160;𝑋𝑖<br/>
+7.6.2<br/>
+The&#160;Proofs<br/>
+Like&#160;in&#160;Ouroboros&#160;Praos&#160;and&#160;Ouroboros&#160;Genesis,&#160;much&#160;of&#160;the&#160;analysis&#160;on&#160;char-<br/>acteristic&#160;strings&#160;is&#160;done&#160;by&#160;transforming&#160;them&#160;to&#160;their&#160;synchronous&#160;versions<br/>and&#160;analyzing&#160;the&#160;latter.&#160;The&#160;resulting&#160;distribution&#160;is&#160;called&#160;the&#160;‘induced&#160;distri-<br/>bution’,&#160;denoted&#160;by&#160;𝜌&#160;(·).&#160;In&#160;Lemma&#160;6&#160;of&#160;Genesis,&#160;it&#160;is&#160;shown&#160;that&#160;the&#160;induced<br/>
+𝛥<br/>
+distribution&#160;is&#160;a&#160;prefix&#160;of&#160;a&#160;distribution&#160;that&#160;satisfies&#160;𝛾&#160;(1−&#160;𝑓&#160;)𝛥+1-martingale&#160;con-<br/>ditions&#160;(cf.&#160;Definition&#160;<a href="2020-352s.html#34">3).&#160;</a>In&#160;the&#160;following,&#160;we&#160;prove&#160;certain&#160;useful&#160;properties<br/>about&#160;the&#160;distribution&#160;which&#160;is&#160;employed&#160;in&#160;the&#160;crux&#160;of&#160;our&#160;main&#160;proof.<br/>
+Definition&#160;3&#160;(The&#160;super-binomial&#160;martingale&#160;conditions).&#160;Consider&#160;a&#160;family<br/>of&#160;random&#160;variables&#160;𝑋1,&#160;.&#160;.&#160;.&#160;,&#160;𝑋&#160;taking&#160;values&#160;in&#160;{0,&#160;1}𝑛.&#160;We&#160;say&#160;that&#160;they&#160;sat-<br/>
+𝑛<br/>
+isfy&#160;the&#160;𝛾-super-binomial&#160;martingale&#160;conditions&#160;(or,&#160;simply,&#160;the&#160;𝛾-martingale<br/>conditions)&#160;if<br/>
+Pr[𝑋&#160;=&#160;0&#160;|&#160;𝑋<br/>
+𝑘<br/>
+1,&#160;.&#160;.&#160;.&#160;,&#160;𝑋𝑘−1]&#160;≥&#160;𝛾,&#160;and&#160;hence<br/>
+Pr[𝑋&#160;=&#160;1&#160;|&#160;𝑋<br/>
+𝑘<br/>
+1,&#160;.&#160;.&#160;.&#160;,&#160;𝑋𝑘−1]&#160;≤&#160;1&#160;−&#160;𝛾.<br/>
+We&#160;may&#160;naturally&#160;apply&#160;the&#160;same&#160;terminology&#160;to&#160;infinite&#160;sequences&#160;of&#160;variables<br/>taking&#160;values&#160;in&#160;{0,&#160;1}.<br/>
+34<br/>
+<hr/>
+<a name=35></a>Lemma&#160;2&#160;(Structure&#160;of&#160;the&#160;induced&#160;distribution).&#160;Let&#160;𝑊&#160;=&#160;𝑊1,&#160;.&#160;.&#160;.&#160;,&#160;𝑊&#160;be&#160;a<br/>
+𝑛<br/>
+sequence&#160;of&#160;random&#160;variables,&#160;each&#160;taking&#160;values&#160;in&#160;{0,&#160;1,&#160;⊥},&#160;which&#160;satisfy&#160;the<br/>
+(&#160;𝑓&#160;;&#160;𝛾)-characteristic&#160;conditions&#160;and&#160;let<br/>
+𝑋&#160;=&#160;𝑋1,&#160;.&#160;.&#160;.&#160;,&#160;𝑋&#160;=&#160;𝜌&#160;(𝑊<br/>
+)<br/>
+ℓ<br/>
+𝛥<br/>
+1,&#160;.&#160;.&#160;.&#160;,&#160;𝑊𝑛<br/>
+be&#160;the&#160;synchronous&#160;equivalent&#160;random&#160;variables&#160;obtained&#160;by&#160;applying&#160;the&#160;𝛥-<br/>reduction&#160;mapping&#160;to&#160;𝑊&#160;.&#160;Also,&#160;let&#160;Pr[𝑊&#160;=⊥<br/>
+|𝑊<br/>
+𝑖<br/>
+1,&#160;.&#160;.&#160;.&#160;,&#160;𝑊𝑖−1]&#160;≤&#160;(1&#160;−&#160;𝑎).<br/>
+If<br/>
+𝛾&#160;(1&#160;−&#160;𝑓&#160;)&#160;𝛥+1&#160;≥&#160;(1&#160;+&#160;𝜖&#160;)/2&#160;for&#160;some&#160;𝜖&#160;≥&#160;0&#160;then,&#160;the&#160;following&#160;hold.<br/>
+1.&#160;For&#160;any&#160;𝛿&#160;,&#160;𝛿<br/>
+ℓ<br/>
+0&#160;&gt;&#160;0,<br/>
+4<br/>
+(1&#160;+&#160;𝜖&#160;)<br/>
+𝜖#&#160;(𝑎,&#160;𝑛)&#160;=&#160;Pr[#<br/>
+(&#160;(1&#160;−&#160;𝛿&#160;)𝑎𝑛)&#160;−&#160;𝛥]<br/>
+0<br/>
+0&#160;(&#160;𝑋&#160;)&#160;&lt;&#160;(1&#160;−&#160;𝛿0)<br/>
+2<br/>
+ℓ<br/>
+&#160;<br/>
+2&#160;2<br/>
+!<br/>
+2<br/>
+𝛿<br/>
+𝑎<br/>
+𝑛<br/>
+<br/>
+<br/>
+𝛿<br/>
+(&#160;(1&#160;−&#160;𝛿&#160;)𝑎𝑛)<br/>
+ℓ<br/>
+≤&#160;exp&#160;−<br/>
+ℓ<br/>
++&#160;exp&#160;−&#160;0<br/>
+(4)<br/>
+2(1&#160;−&#160;𝑎)2<br/>
+2<br/>
+2.&#160;For&#160;any&#160;𝛿1&#160;&gt;&#160;0,<br/>
+4<br/>
+(1&#160;−&#160;𝜖&#160;)<br/>
+𝜖#&#160;(𝑎,&#160;𝑛)&#160;=&#160;Pr[#<br/>
+𝑎𝑛&#160;−&#160;𝛥]<br/>
+1<br/>
+1&#160;(&#160;𝑋&#160;)&#160;&gt;&#160;(1&#160;+&#160;𝛿1)<br/>
+2<br/>
+<br/>
+2<br/>
+<br/>
+𝛿<br/>
+𝑎𝑛<br/>
+≤=&#160;exp&#160;−&#160;1<br/>
+(5)<br/>
+2<br/>
+Proof.&#160;We&#160;establish&#160;the&#160;bounds&#160;by&#160;employing&#160;Corollary&#160;<a href="2020-352s.html#34">1.&#160;</a>Recall&#160;that&#160;Corol-<br/>lary&#160;<a href="2020-352s.html#34">1&#160;</a>provides&#160;bounds&#160;on&#160;the&#160;number&#160;of&#160;ones&#160;and&#160;zeros&#160;in&#160;a&#160;sequence&#160;of&#160;binary<br/>random&#160;variables&#160;that&#160;satisfy&#160;the&#160;martingale&#160;conditions.&#160;However,&#160;𝑊&#160;might<br/>contain&#160;⊥&#160;also.&#160;Therefore,&#160;we&#160;consider&#160;the&#160;𝛥-reduced&#160;mapping&#160;of&#160;𝑊&#160;:&#160;namely,<br/>
+𝑋&#160;=&#160;𝑋1,&#160;.&#160;.&#160;.&#160;,&#160;𝑋<br/>
+=&#160;𝜌&#160;(𝑊<br/>
+)&#160;and&#160;apply&#160;the&#160;Lemma&#160;on&#160;the&#160;mapped&#160;distri-<br/>
+ℓ<br/>
+𝛥<br/>
+1,&#160;.&#160;.&#160;.&#160;,&#160;𝑊𝑛<br/>
+bution.<br/>
+From&#160;Lemma&#160;8&#160;(i)&#160;and&#160;(ii)&#160;in&#160;Ouroboros&#160;Genesis,&#160;we&#160;have&#160;that&#160;𝑋1,&#160;.&#160;.&#160;.&#160;,&#160;𝑋<br/>
+is<br/>
+ℓ&#160;−𝛥<br/>
+a&#160;prefix&#160;to&#160;a&#160;sequence&#160;of&#160;random&#160;variables&#160;𝑍1,&#160;𝑍2,&#160;.&#160;.&#160;.&#160;that&#160;satisfy&#160;the&#160;𝛾(1−&#160;𝑓&#160;)𝛥+1-<br/>martingale&#160;conditions&#160;(for&#160;definition,&#160;see&#160;Appendix&#160;<a href="2020-352s.html#33">7.6.1).&#160;</a>Therefore,&#160;we&#160;can<br/>apply&#160;Lemma&#160;<a href="2020-352s.html#34">1&#160;</a>on&#160;𝑋1,&#160;.&#160;.&#160;.&#160;,&#160;𝑋<br/>
+.<br/>
+ℓ&#160;−𝛥<br/>
+Proof&#160;of&#160;(i).<br/>
+The&#160;proof&#160;of&#160;(i)&#160;is&#160;structured&#160;as&#160;follows.&#160;We&#160;will&#160;first&#160;establish<br/>
+a&#160;lower&#160;bound&#160;on&#160;ℓ&#160;by&#160;applying&#160;the&#160;Azuma’s&#160;inequality.&#160;Then,&#160;for&#160;this&#160;lower<br/>bound,&#160;we&#160;will&#160;apply&#160;Lemma&#160;<a href="2020-352s.html#34">1&#160;</a>on&#160;𝑋1,&#160;.&#160;.&#160;.&#160;,&#160;𝑋<br/>
+to&#160;obtain&#160;a&#160;lower&#160;bound&#160;on&#160;the<br/>
+ℓ&#160;−𝛥<br/>
+number&#160;of&#160;zeroes.<br/>
+Consider&#160;the&#160;random&#160;variables<br/>
+(<br/>
+4<br/>
+0,&#160;if&#160;𝑊&#160;=⊥<br/>
+𝑖<br/>
+𝐴<br/>
+=<br/>
+𝑖<br/>
+1,&#160;if&#160;𝑊&#160;≠⊥<br/>
+𝑖<br/>
+35<br/>
+<hr/>
+<a name=36></a>and&#160;let&#160;ℓ&#160;=&#160;Í𝑛<br/>
+𝐴&#160;.&#160;Then,&#160;Pr[&#160;𝐴<br/>
+=&#160;1&#160;|&#160;𝐴<br/>
+𝑖=1<br/>
+𝑖<br/>
+𝑖<br/>
+1,&#160;.&#160;.&#160;.&#160;,&#160;𝐴𝑖−1]&#160;≥&#160;𝑎.&#160;By&#160;applying&#160;Azuma’s<br/>
+4<br/>
+inequality&#160;to&#160;the&#160;random&#160;variables&#160;𝐵&#160;=&#160;Í𝑡<br/>
+(&#160;𝐴&#160;−&#160;𝑎),&#160;we&#160;obtain<br/>
+𝑡<br/>
+𝑖=1<br/>
+𝑖<br/>
+&#160;<br/>
+2&#160;2<br/>
+!<br/>
+&#160;<br/>
+2&#160;2<br/>
+!<br/>
+𝛿<br/>
+𝑎<br/>
+𝑛<br/>
+𝛿<br/>
+𝑎<br/>
+𝑛<br/>
+Pr[<br/>
+ℓ<br/>
+ℓ<br/>
+ℓ&#160;&lt;&#160;(1&#160;−&#160;𝛿&#160;)𝑎𝑛]&#160;≤&#160;exp<br/>
+−<br/>
+≤&#160;exp&#160;−<br/>
+(6)<br/>
+ℓ<br/>
+2(1&#160;−&#160;𝑎)2<br/>
+2<br/>
+With&#160;this&#160;length&#160;bound&#160;established,&#160;we&#160;must&#160;have&#160;#0&#160;(𝑋)&#160;≥&#160;#0&#160;(𝑍1,&#160;.&#160;.&#160;.&#160;,&#160;𝑍&#160;)&#160;−<br/>
+ℓ<br/>
+𝛥.&#160;Applying&#160;Lemma&#160;<a href="2020-352s.html#34">1&#160;</a>to&#160;𝑍&#160;,&#160;we&#160;conclude&#160;that<br/>
+𝑖<br/>
+(1&#160;+<br/>
+<br/>
+2<br/>
+<br/>
+𝜖&#160;)<br/>
+𝛿<br/>
+ℓ<br/>
+Pr[#<br/>
+0<br/>
+0&#160;(&#160;𝑍1,&#160;.&#160;.&#160;.&#160;,&#160;𝑍&#160;)&#160;≤&#160;(1&#160;−&#160;𝛿<br/>
+ℓ]&#160;≤&#160;exp<br/>
+−<br/>
+(7)<br/>
+ℓ<br/>
+0)<br/>
+2<br/>
+2<br/>
+Taking&#160;the&#160;union&#160;bound&#160;over&#160;these&#160;two&#160;bad&#160;events&#160;yields&#160;Equation&#160;<a href="2020-352s.html#35">(4).</a><br/>
+Proof&#160;of&#160;(ii).<br/>
+By&#160;assuming&#160;the&#160;worst&#160;case&#160;of&#160;ℓ&#160;=&#160;𝑎𝑛&#160;and&#160;applying&#160;Lemma&#160;<a href="2020-352s.html#34">1</a><br/>
+to&#160;the&#160;prefix&#160;of&#160;𝑍&#160;s,&#160;we&#160;immediately&#160;obtain&#160;<a href="2020-352s.html#35">(5).</a><br/>
+𝑖<br/>
+<br/>
+Theorem&#160;2.&#160;Consider&#160;the&#160;protocol&#160;Ouroboros-Samasika&#160;using&#160;maxvalid-sc<br/>as&#160;described&#160;in&#160;Figure&#160;<a href="2020-352s.html#22">7,&#160;</a>executed&#160;in&#160;the&#160;FN-MC-registration.&#160;Let&#160;𝑓&#160;be&#160;the<br/>active-slot&#160;coefficient,&#160;let&#160;𝛥&#160;be&#160;the&#160;upper&#160;bound&#160;on&#160;the&#160;network&#160;delay.&#160;Let<br/>
+𝛼,&#160;𝛽<br/>
+∈&#160;[0,&#160;1]&#160;denote&#160;a&#160;lower&#160;bound&#160;on&#160;the&#160;alert&#160;ratio&#160;and&#160;participating&#160;ratio<br/>
+throughout&#160;the&#160;whole&#160;execution,&#160;respectively.&#160;Let&#160;𝑅&#160;and&#160;𝐿&#160;denote&#160;the&#160;epoch<br/>length&#160;and&#160;the&#160;total&#160;lifetime&#160;of&#160;the&#160;system&#160;(in&#160;slots).&#160;If&#160;for&#160;some&#160;𝜖<br/>
+∈&#160;(0,&#160;1)&#160;we<br/>
+𝑤<br/>
+have&#160;𝛼&#160;·&#160;(1&#160;−&#160;𝑓&#160;)𝛥+1&#160;≥&#160;(1&#160;+&#160;𝜖&#160;)/2&#160;and&#160;if&#160;the&#160;maxvalid-sc&#160;parameters,&#160;𝜖&#160;,&#160;𝑠<br/>
+𝑤<br/>
+𝑤<br/>
+CG,&#160;𝑠&#160;∃CQ<br/>
+and&#160;the&#160;network&#160;parameter&#160;𝛥&#160;satisfy<br/>
+288𝛥/(𝜖&#160;𝛽)&#160;&lt;&#160;𝑘,&#160;2(1&#160;+&#160;𝜖&#160;)𝑠<br/>
+𝑤<br/>
+CG&#160;+&#160;𝛥&#160;≤&#160;𝑅/3&#160;and&#160;𝑠CG&#160;+&#160;𝑠&#160;∃CQ&#160;≤&#160;𝑅/3,<br/>
+then&#160;the&#160;following&#160;guarantees&#160;for&#160;common&#160;prefix,&#160;chain&#160;growth,&#160;chain&#160;quality,<br/>and&#160;existential&#160;chain&#160;quality&#160;hold&#160;except&#160;for&#160;an&#160;additional&#160;error&#160;probability<br/>
+exp(ln&#160;𝐿&#160;−&#160;𝛺(𝑘))&#160;+&#160;𝜖#&#160;(𝛽&#160;𝑓&#160;,&#160;ω)&#160;+&#160;𝜖<br/>
+(&#160;𝛽&#160;𝑓&#160;,&#160;ω)<br/>
+0<br/>
+#1<br/>
+𝜖CG&#160;(&#160;𝛽&#160;𝑓&#160;/16,&#160;𝑠CG)&#160;+&#160;𝜖&#160;∃CQ&#160;(𝑠∃CQ)&#160;+&#160;𝜖CP&#160;(𝑠CG)<br/>
+•&#160;Common&#160;prefix.&#160;The&#160;probability&#160;that&#160;the&#160;protocol&#160;violates&#160;the&#160;common<br/>
+prefix&#160;property&#160;with&#160;parameter&#160;𝑘&#160;is&#160;no&#160;more&#160;than<br/>
+4&#160;19𝐿<br/>
+4<br/>
+𝜖CP&#160;(&#160;𝑘&#160;)&#160;=<br/>
+exp(&#160;𝛥&#160;−&#160;𝜖&#160;𝑘/18)&#160;+&#160;𝜖<br/>
+4<br/>
+lift;<br/>
+𝜖<br/>
+•&#160;Chain&#160;growth.&#160;The&#160;probability&#160;that&#160;the&#160;protocol&#160;violates&#160;the&#160;chain<br/>
+4<br/>
+growth&#160;property&#160;with&#160;parameters&#160;𝑠&#160;≥&#160;𝑠CG&#160;=&#160;48𝛥/(𝜖&#160;𝛽&#160;𝑓&#160;)&#160;and&#160;𝜏CG&#160;=&#160;𝛽&#160;𝑓&#160;/16<br/>is&#160;no&#160;more&#160;than<br/>
+2<br/>
+4&#160;𝑠&#160;𝐿<br/>
+𝜖CG&#160;(𝜏CG,&#160;𝑠)&#160;=<br/>
+exp(−(𝜖&#160;𝛽&#160;𝑓&#160;)2𝑠/256)&#160;+&#160;𝜖lift;<br/>
+2<br/>
+36<br/>
+<hr/>
+<a name=37></a>•&#160;Existential&#160;chain&#160;quality.&#160;The&#160;probability&#160;that&#160;the&#160;protocol&#160;violates&#160;the<br/>
+4<br/>
+existential&#160;chain&#160;quality&#160;property&#160;with&#160;parameter&#160;𝑠&#160;≥&#160;𝑠∃CQ&#160;=&#160;12𝛥/(𝜖&#160;𝛽&#160;𝑓&#160;)<br/>is&#160;no&#160;more&#160;than<br/>
+4<br/>
+2<br/>
+𝜖&#160;∃CQ&#160;(𝑠)&#160;=&#160;(𝑠&#160;+&#160;1)&#160;𝐿&#160;exp(−(𝜖&#160;𝛽&#160;𝑓&#160;)2&#160;𝑠/64)&#160;+&#160;𝜖lift;<br/>
+where&#160;𝜖lift&#160;is&#160;a&#160;shorthand&#160;for&#160;the&#160;quantity<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+4<br/>
+&#160;<br/>
+4<br/>
+(<br/>
+38<br/>
+3<br/>
+𝜖&#160;𝛽&#160;𝑓&#160;)2&#160;𝑅<br/>
+𝑅<br/>
+𝜖<br/>
+𝛽&#160;𝑓&#160;𝑅&#160;𝑅<br/>
+𝜖lift&#160;=&#160;𝑄&#160;𝐿&#160;·<br/>
+𝑅<br/>
+exp&#160;−<br/>
++<br/>
+exp&#160;𝛥&#160;−<br/>
+768<br/>
+4<br/>
+𝜖<br/>
+864<br/>
+Proof.&#160;We&#160;begin&#160;with&#160;a&#160;high-level&#160;description&#160;of&#160;the&#160;proof.&#160;Recall&#160;that&#160;our<br/>goal&#160;is&#160;to&#160;show&#160;that&#160;when&#160;we&#160;replace&#160;maxvalid-bg&#160;with&#160;maxvalid-sc,&#160;the&#160;overall<br/>execution&#160;of&#160;the&#160;protocol&#160;remains&#160;the&#160;same.&#160;To&#160;see&#160;this,&#160;consider&#160;a&#160;run&#160;of&#160;the<br/>protocol&#160;with&#160;maxvalid-bg&#160;and&#160;consider&#160;the&#160;first&#160;slcurr&#160;an&#160;honest&#160;party&#160;discovers<br/>a&#160;long-range&#160;fork.&#160;Let&#160;Cloc&#160;be&#160;the&#160;local&#160;chain&#160;and&#160;Ccand&#160;be&#160;the&#160;candidate&#160;chain.<br/>We&#160;will&#160;show&#160;that&#160;maxvalid-sc&#160;will&#160;output&#160;the&#160;same&#160;chain&#160;recommendation&#160;as<br/>maxvalid-bg&#160;with&#160;all&#160;but&#160;negligible&#160;probability.&#160;(Note&#160;that,&#160;until&#160;slcurr,&#160;the&#160;whole<br/>execution&#160;would&#160;proceed&#160;identically&#160;if&#160;parties&#160;were&#160;using&#160;maxvalid-sc&#160;instead,&#160;as<br/>in&#160;both&#160;the&#160;cases&#160;they&#160;would&#160;always&#160;prefer&#160;the&#160;longer&#160;of&#160;the&#160;compared&#160;chains<br/>using&#160;the&#160;short-range&#160;fork&#160;rule.)&#160;This&#160;will&#160;then&#160;imply&#160;the&#160;full&#160;statement,&#160;as<br/>the&#160;reasoning&#160;can&#160;be&#160;applied&#160;inductively&#160;to&#160;each&#160;of&#160;the&#160;slots&#160;where&#160;maxvalid-bg<br/>encounters&#160;a&#160;long-range&#160;fork,&#160;throughout&#160;the&#160;whole&#160;execution.<br/>
+The&#160;proof&#160;is&#160;structured&#160;as&#160;follows:<br/>
+1.&#160;In&#160;Lemma&#160;<a href="2020-352s.html#37">3,&#160;</a>we&#160;will&#160;show&#160;that&#160;the&#160;ω-window&#160;with&#160;lowest&#160;density&#160;in&#160;Cloc<br/>
+has&#160;at&#160;least&#160;thigh&#160;number&#160;of&#160;blocks.<br/>
+2.&#160;In&#160;Lemma&#160;<a href="2020-352s.html#38">4&#160;</a>and&#160;<a href="2020-352s.html#39">5,&#160;</a>we&#160;will&#160;consider&#160;a&#160;specific&#160;ω-window&#160;and&#160;establish&#160;an<br/>
+upper&#160;bound&#160;on&#160;the&#160;number&#160;of&#160;blocks&#160;in&#160;Ccand&#160;in&#160;that&#160;window.<br/>
+We&#160;will&#160;see&#160;that&#160;thigh&#160;&gt;&#160;tlow&#160;thereby&#160;establishing&#160;the&#160;theorem.<br/>
+Lemma&#160;3.&#160;There&#160;exists&#160;thigh&#160;such&#160;that&#160;getMinDen(Cloc)&#160;≥&#160;thigh&#160;except&#160;with<br/>probability&#160;𝜖#&#160;(𝛽&#160;𝑓&#160;,&#160;ω).<br/>
+0<br/>
+Proof.&#160;Let&#160;wmin&#160;denote&#160;the&#160;window&#160;in&#160;C<br/>
+loc<br/>
+loc<br/>
+with&#160;the&#160;lowest&#160;density&#160;(i.e.,<br/>
+getMinDen(Cloc)&#160;=&#160;|Cloc&#160;[wmin]&#160;|).&#160;Let&#160;𝑊&#160;denote&#160;the&#160;characteristic&#160;string&#160;induced<br/>
+loc<br/>
+by&#160;this&#160;protocol&#160;execution&#160;within&#160;wmin.<br/>
+loc<br/>
+Note&#160;that&#160;the&#160;number&#160;of&#160;blocks&#160;in&#160;wmin&#160;is&#160;at&#160;least&#160;#<br/>
+=&#160;0&#160;means<br/>
+loc<br/>
+0&#160;(𝑊&#160;),&#160;since&#160;𝑊𝑖<br/>
+that&#160;the&#160;corresponding&#160;slot&#160;has&#160;a&#160;uniquely&#160;alert&#160;slot&#160;leader.&#160;Therefore,&#160;it&#160;suffices<br/>to&#160;lower&#160;bound&#160;#0&#160;(𝑊).<br/>
+From&#160;Lemma&#160;<a href="2020-352s.html#35">2,&#160;</a>by&#160;setting&#160;𝑎&#160;=&#160;𝛽&#160;𝑓&#160;,&#160;we&#160;get&#160;that,&#160;for&#160;any&#160;0&#160;&lt;&#160;𝛿&#160;,&#160;𝛿<br/>
+ℓ<br/>
+loc&#160;&lt;&#160;1,<br/>
+(1&#160;+&#160;𝜖&#160;)<br/>
+Pr[#0&#160;(𝑊)&#160;≤&#160;(1&#160;−&#160;𝛿loc)<br/>
+(&#160;(1&#160;−&#160;𝛿&#160;)&#160;𝛽&#160;𝑓&#160;ω)&#160;−&#160;𝛥]&#160;≤&#160;𝜖#&#160;(𝛽&#160;𝑓&#160;,&#160;ω)<br/>
+2<br/>
+ℓ<br/>
+0<br/>
+Hence,&#160;we&#160;have&#160;that&#160;thigh&#160;=&#160;(1−𝛿loc)&#160;(1+𝜖&#160;)&#160;((1−𝛿&#160;)&#160;𝛽&#160;𝑓&#160;ω)−𝛥&#160;and&#160;getMinDen(C<br/>
+2<br/>
+ℓ<br/>
+loc)&#160;≥<br/>
+thigh&#160;except&#160;with&#160;probability&#160;𝜖#&#160;(𝛽&#160;𝑓&#160;,&#160;ω).<br/>
+<br/>
+0<br/>
+37<br/>
+<hr/>
+<a name=38></a>Towards&#160;establishing&#160;an&#160;upper&#160;bound&#160;on&#160;the&#160;window&#160;density&#160;for&#160;Ccand,&#160;we<br/>
+will&#160;first&#160;need&#160;to&#160;establish&#160;a&#160;helper&#160;lemma&#160;(Lemma&#160;<a href="2020-352s.html#38">4)&#160;</a>that&#160;states&#160;that&#160;no&#160;honest<br/>party&#160;holds&#160;the&#160;chain&#160;Ccand&#160;at&#160;any&#160;slot&#160;&gt;&#160;slfork&#160;+&#160;𝑠CG&#160;+&#160;𝛥.<br/>
+Lemma&#160;4.&#160;No&#160;honest&#160;party&#160;extends&#160;Ccand&#160;at&#160;any&#160;slot&#160;later&#160;than&#160;slfork&#160;+&#160;𝑠CG&#160;+&#160;𝛥<br/>except&#160;with&#160;probability&#160;𝜖CG&#160;(𝛽&#160;𝑓&#160;/16,&#160;𝑠CG)&#160;+&#160;𝜖∃CQ&#160;(𝑠∃CQ)&#160;+&#160;𝜖CP&#160;(𝑠CG,&#160;𝛽&#160;𝑓&#160;/16).<br/>
+Proof.&#160;At&#160;a&#160;high&#160;level,&#160;the&#160;proof&#160;is&#160;structured&#160;as&#160;follows.&#160;We&#160;will&#160;consider<br/>two&#160;consecutive&#160;intervals&#160;of&#160;slots&#160;𝐼growth&#160;=&#160;[slfork&#160;+&#160;1,&#160;slfork&#160;+&#160;𝑠CG]&#160;and&#160;𝐼stabilize&#160;=<br/>
+[slfork&#160;+&#160;𝑠CG&#160;+&#160;1,&#160;slfork&#160;+&#160;𝑠CG&#160;+&#160;𝑠∃CQ].&#160;Firstly,&#160;we&#160;will&#160;show&#160;that&#160;Cloc&#160;has&#160;a&#160;large<br/>
+number&#160;of&#160;blocks&#160;in&#160;𝐼growth&#160;by&#160;employing&#160;the&#160;chain&#160;growth&#160;property;&#160;secondly,<br/>we&#160;will&#160;show&#160;that&#160;it&#160;has&#160;at&#160;least&#160;one&#160;honest&#160;block&#160;in&#160;𝐼stabilize&#160;by&#160;employing&#160;the<br/>existential&#160;chain&#160;quality&#160;property;&#160;finally,&#160;in&#160;the&#160;crux&#160;of&#160;the&#160;proof,&#160;we&#160;show<br/>that&#160;if&#160;an&#160;honest&#160;party&#160;holds&#160;Ccand&#160;at&#160;a&#160;slot&#160;later&#160;than&#160;slfork&#160;+&#160;𝑠CG&#160;+&#160;𝛥,&#160;then&#160;it<br/>contradicts&#160;the&#160;chain&#160;prefix&#160;property.<br/>
+In&#160;the&#160;rest&#160;of&#160;the&#160;proof,&#160;we&#160;will&#160;assume&#160;that&#160;and<br/>
+(CP)&#160;there&#160;is&#160;no&#160;𝑠CG&#160;𝛽&#160;𝑓&#160;/16-CP&#160;violation,<br/>
+(∃CQ)&#160;there&#160;is&#160;no&#160;𝑠∃CQ-∃CQ&#160;violation,&#160;and<br/>
+(CG)&#160;there&#160;is&#160;no&#160;(&#160;𝛽&#160;𝑓&#160;/16,&#160;𝑠CG)-CG&#160;violation.<br/>
+We&#160;observe&#160;that&#160;Cloc&#160;exhibits&#160;significant&#160;growth&#160;over&#160;the&#160;interval&#160;𝐼growth:<br/>
+specifically,&#160;by&#160;the&#160;chain&#160;growth&#160;property&#160;established&#160;in&#160;Theorem&#160;1&#160;of&#160;<a href="2020-352s.html#45">[4],</a><br/>
+|Cloc&#160;[𝐼growth]&#160;|&#160;≥&#160;𝑠CG&#160;𝛽&#160;𝑓&#160;/16<br/>
+(8)<br/>
+Furthermore,&#160;observe&#160;that&#160;Cloc&#160;possesses&#160;at&#160;least&#160;one&#160;honestly-generated&#160;block<br/>over&#160;the&#160;interval&#160;𝐼stabilize:&#160;specifically,&#160;since&#160;|𝐼stabilize|&#160;=&#160;𝑠∃CQ&#160;and&#160;by&#160;the&#160;exis-<br/>tential&#160;chain&#160;quality&#160;property&#160;established&#160;in&#160;Theorem&#160;1&#160;of&#160;<a href="2020-352s.html#45">[4],&#160;</a>there&#160;must&#160;exist<br/>a&#160;slot&#160;sl∗<br/>
+∈&#160;𝐼<br/>
+]&#160;was&#160;honestly&#160;generated.<br/>
+loc<br/>
+stabilize&#160;for&#160;which&#160;the&#160;block&#160;Cloc&#160;[sl∗<br/>
+loc<br/>
+In&#160;order&#160;to&#160;establish&#160;the&#160;lemma,&#160;we&#160;observe&#160;that&#160;an&#160;honest&#160;party&#160;extending<br/>
+Ccand&#160;after&#160;the&#160;slot&#160;slfork&#160;+&#160;𝑠CG&#160;+&#160;𝛥&#160;would&#160;yield&#160;a&#160;violation&#160;of&#160;common&#160;prefix.<br/>Assume&#160;for&#160;contradiction&#160;that&#160;there&#160;exists&#160;an&#160;honestly&#160;generated&#160;block&#160;in&#160;Ccand<br/>after&#160;slfork&#160;+&#160;𝑠CG&#160;+&#160;𝛥&#160;slots.&#160;Let&#160;that&#160;slot&#160;be&#160;denoted&#160;by&#160;sl∗<br/>
+.<br/>
+cand<br/>
+Let&#160;𝐴&#160;=&#160;|Cloc&#160;[𝐼growth]&#160;|&#160;and&#160;let&#160;𝐵&#160;=&#160;|Ccand&#160;[𝐼growth]&#160;|.&#160;Also,&#160;consider&#160;the&#160;tines<br/>
+𝑡loc&#160;=&#160;Cloc&#160;[1,&#160;sl∗&#160;]&#160;and&#160;𝑡<br/>
+].<br/>
+loc<br/>
+cand&#160;=&#160;Ccand&#160;[1,&#160;sl∗<br/>
+cand<br/>
+Now,&#160;we&#160;will&#160;consider&#160;the&#160;following&#160;two&#160;cases.<br/>
+Case&#160;1:&#160;𝐵&#160;≥&#160;𝐴:<br/>
+Recall&#160;that&#160;there&#160;is&#160;an&#160;honest&#160;block&#160;in&#160;Cloc&#160;at&#160;sl∗<br/>
+and&#160;in<br/>
+loc<br/>
+Ccand&#160;at&#160;sl∗<br/>
+.&#160;Therefore,&#160;𝑡<br/>
+cand<br/>
+loc&#160;and&#160;𝑡cand&#160;are&#160;viable&#160;tines.<br/>
+This&#160;gives&#160;rise&#160;to&#160;a<br/>
+divergence&#160;of&#160;div(𝑡loc,&#160;𝑡cand)&#160;≥&#160;𝐴.&#160;In&#160;other&#160;words,&#160;there&#160;is&#160;a&#160;divergence&#160;violation<br/>(or&#160;CP&#160;violation)&#160;with&#160;parameter&#160;𝐴&#160;≥&#160;𝑠CG&#160;𝛽&#160;𝑓&#160;/16&#160;(from&#160;<a href="2020-352s.html#38">(8)).</a><br/>
+38<br/>
+<hr/>
+<a name=39></a>Case&#160;2:<br/>
+𝐴<br/>
+&gt;<br/>
+𝐵:<br/>
+Recall&#160;that&#160;there&#160;exists&#160;an&#160;honestly-generated&#160;block&#160;at<br/>
+Ccand&#160;[sl∗<br/>
+].&#160;Also,&#160;recall&#160;that&#160;sl∗<br/>
+&gt;<br/>
+sl<br/>
+cand<br/>
+cand<br/>
+fork&#160;+&#160;𝑠CG&#160;+&#160;𝛥.<br/>
+Given&#160;that&#160;the&#160;delay<br/>
+of&#160;𝛥&#160;has&#160;passed,&#160;the&#160;honest&#160;party&#160;that&#160;generated&#160;Ccand&#160;[sl∗<br/>
+]&#160;has&#160;completely<br/>
+cand<br/>
+learned&#160;Cloc&#160;[1,&#160;slfork&#160;+&#160;𝑠CG].&#160;Since&#160;the&#160;honest&#160;party&#160;still&#160;extended&#160;Ccand&#160;instead<br/>
+4<br/>
+of&#160;Cloc,&#160;we&#160;have&#160;that&#160;ˆ<br/>
+𝐵&#160;=&#160;|&#160;Ccand&#160;[slfork&#160;+&#160;1,&#160;sl∗<br/>
+]&#160;|&#160;≥&#160;𝐴.&#160;Similar&#160;to&#160;the&#160;above&#160;case,<br/>
+cand<br/>
+this&#160;results&#160;in&#160;divergence&#160;violation&#160;with&#160;parameter&#160;𝐴&#160;≥&#160;𝑠CG&#160;𝛽&#160;𝑓&#160;/16.<br/>
+<br/>
+Recall&#160;that&#160;getMinDen(C)&#160;outputs&#160;the&#160;minimum&#160;density&#160;of&#160;blocks&#160;over&#160;win-<br/>
+dows&#160;of&#160;length&#160;w&#160;slots.&#160;Consider&#160;the&#160;window&#160;corresponding&#160;to&#160;which&#160;getMinDen<br/>output&#160;the&#160;density.&#160;Let&#160;the&#160;slot&#160;right&#160;before&#160;the&#160;window&#160;begins&#160;be&#160;denoted<br/>by&#160;slmin.&#160;Consider&#160;the&#160;interval&#160;𝐼growth&#160;=&#160;(slmin,&#160;slmin&#160;+&#160;ω].&#160;By&#160;the&#160;chain&#160;growth<br/>property&#160;established&#160;in&#160;Theorem&#160;1&#160;of&#160;<a href="2020-352s.html#45">[4]&#160;</a>and&#160;by&#160;the&#160;assumption&#160;𝑤&#160;=&#160;1.1<br/>
+Towards&#160;establishing&#160;Lemma&#160;<a href="2020-352s.html#39">5&#160;</a>and&#160;Lemma&#160;<a href="2020-352s.html#37">3,&#160;</a>we&#160;will&#160;employ&#160;the&#160;chain<br/>
+growth&#160;and&#160;the&#160;existential&#160;chain&#160;quality&#160;properties;&#160;specifically,&#160;we&#160;will&#160;consider<br/>two&#160;disjoint&#160;consecutive&#160;intervals&#160;of&#160;length&#160;𝑠CG&#160;and&#160;𝑠∃CQ&#160;between&#160;slfork&#160;and&#160;slcurr.<br/>For&#160;this,&#160;we&#160;need&#160;to&#160;first&#160;show&#160;that&#160;there&#160;are&#160;at&#160;least&#160;𝑠CG&#160;+&#160;𝑠∃CQ&#160;slots&#160;between<br/>slfork&#160;and&#160;slcurr&#160;so&#160;that&#160;we&#160;can&#160;apply&#160;the&#160;properties.<br/>
+Lemma&#160;5.&#160;getMinDen(Ccand)&#160;≤&#160;tlow&#160;except&#160;with&#160;probability&#160;𝜖#&#160;(𝛽&#160;𝑓&#160;,&#160;ω).<br/>
+1<br/>
+Proof.&#160;In&#160;order&#160;to&#160;establish&#160;an&#160;upper&#160;bound&#160;on&#160;the&#160;min-density&#160;for&#160;Ccand,&#160;we<br/>will&#160;consider&#160;a&#160;specific&#160;window&#160;close&#160;to&#160;the&#160;fork&#160;and&#160;establish&#160;an&#160;upper&#160;bound<br/>of&#160;its&#160;density.&#160;It&#160;follows&#160;that&#160;the&#160;min-density&#160;of&#160;the&#160;chain&#160;is&#160;at&#160;most&#160;the&#160;upper<br/>bound.<br/>
+We&#160;will&#160;now&#160;specify&#160;the&#160;window&#160;we&#160;will&#160;focus&#160;on.&#160;Consider&#160;the&#160;first&#160;window<br/>
+that&#160;begins&#160;after&#160;the&#160;slot&#160;slfork&#160;+&#160;𝑠CG&#160;+&#160;𝛥.&#160;Denote&#160;this&#160;window&#160;by&#160;w∗<br/>
+.<br/>
+cand<br/>
+We&#160;will&#160;show&#160;that&#160;|w∗<br/>
+|&#160;≤&#160;t<br/>
+cand<br/>
+low.<br/>
+From&#160;Lemma&#160;<a href="2020-352s.html#38">4,&#160;</a>we&#160;have&#160;that&#160;there&#160;are&#160;no&#160;honestly-generated&#160;blocks&#160;in<br/>
+Ccand&#160;after&#160;the&#160;slot&#160;slfork&#160;+&#160;𝑠CG&#160;+&#160;𝛥&#160;except&#160;with&#160;probability&#160;𝜖CG&#160;(𝛽&#160;𝑓&#160;/16,&#160;𝑠CG)&#160;+<br/>𝜖&#160;∃CQ&#160;(𝑠∃CQ)&#160;+𝜖CP&#160;(𝑠CG,&#160;𝛽&#160;𝑓&#160;/16).&#160;Therefore,&#160;all&#160;the&#160;blocks&#160;in&#160;Ccand&#160;after&#160;slfork&#160;+𝑠CG&#160;+&#160;𝛥<br/>are&#160;adversarially&#160;generated.&#160;In&#160;other&#160;words,&#160;|w∗<br/>
+|&#160;=&#160;#<br/>
+cand<br/>
+1&#160;(&#160;ˆ<br/>
+𝑊&#160;),&#160;where&#160;ˆ<br/>
+𝑊&#160;denotes<br/>
+the&#160;characteristic&#160;string&#160;induced&#160;by&#160;this&#160;protocol&#160;execution&#160;within&#160;w∗<br/>
+.<br/>
+cand<br/>
+We&#160;can&#160;now&#160;employ&#160;Lemma&#160;<a href="2020-352s.html#35">2,&#160;</a>by&#160;setting&#160;𝑎&#160;=&#160;𝛽&#160;𝑓&#160;,&#160;we&#160;get&#160;that,&#160;for&#160;any<br/>
+0&#160;&lt;&#160;𝛿1&#160;&lt;&#160;1,<br/>
+(1&#160;−&#160;𝜖&#160;)<br/>
+Pr[#1&#160;(𝑊)&#160;&gt;&#160;(1&#160;+&#160;𝛿1)<br/>
+𝛽&#160;𝑓&#160;−&#160;𝛥]&#160;≤&#160;𝜖#&#160;(&#160;𝛽&#160;𝑓&#160;,&#160;ω)<br/>
+2<br/>
+1<br/>
+Hence,&#160;we&#160;have&#160;that&#160;tlow&#160;=&#160;(1&#160;+&#160;𝛿1)&#160;(1−𝜖&#160;)&#160;𝛽&#160;𝑓&#160;−&#160;𝛥&#160;and&#160;getMinDen(C<br/>
+2<br/>
+cand)&#160;≤&#160;tlow<br/>
+except&#160;with&#160;probability&#160;𝜖#&#160;(𝛽&#160;𝑓&#160;,&#160;ω).<br/>
+1<br/>
+<br/>
+Consistent&#160;distribution.<br/>
+We&#160;have&#160;considered&#160;various&#160;ranges&#160;of&#160;slots&#160;in&#160;Lemma<br/>
+<a href="2020-352s.html#37">3,&#160;</a><a href="2020-352s.html#38">4&#160;</a>and&#160;<a href="2020-352s.html#39">5.&#160;</a>It&#160;is&#160;required&#160;that&#160;all&#160;those&#160;ranges&#160;have&#160;the&#160;same&#160;the&#160;same&#160;stake<br/>distribution&#160;and&#160;randomness&#160;to&#160;determine&#160;slot&#160;leaders&#160;throughout&#160;the&#160;ranges.<br/>
+39<br/>
+<hr/>
+<a name=40></a>This&#160;is&#160;ensured&#160;by&#160;the&#160;following&#160;two&#160;constraints:<br/>
+𝑠CG&#160;+&#160;𝛥&#160;+&#160;𝜈&#160;+&#160;ω<br/>
+≤&#160;𝑅/3<br/>
+𝑠CG&#160;+&#160;𝑠∃CQ<br/>
+≤&#160;𝑅/3<br/>
+These&#160;constraints&#160;correspond&#160;to&#160;those&#160;in&#160;the&#160;theorem&#160;statement,&#160;since&#160;we&#160;have<br/>assigned&#160;ω&#160;=&#160;(1&#160;+&#160;𝜖&#160;)𝑠<br/>
+𝑠<br/>
+𝑤<br/>
+CG&#160;and&#160;𝜈&#160;=&#160;𝜖&#160;𝑤&#160;CG.<br/>
+To&#160;ensure&#160;slot&#160;ranges&#160;are&#160;within&#160;slfork&#160;and&#160;slcurr.<br/>
+Observe&#160;that&#160;we&#160;have<br/>
+considered&#160;various&#160;ranges&#160;of&#160;slot&#160;positions&#160;in&#160;the&#160;above&#160;proof.&#160;It&#160;remains&#160;to&#160;en-<br/>sure&#160;that&#160;they&#160;all&#160;lie&#160;between&#160;slfork&#160;and&#160;slcurr.&#160;Towards&#160;this,&#160;we&#160;will&#160;first&#160;establish<br/>a&#160;lower&#160;bound&#160;on&#160;slcurr&#160;−&#160;slfork.&#160;Then&#160;we&#160;will&#160;illustrate&#160;example&#160;assignments&#160;to<br/>various&#160;parameters&#160;with&#160;which&#160;the&#160;slot&#160;ranges&#160;lie&#160;within&#160;the&#160;limits.<br/>
+Recall&#160;that&#160;slfork&#160;is&#160;the&#160;slot&#160;associated&#160;with&#160;the&#160;last&#160;common&#160;block&#160;of&#160;Cloc&#160;and<br/>
+Ccand.&#160;Recall&#160;that&#160;by&#160;the&#160;design&#160;of&#160;the&#160;protocol&#160;(independently&#160;of&#160;the&#160;underlying<br/>maxvalid&#160;rule),&#160;for&#160;every&#160;slot&#160;sl&#160;there&#160;is&#160;an&#160;event&#160;𝐸&#160;such&#160;that,&#160;if&#160;𝐸&#160;occurs,&#160;then<br/>
+𝑖<br/>
+𝑖<br/>
+𝑖<br/>
+no&#160;valid&#160;block&#160;can&#160;be&#160;created&#160;for&#160;the&#160;slot&#160;sl&#160;.&#160;Moreover,&#160;the&#160;events&#160;𝐸<br/>
+𝑖<br/>
+1,&#160;𝐸2,&#160;.&#160;.&#160;.<br/>
+are&#160;independent&#160;and&#160;Pr[𝐸&#160;]&#160;=&#160;1&#160;−&#160;𝑓&#160;.&#160;Therefore,&#160;using&#160;a&#160;Chernoff&#160;bound&#160;(cf.<br/>
+𝑖<br/>
+Appendix&#160;<a href="2020-352s.html#33">7.6.1)&#160;</a>and&#160;a&#160;union&#160;bound&#160;over&#160;the&#160;running&#160;time&#160;𝐿&#160;of&#160;the&#160;system,<br/>and&#160;by&#160;using&#160;the&#160;fact&#160;that&#160;there&#160;are&#160;𝑘&#160;blocks&#160;between&#160;slfork&#160;and&#160;slcurr,&#160;we&#160;can<br/>lower-bound&#160;the&#160;number&#160;of&#160;slots&#160;between&#160;slfork&#160;and&#160;slcurr:&#160;slcurr&#160;−&#160;slfork&#160;≥&#160;𝑘/2&#160;𝑓&#160;,<br/>except&#160;with&#160;error&#160;probability&#160;exp(ln&#160;𝐿&#160;−&#160;𝛺(𝑘)).&#160;For&#160;the&#160;remainder&#160;of&#160;the&#160;proof,<br/>we&#160;will&#160;assume&#160;that&#160;the&#160;execution&#160;satisfies&#160;slcurr:&#160;slcurr&#160;−&#160;slfork&#160;≥&#160;𝑘/2&#160;𝑓&#160;for&#160;all<br/>pairs&#160;of&#160;slots&#160;bounding&#160;at&#160;least&#160;𝑘&#160;blocks&#160;on&#160;an&#160;honestly&#160;held&#160;chain).<br/>
+The&#160;following&#160;is&#160;a&#160;potential&#160;assignment&#160;that&#160;ensures&#160;that&#160;the&#160;ranges&#160;fit&#160;within<br/>
+the&#160;limits.&#160;𝑠CG,&#160;𝑠∃CQ&#160;=&#160;𝑘/(6&#160;𝑓&#160;).&#160;Typically,&#160;𝛥&#160;&#160;𝑘/(6&#160;𝑓&#160;).&#160;And&#160;by&#160;setting&#160;𝜖<br/>
+=&#160;1,<br/>
+𝑤<br/>
+we&#160;get&#160;that&#160;2(1&#160;+&#160;𝜖&#160;)𝑠<br/>
+𝑤<br/>
+CG&#160;+&#160;𝛥&#160;≤&#160;𝑘&#160;/(2&#160;𝑓&#160;).&#160;Further,&#160;by&#160;setting&#160;𝑠&#160;∃CQ&#160;=&#160;𝑘&#160;/(6&#160;𝑓&#160;),&#160;we&#160;get<br/>
+𝑠CG&#160;+&#160;𝑠∃CQ&#160;≤&#160;𝑘&#160;/(2&#160;𝑓&#160;).&#160;In&#160;these&#160;assignments,&#160;we&#160;needed&#160;to&#160;assume&#160;48𝛥/(𝜖&#160;𝛽)&#160;&lt;&#160;𝑘&#160;/6<br/>which&#160;conforms&#160;with&#160;the&#160;theorem&#160;statement.<br/>
+<br/>
+7.7<br/>
+An&#160;Efficient&#160;Implementation&#160;of&#160;the&#160;Short-range&#160;Fork<br/>Rule<br/>
+Recall&#160;that&#160;the&#160;short-range&#160;fork&#160;rule&#160;is&#160;simply&#160;to&#160;choose&#160;the&#160;longest&#160;chain,&#160;like<br/>in&#160;Ouroboros&#160;Genesis.&#160;Recall&#160;that&#160;a&#160;fork&#160;is&#160;a&#160;short-range&#160;one&#160;if&#160;it&#160;is&#160;less&#160;than<br/>
+𝑘&#160;blocks&#160;ago&#160;in&#160;history.&#160;A&#160;na¨<br/>
+ıve&#160;implementation&#160;of&#160;this&#160;rule&#160;is&#160;to&#160;always&#160;store<br/>
+the&#160;last&#160;𝑘&#160;blocks.&#160;However,&#160;this&#160;is&#160;not&#160;efficient.&#160;In&#160;the&#160;following,&#160;we&#160;propose<br/>an&#160;approach&#160;where&#160;only&#160;information&#160;about&#160;just&#160;two&#160;block&#160;needs&#160;to&#160;be&#160;stored&#160;at<br/>any&#160;given&#160;point&#160;in&#160;time.<br/>
+The&#160;idea&#160;is&#160;to&#160;maintain&#160;two&#160;checkpoints&#160;in&#160;every&#160;epoch,&#160;that&#160;can&#160;provide&#160;an<br/>
+estimate&#160;on&#160;how&#160;long&#160;ago&#160;a&#160;fork&#160;has&#160;occurred.&#160;One,&#160;a&#160;‘start&#160;checkpoint&#160;’,&#160;which<br/>is&#160;at&#160;the&#160;beginning&#160;of&#160;each&#160;epoch,&#160;and&#160;the&#160;other,&#160;a&#160;‘lock&#160;checkpoint&#160;’,&#160;which&#160;is&#160;at<br/>the&#160;last&#160;block&#160;in&#160;the&#160;first&#160;two-thirds&#160;of&#160;an&#160;epoch.&#160;That&#160;is,&#160;in&#160;the&#160;current&#160;epoch,<br/>as&#160;time&#160;progresses&#160;away&#160;from&#160;the&#160;first&#160;slot,&#160;the&#160;lock&#160;checkpoint&#160;is&#160;the&#160;last&#160;block<br/>so&#160;far&#160;until&#160;we&#160;reach&#160;the&#160;last&#160;block&#160;in&#160;the&#160;first&#160;two-thirds&#160;of&#160;the&#160;epoch,&#160;when<br/>the&#160;lock&#160;checkpoint&#160;“freezes”&#160;at&#160;that&#160;block.&#160;These&#160;checkpoints&#160;are&#160;compared<br/>
+40<br/>
+<hr/>
+<a name=41></a>for&#160;candidate&#160;chains&#160;to&#160;determine&#160;when&#160;the&#160;fork&#160;has&#160;occurred.&#160;To&#160;estimate&#160;the<br/>fork&#160;position,&#160;we&#160;consider&#160;the&#160;following&#160;two&#160;cases.<br/>
+Fork&#160;in&#160;the&#160;current&#160;epoch:&#160;We&#160;categorize&#160;this&#160;as&#160;a&#160;short-range&#160;fork.&#160;This<br/>
+is&#160;because&#160;the&#160;leader&#160;selection&#160;distribution&#160;for&#160;the&#160;current&#160;epoch&#160;was&#160;al-<br/>ready&#160;determined&#160;by&#160;the&#160;end&#160;of&#160;the&#160;first&#160;two-thirds&#160;of&#160;the&#160;previous&#160;epoch.<br/>Therefore,&#160;we&#160;can&#160;safely&#160;assume&#160;that&#160;the&#160;adversary&#160;has&#160;not&#160;skewed&#160;the<br/>distribution&#160;for&#160;the&#160;current&#160;epoch&#160;and&#160;the&#160;simple&#160;longest&#160;chain&#160;rule&#160;suffices<br/>in&#160;this&#160;case.<br/>
+Fork&#160;in&#160;the&#160;previous&#160;epoch&#160;with&#160;the&#160;same&#160;lock&#160;checkpoint:&#160;Since&#160;the&#160;lock<br/>
+checkpoints&#160;for&#160;the&#160;previous&#160;epoch&#160;are&#160;the&#160;same&#160;for&#160;the&#160;candidate&#160;chains,<br/>as&#160;noted&#160;in&#160;the&#160;previous&#160;case,&#160;the&#160;leader&#160;selection&#160;distribution&#160;is&#160;well&#160;dis-<br/>tributed&#160;even&#160;after&#160;the&#160;fork.&#160;Hence,&#160;again,&#160;the&#160;simple&#160;longest&#160;chain&#160;rule<br/>suffices.<br/>
+8<br/>
+Experimental&#160;Results<br/>
+We&#160;have&#160;implemented&#160;the&#160;Coda&#160;protocol&#160;and&#160;launched&#160;the&#160;testnet&#160;with&#160;par-<br/>ticipation&#160;from&#160;across&#160;the&#160;world.&#160;In&#160;this&#160;section,&#160;we&#160;report&#160;the&#160;results&#160;from&#160;a<br/>representative&#160;duration&#160;between&#160;November&#160;12,&#160;2019,&#160;10&#160;AM&#160;Pacific&#160;Time&#160;Zone<br/>and&#160;December&#160;15,&#160;2019,&#160;10&#160;AM&#160;Pacific&#160;Time&#160;Zone.<br/>
+8.1<br/>
+The&#160;Implementation&#160;Details<br/>
+The&#160;implementation&#160;is&#160;written&#160;in&#160;OCaml.&#160;The&#160;SNARK&#160;themselves&#160;are&#160;written<br/>in&#160;a&#160;special&#160;intuitive&#160;OCaml-based&#160;language&#160;called&#160;Snarky,&#160;with&#160;a&#160;backend&#160;based<br/>on&#160;libsnark&#160;<a href="2020-352s.html#45">[5].&#160;</a>The&#160;underlying&#160;gossip&#160;protocol&#160;is&#160;based&#160;on&#160;libp2p&#160;<a href="2020-352s.html#45">[1].</a><br/>
+The&#160;incrementally-computable&#160;SNARK.<br/>
+Recall&#160;that&#160;the&#160;Coda&#160;protocol<br/>
+is&#160;based&#160;on&#160;an&#160;incrementally-computable&#160;SNARK.&#160;The&#160;SNARK&#160;implementation<br/>employs&#160;the&#160;parallel&#160;scan&#160;state&#160;technique&#160;from&#160;Section&#160;<a href="2020-352s.html#17">6.1,&#160;</a>where&#160;for&#160;a&#160;queue&#160;of<br/>blocks,&#160;a&#160;tree&#160;of&#160;SNARK&#160;proofs&#160;are&#160;generated&#160;and&#160;the&#160;root&#160;proof&#160;is&#160;combined<br/>with&#160;the&#160;proof&#160;for&#160;the&#160;blockchain&#160;prior&#160;the&#160;queue,&#160;to&#160;obtain&#160;a&#160;new&#160;proof&#160;for<br/>the&#160;updated&#160;blockchain.&#160;The&#160;SNARK&#160;proof&#160;attesting&#160;validity&#160;of&#160;a&#160;blockchain<br/>is&#160;called&#160;a&#160;blockchain&#160;proof&#160;and&#160;all&#160;the&#160;other&#160;proofs&#160;in&#160;the&#160;trees&#160;are&#160;called<br/>block&#160;proofs.&#160;Recall&#160;from&#160;Section&#160;<a href="2020-352s.html#10">4.1.1&#160;</a>that,&#160;under&#160;the&#160;hood,&#160;there&#160;are&#160;three<br/>different&#160;types&#160;of&#160;proofs,&#160;namely&#160;the&#160;base&#160;proofs,&#160;the&#160;wrap&#160;proofs&#160;and&#160;the&#160;merge<br/>proofs.&#160;In&#160;effect,&#160;we&#160;have&#160;blockchain-base&#160;proofs,&#160;blockchain-wrap&#160;proofs,&#160;block-<br/>base&#160;proofs,&#160;block-wrap&#160;proofs&#160;and&#160;block-merge&#160;proofs.&#160;(Note&#160;that&#160;we&#160;do&#160;not<br/>have&#160;blockchain-merge&#160;proofs,&#160;since&#160;the&#160;blockchain&#160;proofs&#160;are&#160;only&#160;computed<br/>sequentially&#160;and&#160;therefore,&#160;multiple&#160;blockchain&#160;proofs&#160;are&#160;never&#160;merged.)<br/>
+The&#160;consensus&#160;parameters.<br/>
+The&#160;Coda&#160;protocol&#160;is&#160;instantiated&#160;with&#160;the<br/>
+Ouroboros&#160;Samasika&#160;consensus&#160;mechanism.&#160;We&#160;set&#160;the&#160;main&#160;consensus&#160;param-<br/>
+41<br/>
+<hr/>
+<a name=42></a>Type&#160;of&#160;SNARK&#160;proof<br/>
+Number&#160;of&#160;constraints<br/>
+block-base&#160;proof<br/>
+42700<br/>
+block-wrap&#160;proof<br/>
+34954<br/>
+block-merge&#160;proof<br/>
+206388<br/>
+blockchain-base&#160;proof<br/>
+248006<br/>
+blockchain-wrap&#160;proof<br/>
+28313<br/>
+Table&#160;1:&#160;Number&#160;of&#160;constraints&#160;in&#160;the&#160;different&#160;proofs&#160;used&#160;for&#160;the&#160;Coda&#160;proto-<br/>col.<br/>
+eters&#160;at&#160;𝑘&#160;=&#160;10&#160;(the&#160;number&#160;of&#160;slots&#160;before&#160;guaranteed&#160;finality),&#160;slot&#160;duration<br/>
+𝑅=240&#160;s,&#160;and&#160;𝑓&#160;=&#160;0.5&#160;(the&#160;average&#160;fraction&#160;of&#160;filled&#160;slots&#160;in&#160;an&#160;epoch).<br/>
+Community&#160;members&#160;across&#160;the&#160;world&#160;participated&#160;in&#160;the&#160;testnet.&#160;Besides,<br/>
+a&#160;few&#160;nodes&#160;were&#160;also&#160;run&#160;by&#160;us.<br/>
+Recall&#160;that,&#160;in&#160;the&#160;Coda&#160;protocol,&#160;every&#160;node&#160;is&#160;a&#160;full&#160;node,&#160;since&#160;verifying<br/>
+the&#160;entire&#160;blockchain&#160;is&#160;as&#160;simple&#160;as&#160;verifying&#160;just&#160;a&#160;short,&#160;constant-sized&#160;proof.<br/>However,&#160;every&#160;full&#160;node&#160;can&#160;have&#160;one&#160;or&#160;more&#160;of&#160;the&#160;following&#160;roles:&#160;a&#160;prover<br/>and&#160;a&#160;block&#160;producer.<br/>
+In&#160;total,&#160;the&#160;testnet&#160;had&#160;85&#160;unique&#160;participants.&#160;Among&#160;them,&#160;there&#160;were<br/>
+49&#160;block&#160;producers&#160;(where,&#160;44&#160;of&#160;the&#160;nodes&#160;were&#160;run&#160;by&#160;the&#160;community&#160;and&#160;5<br/>by&#160;us)&#160;and&#160;8&#160;unique&#160;provers&#160;.<br/>
+The&#160;block&#160;producer&#160;nodes&#160;run&#160;by&#160;us&#160;used&#160;the&#160;following&#160;instance&#160;size:&#160;‘c5.2xlarge’.<br/>
+The&#160;prover&#160;nodes&#160;run&#160;by&#160;us&#160;used&#160;the&#160;following&#160;instance&#160;size:&#160;‘c5.9xlarge’.&#160;The<br/>community&#160;members&#160;ran&#160;their&#160;nodes&#160;on&#160;Linux,&#160;OS&#160;X,&#160;or&#160;Windows&#160;through&#160;WSL<br/>(Windows&#160;Subsystem&#160;for&#160;Linux).<br/>
+8.2<br/>
+The&#160;Results<br/>
+Filled&#160;vs.<br/>
+unfilled&#160;slots.<br/>
+Observe&#160;that&#160;the&#160;total&#160;number&#160;of&#160;slots&#160;in&#160;the<br/>
+duration&#160;of&#160;interest&#160;is&#160;15839.&#160;Among&#160;them,&#160;7926&#160;slots&#160;were&#160;filled.&#160;Recall&#160;that<br/>
+𝑓<br/>
+=&#160;0.5&#160;implied&#160;that&#160;the&#160;expect&#160;fraction&#160;of&#160;filled&#160;slots&#160;is&#160;0.5.&#160;In&#160;the&#160;experiment,<br/>
+0.5004&#160;fraction&#160;of&#160;slots&#160;were&#160;filled.<br/>
+Transactions&#160;and&#160;SNARK&#160;proofs.<br/>
+A&#160;total&#160;of&#160;24826&#160;transactions&#160;were&#160;sent,<br/>
+17256&#160;of&#160;which&#160;were&#160;from&#160;the&#160;community&#160;members.<br/>
+There&#160;were&#160;78&#160;unique<br/>
+senders&#160;and&#160;183&#160;unique&#160;receivers.&#160;In&#160;total,&#160;53120&#160;block&#160;SNARK&#160;proofs&#160;were<br/>generated.<br/>
+The&#160;figures&#160;<a href="2020-352s.html#43">17,&#160;18&#160;</a>and&#160;<a href="2020-352s.html#43">19&#160;</a>report&#160;the&#160;number&#160;of&#160;daily&#160;transactions,&#160;number<br/>
+of&#160;daily&#160;blocks&#160;produced&#160;and&#160;number&#160;of&#160;daily&#160;SNARKs&#160;produced.<br/>
+42<br/>
+<hr/>
+<a name=43></a><img src="2020-352-43_1.png"/><br/>
+<img src="2020-352-43_2.png"/><br/>
+<img src="2020-352-43_3.png"/><br/>
+Figure&#160;17:&#160;Transactions&#160;produced&#160;from&#160;November&#160;12,&#160;2019,&#160;10&#160;AM&#160;to&#160;December<br/>15,&#160;2019,&#160;10&#160;AM,&#160;Pacific&#160;Time&#160;Zone<br/>
+Figure&#160;18:&#160;Blocks&#160;produced&#160;from&#160;November&#160;12,&#160;2019,&#160;10&#160;AM&#160;to&#160;December&#160;15,<br/>2019,&#160;10&#160;AM,&#160;Pacific&#160;Time&#160;Zone<br/>
+Figure&#160;19:&#160;SNARKs&#160;produced&#160;from&#160;November&#160;12,&#160;2019,&#160;10&#160;AM&#160;to&#160;December<br/>15,&#160;2019,&#160;10&#160;AM,&#160;Pacific&#160;Time&#160;Zone<br/>
+9<br/>
+Future&#160;Work<br/>
+While&#160;the&#160;presented&#160;description&#160;of&#160;the&#160;Coda&#160;protocol&#160;is&#160;for&#160;the&#160;payments&#160;sytem,<br/>the&#160;notion&#160;can&#160;be&#160;easily&#160;extended&#160;to&#160;any&#160;Turing-complete&#160;functionalities.&#160;For<br/>
+43<br/>
+<hr/>
+<a name=44></a>example,&#160;the&#160;framework&#160;can&#160;be&#160;extended&#160;to&#160;support&#160;user-defined&#160;tokens&#160;and<br/>multisignature&#160;accounts.&#160;Also,&#160;our&#160;roadmap&#160;includes&#160;upgrading&#160;the&#160;underlying<br/>SNARKs&#160;to&#160;the&#160;recent&#160;advances&#160;in&#160;the&#160;SNARK&#160;line&#160;of&#160;research,&#160;such&#160;as,&#160;those<br/>with&#160;universal&#160;setup&#160;<a href="2020-352s.html#45">[10,&#160;11].</a><br/>
+10<br/>
+Related&#160;Work<br/>
+Coda&#160;is,&#160;of&#160;course,&#160;not&#160;the&#160;only&#160;project&#160;working&#160;on&#160;solutions&#160;to&#160;the&#160;tradeoff<br/>between&#160;scaling&#160;and&#160;decentralization.&#160;Indeed,&#160;this&#160;tradeoff&#160;has&#160;been&#160;a&#160;key&#160;chal-<br/>lenge&#160;since&#160;the&#160;very&#160;beginning&#160;of&#160;blockchains.&#160;The&#160;very&#160;first&#160;reply&#160;to&#160;the&#160;original<br/>post&#160;of&#160;the&#160;bitcoin&#160;whitepaper&#160;raised&#160;this&#160;issue&#160;<a href="2020-352s.html#46">[14].</a><br/>
+Since&#160;then,&#160;many&#160;solutions&#160;have&#160;been&#160;suggested,&#160;all&#160;with&#160;various&#160;tradeoffs<br/>
+<a href="2020-352s.html#45">[3].&#160;</a>These&#160;solutions&#160;can&#160;be&#160;categorized&#160;into&#160;those&#160;that&#160;leverage&#160;existing&#160;chains,<br/>and&#160;those,&#160;like&#160;Coda,&#160;that&#160;propose&#160;novel&#160;architectures.<br/>
+10.1<br/>
+Existing&#160;Chain&#160;Solutions<br/>
+The&#160;Lightning&#160;and&#160;Plasma&#160;networks&#160;move&#160;transactions&#160;off&#160;the&#160;main&#160;chain&#160;to<br/>side&#160;channels.&#160;However,&#160;chain&#160;operations&#160;still&#160;require&#160;downloading&#160;the&#160;entire<br/>blockchain&#160;and&#160;suffer&#160;from&#160;unsolved&#160;routing&#160;challenges&#160;<a href="2020-352s.html#46">[23].&#160;</a>There&#160;have&#160;also<br/>been&#160;critical&#160;attacks&#160;on&#160;Lightning&#160;that&#160;limit&#160;its&#160;usefulness&#160;<a href="2020-352s.html#46">[22].</a><br/>
+Light&#160;nodes&#160;have&#160;been&#160;suggested&#160;as&#160;a&#160;possible&#160;solution&#160;to&#160;enable&#160;wider&#160;ac-<br/>
+cess&#160;to&#160;cryptocurrencies.&#160;They&#160;work&#160;by&#160;downloading&#160;block&#160;headers&#160;in&#160;order&#160;to<br/>determine&#160;the&#160;Merkle&#160;root&#160;of&#160;the&#160;database&#160;state&#160;that&#160;has&#160;the&#160;strongest&#160;protocol<br/>state.<br/>
+Sharding&#160;has&#160;also&#160;been&#160;suggested&#160;as&#160;a&#160;way&#160;to&#160;increase&#160;capacity.<br/>
+Nodes<br/>
+however&#160;have&#160;full&#160;certainty&#160;only&#160;over&#160;shards&#160;they&#160;possess&#160;the&#160;full&#160;data&#160;for.&#160;In<br/>the&#160;case&#160;of&#160;shards&#160;that&#160;nodes&#160;do&#160;not&#160;have&#160;the&#160;full&#160;data&#160;for,&#160;those&#160;nodes&#160;essentially<br/>have&#160;to&#160;trust&#160;the&#160;consensus&#160;nodes,&#160;and&#160;in&#160;so&#160;doing&#160;are&#160;operating&#160;as&#160;light&#160;nodes.<br/>Furthermore,&#160;this&#160;technique&#160;suffers&#160;from&#160;the&#160;high&#160;cost&#160;of&#160;having&#160;to&#160;download&#160;a<br/>new&#160;shard&#160;in&#160;every&#160;validator&#160;rotation&#160;<a href="2020-352s.html#46">[21].</a><br/>
+Another&#160;proposed&#160;solution&#160;to&#160;blockchain&#160;access&#160;is&#160;reliance&#160;on&#160;third-party<br/>
+nodes.&#160;Instead&#160;of&#160;connecting&#160;to&#160;the&#160;blockchain&#160;trustlessly,&#160;a&#160;third-party&#160;oper-<br/>ates&#160;a&#160;full&#160;node&#160;which&#160;is&#160;relied&#160;upon&#160;for&#160;state&#160;updates.&#160;Inherently,&#160;this&#160;approach<br/>requires&#160;trusting&#160;the&#160;third&#160;party.&#160;Such&#160;access&#160;precludes&#160;both&#160;censorship&#160;resis-<br/>tance&#160;and&#160;guaranteed&#160;liveness.<br/>
+Acknowledgement<br/>
+We&#160;thank&#160;Amit&#160;Sahai&#160;for&#160;his&#160;valuable&#160;comments.<br/>
+44<br/>
+<hr/>
+<a name=45></a>References<br/>
+[1]&#160;libp2p:&#160;Modular&#160;peer-to-peer&#160;networking&#160;stack.&#160;[Online;&#160;accessed&#160;February<br/>
+15,&#160;2020].<br/>
+[2]&#160;The&#160;coda&#160;protocol.&#160;<a href="https://github.com/CodaProtocol/coda">https://github.com/CodaProtocol/coda,&#160;</a>2018.<br/>
+[3]&#160;Vitalik&#160;Buterin&#160;talks&#160;scalability:&#160;‘Ethereum&#160;blockchain&#160;is&#160;almost&#160;full’,&#160;2019<br/>
+(accessed&#160;October,&#160;2019).&#160;<a href="https://cointelegraph.com/news">https://cointelegraph.com/news.</a><br/>
+[4]&#160;Christian&#160;Badertscher,&#160;Peter&#160;Gazi,&#160;Aggelos&#160;Kiayias,&#160;Alexander&#160;Russell,&#160;and<br/>
+Vassilis&#160;Zikas.&#160;Ouroboros&#160;genesis:&#160;Composable&#160;proof-of-stake&#160;blockchains<br/>with&#160;dynamic&#160;availability.&#160;Cryptology&#160;ePrint&#160;Archive,&#160;Report&#160;2018/378,<br/>2018.&#160;<a href="https://eprint.iacr.org/2018/378">“https://eprint.iacr.org/2018/378”.</a><br/>
+[5]&#160;Eli&#160;Ben-Sasson,&#160;Alessandro&#160;Chiesa,&#160;Daniel&#160;Genkin,&#160;Shaul&#160;Kfir,&#160;Eran<br/>
+Tromer,&#160;Madars&#160;Virza,&#160;and&#160;Howard&#160;Wu.&#160;libsnark.&#160;<a href="https://github.com/scipr-lab/libsnark">https://github.com/<br/>scipr-lab/libsnark,&#160;</a>2017.<br/>
+[6]&#160;Eli&#160;Ben-Sasson,&#160;Alessandro&#160;Chiesa,&#160;Eran&#160;Tromer,&#160;and&#160;Madars&#160;Virza.&#160;Scal-<br/>
+able&#160;zero&#160;knowledge&#160;via&#160;cycles&#160;of&#160;elliptic&#160;curves.&#160;In&#160;CRYPTO&#160;(2),&#160;volume<br/>8617&#160;of&#160;Lecture&#160;Notes&#160;in&#160;Computer&#160;Science,&#160;pages&#160;276–294.&#160;Springer,&#160;2014.<br/>
+[7]&#160;Eli&#160;Ben-Sasson,&#160;Alessandro&#160;Chiesa,&#160;Eran&#160;Tromer,&#160;and&#160;Madars&#160;Virza.&#160;Scal-<br/>
+able&#160;zero&#160;knowledge&#160;via&#160;cycles&#160;of&#160;elliptic&#160;curves.&#160;Algorithmica,&#160;79(4):1102–<br/>1160,&#160;Dec&#160;2017.<br/>
+[8]&#160;Nir&#160;Bitansky,&#160;Ran&#160;Canetti,&#160;Alessandro&#160;Chiesa,&#160;and&#160;Eran&#160;Tromer.&#160;Recursive<br/>
+composition&#160;and&#160;bootstrapping&#160;for&#160;SNARKS&#160;and&#160;proof-carrying&#160;data.&#160;In<br/>STOC,&#160;pages&#160;111–120.&#160;ACM,&#160;2013.<br/>
+[9]&#160;Sean&#160;Bowe&#160;and&#160;Ariel&#160;Gabizon.&#160;Making&#160;groth’s&#160;zk-snark&#160;simulation&#160;ex-<br/>
+tractable&#160;in&#160;the&#160;random&#160;oracle&#160;model.&#160;Cryptology&#160;ePrint&#160;Archive,&#160;Report<br/>2018/187,&#160;2018.&#160;<a href="https://eprint.iacr.org/2018/187">https://eprint.iacr.org/2018/187.</a><br/>
+[10]&#160;Sean&#160;Bowe,&#160;Jack&#160;Grigg,&#160;and&#160;Daira&#160;Hopwood.&#160;Halo:&#160;Recursive&#160;proof&#160;compo-<br/>
+sition&#160;without&#160;a&#160;trusted&#160;setup.&#160;IACR&#160;Cryptology&#160;ePrint&#160;Archive,&#160;2019:1021,<br/>2019.<br/>
+[11]&#160;Alessandro&#160;Chiesa,&#160;Yuncong&#160;Hu,&#160;Mary&#160;Maller,&#160;Pratyush&#160;Mishra,&#160;Noah<br/>
+Vesely,&#160;and&#160;Nicholas&#160;P.&#160;Ward.&#160;Marlin:&#160;Preprocessing&#160;zksnarks&#160;with&#160;uni-<br/>versal&#160;and&#160;updatable&#160;SRS.&#160;IACR&#160;Cryptology&#160;ePrint&#160;Archive,&#160;2019:1047,<br/>2019.<br/>
+[12]&#160;Phil&#160;Daian,&#160;Rafael&#160;Pass,&#160;and&#160;Elaine&#160;Shi.&#160;Snow&#160;white:&#160;Robustly&#160;reconfig-<br/>
+urable&#160;consensus&#160;and&#160;applications&#160;to&#160;provably&#160;secure&#160;proof&#160;of&#160;stake.&#160;In<br/>Financial&#160;Cryptography,&#160;volume&#160;11598&#160;of&#160;Lecture&#160;Notes&#160;in&#160;Computer&#160;Sci-<br/>ence,&#160;pages&#160;23–41.&#160;Springer,&#160;2019.<br/>
+45<br/>
+<hr/>
+<a name=46></a>[13]&#160;Bernardo&#160;David,&#160;Peter&#160;Gaˇ<br/>
+zi,&#160;Aggelos&#160;Kiayias,&#160;and&#160;Alexander&#160;Russell.<br/>
+Ouroboros&#160;praos:&#160;An&#160;adaptively-secure,&#160;semi-synchronous&#160;proof-of-stake<br/>protocol.<br/>
+Cryptology&#160;ePrint&#160;Archive,&#160;Report&#160;2017/573,&#160;2017.<br/>
+<a href="http://eprint.iacr.org/2017/573">http:</a><br/>
+<a href="http://eprint.iacr.org/2017/573">//eprint.iacr.org/2017/573.</a><br/>
+[14]&#160;James&#160;A.&#160;Donald.&#160;Bitcoin&#160;P2P&#160;e-cash&#160;paper,&#160;2008&#160;(accessed&#160;October,&#160;2019).<br/>
+[15]&#160;Juan&#160;A.&#160;Garay,&#160;Aggelos&#160;Kiayias,&#160;and&#160;Nikos&#160;Leonardos.&#160;The&#160;bitcoin&#160;back-<br/>
+bone&#160;protocol:&#160;Analysis&#160;and&#160;applications.&#160;In&#160;EUROCRYPT&#160;(2),&#160;volume<br/>9057&#160;of&#160;Lecture&#160;Notes&#160;in&#160;Computer&#160;Science,&#160;pages&#160;281–310.&#160;Springer,&#160;2015.<br/>
+[16]&#160;Jens&#160;Groth&#160;and&#160;Mary&#160;Maller.&#160;Snarky&#160;signatures:&#160;Minimal&#160;signatures&#160;of<br/>
+knowledge&#160;from&#160;simulation-extractable&#160;snarks.&#160;In&#160;CRYPTO&#160;(2),&#160;volume<br/>10402&#160;of&#160;Lecture&#160;Notes&#160;in&#160;Computer&#160;Science,&#160;pages&#160;581–612.&#160;Springer,&#160;2017.<br/>
+[17]&#160;Aggelos&#160;Kiayias,<br/>
+Alexander&#160;Russell,<br/>
+Bernardo&#160;David,<br/>
+and&#160;Roman<br/>
+Oliynykov.&#160;Ouroboros:&#160;A&#160;provably&#160;secure&#160;proof-of-stake&#160;blockchain&#160;proto-<br/>col.&#160;In&#160;CRYPTO&#160;(1),&#160;volume&#160;10401&#160;of&#160;Lecture&#160;Notes&#160;in&#160;Computer&#160;Science,<br/>pages&#160;357–388.&#160;Springer,&#160;2017.<br/>
+[18]&#160;Rajeev&#160;Motwani&#160;and&#160;Prabhakar&#160;Raghavan.&#160;Randomized&#160;Algorithms.&#160;Cam-<br/>
+bridge&#160;University&#160;Press,&#160;New&#160;York,&#160;NY,&#160;USA,&#160;1995.<br/>
+[19]&#160;Satoshi&#160;Nakamoto.<br/>
+Bitcoin:<br/>
+A&#160;peer-to-peer&#160;electronic&#160;cash&#160;system,”<br/>
+http://bitcoin.org/bitcoin.pdf,&#160;2008.<br/>
+[20]&#160;Eli&#160;Ben&#160;Sasson,&#160;Alessandro&#160;Chiesa,&#160;Christina&#160;Garman,&#160;Matthew&#160;Green,&#160;Ian<br/>
+Miers,&#160;Eran&#160;Tromer,&#160;and&#160;Madars&#160;Virza.&#160;Zerocash:&#160;Decentralized&#160;anony-<br/>mous&#160;payments&#160;from&#160;bitcoin.&#160;In&#160;2014&#160;IEEE&#160;Symposium&#160;on&#160;Security&#160;and<br/>Privacy,&#160;pages&#160;459–474.&#160;IEEE,&#160;2014.<br/>
+[21]&#160;Alexander&#160;Skidanov.&#160;Unsolved&#160;Problems&#160;in&#160;Blockchain&#160;Sharding,&#160;2018&#160;(ac-<br/>
+cessed&#160;October,&#160;2019).&#160;<a href="https://medium.com/nearprotocol">https://medium.com/nearprotocol.</a><br/>
+[22]&#160;Saar&#160;Tochner,&#160;Stefan&#160;Schmid,&#160;and&#160;Aviv&#160;Zohar.&#160;Hijacking&#160;routes&#160;in&#160;payment<br/>
+channel&#160;networks:&#160;A&#160;predictability&#160;tradeoff.&#160;CoRR,&#160;abs/1909.06890,&#160;2019.<br/>
+[23]&#160;Trustnodes.&#160;Lightning&#160;Network&#160;Has&#160;Many&#160;Routing&#160;Problems&#160;Says&#160;Lead<br/>
+Dev&#160;at&#160;Lightning&#160;Labs,&#160;2019&#160;(accessed&#160;October,&#160;2019).<br/>
+<a href="https://www.trustnodes.com">https://www.</a><br/>
+<a href="https://www.trustnodes.com">trustnodes.com.</a><br/>
+[24]&#160;Paul&#160;Valiant.&#160;Incrementally&#160;verifiable&#160;computation&#160;or&#160;proofs&#160;of&#160;knowledge<br/>
+imply&#160;time/space&#160;efficiency.<br/>
+In&#160;TCC,&#160;volume&#160;4948&#160;of&#160;Lecture&#160;Notes&#160;in<br/>
+Computer&#160;Science,&#160;pages&#160;1–18.&#160;Springer,&#160;2008.<br/>
+[25]&#160;Gavin&#160;Wood&#160;et&#160;al.&#160;Ethereum:&#160;A&#160;secure&#160;decentralised&#160;generalised&#160;transac-<br/>
+tion&#160;ledger.&#160;Ethereum&#160;project&#160;yellow&#160;paper,&#160;151(2014):1–32,&#160;2014.<br/>
+46<br/>
+<hr/>
+<a name=47></a>Appendix&#160;A<br/>
+Chain&#160;Selection&#160;in&#160;Ouroboros&#160;Gen-<br/>esis<br/>
+Here,&#160;we&#160;recall&#160;the&#160;chain&#160;selection&#160;rule&#160;of&#160;Ouroboros&#160;Genesis.&#160;The&#160;protocol<br/>SelectChain&#160;is&#160;the&#160;same&#160;as&#160;in&#160;Ouroboros&#160;Samasika,&#160;except&#160;for&#160;calling&#160;the&#160;algo-<br/>rithm&#160;maxvalid-bg&#160;instead&#160;of&#160;maxvalid-sc.&#160;The&#160;algorithm&#160;maxvalid-bg&#160;is&#160;recalled<br/>below.<br/>
+Algorithm&#160;maxvalid-bg(Cloc,&#160;N&#160;=&#160;{C1,&#160;.&#160;.&#160;.&#160;,&#160;C&#160;},&#160;𝑘,&#160;𝑠)<br/>
+𝑀<br/>
+//&#160;Compare&#160;Cloc&#160;with&#160;each&#160;candidate&#160;chain&#160;in&#160;N<br/>
+1.&#160;Set&#160;Cmax&#160;←&#160;Cloc<br/>
+2.&#160;for&#160;𝑖&#160;=&#160;1,&#160;.&#160;.&#160;.&#160;,&#160;𝑀&#160;do<br/>
+if&#160;(C&#160;forks&#160;from&#160;C<br/>
+𝑖<br/>
+max&#160;at&#160;most&#160;𝑘&#160;blocks&#160;ago)&#160;then&#160;//&#160;The&#160;case&#160;of<br/>
+a&#160;short-range&#160;fork<br/>
+if&#160;|C&#160;|&#160;&gt;&#160;|C<br/>
+𝑖<br/>
+max&#160;|&#160;then<br/>
+Set&#160;Cmax&#160;←&#160;C𝑖<br/>
+end&#160;if<br/>
+else&#160;//&#160;The&#160;case&#160;of&#160;a&#160;long-range&#160;fork<br/>
+Let<br/>
+0<br/>
+𝑗&#160;←&#160;max{&#160;𝑗<br/>
+≥&#160;0&#160;|&#160;Cmax&#160;and&#160;C&#160;have&#160;the&#160;same&#160;block&#160;in&#160;sl&#160;0}<br/>
+𝑖<br/>
+𝑗<br/>
+if&#160;getLocalForkDen(C&#160;,&#160;𝑗&#160;+&#160;𝑠)&#160;&gt;&#160;getLocalForkDen(C<br/>
+𝑖<br/>
+max,&#160;𝑗&#160;+&#160;𝑠)<br/>
+then<br/>
+Set&#160;Cmax&#160;←&#160;C𝑖<br/>
+end&#160;if<br/>
+end&#160;if&#160;end&#160;for<br/>
+3.&#160;Return&#160;Cmax<br/>
+Figure&#160;20:&#160;The&#160;chain&#160;selection&#160;rule&#160;of&#160;Ouroboros&#160;Genesis.<br/>
+Algorithm&#160;getLocalForkDen(C,&#160;𝑛)<br/>
+return&#160;|C[sl1,&#160;sl&#160;]&#160;|,&#160;the&#160;number&#160;of&#160;blocks&#160;in&#160;the&#160;first&#160;𝑛&#160;slots&#160;of&#160;C.<br/>
+𝑛<br/>
+Figure&#160;21:&#160;The&#160;algorithm&#160;for&#160;parties&#160;to&#160;obtain&#160;chain&#160;density&#160;until&#160;a&#160;slot&#160;local<br/>to&#160;the&#160;fork.<br/>
+47<br/>
+<hr/>
+<a name="outline"></a><h1>Document Outline</h1>
+<ul>
+<li><a href="2020-352s.html#1">Introduction</a>
+<ul>
+<li><a href="2020-352s.html#4">Our Contributions</a></li>
+</ul>
+</li>
+<li><a href="2020-352s.html#4">Succinct Blockchains</a>
+<ul>
+<li><a href="2020-352s.html#7">Security Properties of a Succinct Blockchain</a></li>
+</ul>
+</li>
+<li><a href="2020-352s.html#8">Preliminaries</a></li>
+<li><a href="2020-352s.html#9">Coda: A Succinct Blockchain based on Recursive SNARKs</a>
+<ul>
+<li><a href="2020-352s.html#9">Incrementally-computable SNARKs</a>
+<ul>
+<li><a href="2020-352s.html#10">Incrementally-computable SNARKs using Recursive Proof Composition</a></li>
+<li><a href="2020-352s.html#11">An example transition system</a></li>
+</ul>
+</li>
+<li><a href="2020-352s.html#12">CODA: A Succinct Blockchain Using Incrementally-computable SNARKs</a>
+<ul>
+<li><a href="2020-352s.html#12">Our Construction</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="2020-352s.html#14">The Coda Protocol for Payments</a>
+<ul>
+<li><a href="2020-352s.html#14">Coda's Framework for Payments</a>
+<ul>
+<li><a href="2020-352s.html#15">The SNARK</a></li>
+<li><a href="2020-352s.html#16">Our Construction</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="2020-352s.html#17">Snark Workers</a>
+<ul>
+<li><a href="2020-352s.html#17">Parallel Scan State</a></li>
+<li><a href="2020-352s.html#18">Incentivizing the Provers</a></li>
+</ul>
+</li>
+<li><a href="2020-352s.html#19">Ouroboros Samasika – PoS Consensus for Succinct Blockchains</a>
+<ul>
+<li><a href="2020-352s.html#19">Intuitive Description</a></li>
+<li><a href="2020-352s.html#22">Background</a></li>
+<li><a href="2020-352s.html#24">The New Chain Selection Rules</a>
+<ul>
+<li><a href="2020-352s.html#24">The short-range chain selection rule</a></li>
+</ul>
+</li>
+<li><a href="2020-352s.html#25">The Window Min-density</a></li>
+<li><a href="2020-352s.html#28">Adopting the New Chain Selection Rule</a></li>
+<li><a href="2020-352s.html#33">Proofs of Security</a>
+<ul>
+<li><a href="2020-352s.html#33">Preliminaries</a></li>
+<li><a href="2020-352s.html#34">The Proofs</a></li>
+</ul>
+</li>
+<li><a href="2020-352s.html#40">An Efficient Implementation of the Short-range Fork Rule</a></li>
+</ul>
+</li>
+<li><a href="2020-352s.html#41">Experimental Results</a>
+<ul>
+<li><a href="2020-352s.html#41">The Implementation Details</a></li>
+<li><a href="2020-352s.html#42">The Results</a></li>
+</ul>
+</li>
+<li><a href="2020-352s.html#43">Future Work</a></li>
+<li><a href="2020-352s.html#44">Related Work</a>
+<ul>
+<li><a href="2020-352s.html#44">Existing Chain Solutions</a></li>
+</ul>
+</li>
+<li><a href="2020-352s.html#47">Chain Selection in Ouroboros Genesis&#160;</a></li>
+</ul>
+<hr/>
+</body>
+</html>

@@ -1,0 +1,1428 @@
+<!DOCTYPE html><html>
+<head>
+<title></title>
+<style type="text/css">
+<!--
+.xflip {
+    -moz-transform: scaleX(-1);
+    -webkit-transform: scaleX(-1);
+    -o-transform: scaleX(-1);
+    transform: scaleX(-1);
+    filter: fliph;
+}
+.yflip {
+    -moz-transform: scaleY(-1);
+    -webkit-transform: scaleY(-1);
+    -o-transform: scaleY(-1);
+    transform: scaleY(-1);
+    filter: flipv;
+}
+.xyflip {
+    -moz-transform: scaleX(-1) scaleY(-1);
+    -webkit-transform: scaleX(-1) scaleY(-1);
+    -o-transform: scaleX(-1) scaleY(-1);
+    transform: scaleX(-1) scaleY(-1);
+    filter: fliph + flipv;
+}
+-->
+</style>
+</head>
+<body>
+<a name=1></a>Speech&#160;and&#160;Language&#160;Processing.<br/>
+Daniel&#160;Jurafsky&#160;&amp;&#160;James&#160;H.&#160;Martin.<br/>
+Copyright&#160;©&#160;2023.<br/>
+All<br/>
+rights&#160;reserved.<br/>
+Draft&#160;of&#160;February&#160;3,&#160;2024.<br/>
+CHAPTER<br/>
+4&#160;Naive&#160;Bayes,&#160;Text&#160;Classifica-<br/>
+tion,&#160;and&#160;Sentiment<br/>
+Classification&#160;lies&#160;at&#160;the&#160;heart&#160;of&#160;both&#160;human&#160;and&#160;machine&#160;intelligence.&#160;Deciding<br/>what&#160;letter,&#160;word,&#160;or&#160;image&#160;has&#160;been&#160;presented&#160;to&#160;our&#160;senses,&#160;recognizing&#160;faces<br/>or&#160;voices,&#160;sorting&#160;mail,&#160;assigning&#160;grades&#160;to&#160;homeworks;&#160;these&#160;are&#160;all&#160;examples&#160;of<br/>assigning&#160;a&#160;category&#160;to&#160;an&#160;input.&#160;The&#160;potential&#160;challenges&#160;of&#160;this&#160;task&#160;are&#160;highlighted<br/>by&#160;the&#160;fabulist&#160;Jorge&#160;Luis&#160;Borges&#160;<a href="4s.html#22">(1964),&#160;</a>who&#160;imagined&#160;classifying&#160;animals&#160;into:<br/>
+(a)&#160;those&#160;that&#160;belong&#160;to&#160;the&#160;Emperor,&#160;(b)&#160;embalmed&#160;ones,&#160;(c)&#160;those&#160;that<br/>are&#160;trained,&#160;(d)&#160;suckling&#160;pigs,&#160;(e)&#160;mermaids,&#160;(f)&#160;fabulous&#160;ones,&#160;(g)&#160;stray<br/>dogs,&#160;(h)&#160;those&#160;that&#160;are&#160;included&#160;in&#160;this&#160;classification,&#160;(i)&#160;those&#160;that<br/>tremble&#160;as&#160;if&#160;they&#160;were&#160;mad,&#160;(j)&#160;innumerable&#160;ones,&#160;(k)&#160;those&#160;drawn&#160;with<br/>a&#160;very&#160;fine&#160;camel’s&#160;hair&#160;brush,&#160;(l)&#160;others,&#160;(m)&#160;those&#160;that&#160;have&#160;just&#160;broken<br/>a&#160;flower&#160;vase,&#160;(n)&#160;those&#160;that&#160;resemble&#160;flies&#160;from&#160;a&#160;distance.<br/>
+Many&#160;language&#160;processing&#160;tasks&#160;involve&#160;classification,&#160;although&#160;luckily&#160;our&#160;classes<br/>
+are&#160;much&#160;easier&#160;to&#160;define&#160;than&#160;those&#160;of&#160;Borges.&#160;In&#160;this&#160;chapter&#160;we&#160;introduce&#160;the&#160;naive<br/>
+text<br/>
+Bayes&#160;algorithm&#160;and&#160;apply&#160;it&#160;to&#160;text&#160;categorization,&#160;the&#160;task&#160;of&#160;assigning&#160;a&#160;label&#160;or<br/>
+categorization<br/>
+category&#160;to&#160;an&#160;entire&#160;text&#160;or&#160;document.<br/>
+sentiment<br/>
+We&#160;focus&#160;on&#160;one&#160;common&#160;text&#160;categorization&#160;task,&#160;sentiment&#160;analysis,&#160;the&#160;ex-<br/>
+analysis<br/>
+traction&#160;of&#160;sentiment,&#160;the&#160;positive&#160;or&#160;negative&#160;orientation&#160;that&#160;a&#160;writer&#160;expresses<br/>toward&#160;some&#160;object.&#160;A&#160;review&#160;of&#160;a&#160;movie,&#160;book,&#160;or&#160;product&#160;on&#160;the&#160;web&#160;expresses&#160;the<br/>author’s&#160;sentiment&#160;toward&#160;the&#160;product,&#160;while&#160;an&#160;editorial&#160;or&#160;political&#160;text&#160;expresses<br/>sentiment&#160;toward&#160;a&#160;candidate&#160;or&#160;political&#160;action.&#160;Extracting&#160;consumer&#160;or&#160;public&#160;sen-<br/>timent&#160;is&#160;thus&#160;relevant&#160;for&#160;fields&#160;from&#160;marketing&#160;to&#160;politics.<br/>
+The&#160;simplest&#160;version&#160;of&#160;sentiment&#160;analysis&#160;is&#160;a&#160;binary&#160;classification&#160;task,&#160;and<br/>
+the&#160;words&#160;of&#160;the&#160;review&#160;provide&#160;excellent&#160;cues.&#160;Consider,&#160;for&#160;example,&#160;the&#160;follow-<br/>ing&#160;phrases&#160;extracted&#160;from&#160;positive&#160;and&#160;negative&#160;reviews&#160;of&#160;movies&#160;and&#160;restaurants.<br/>Words&#160;like&#160;great,&#160;richly,&#160;awesome,&#160;and&#160;pathetic,&#160;and&#160;awful&#160;and&#160;ridiculously&#160;are&#160;very<br/>informative&#160;cues:<br/>
++&#160;...zany&#160;characters&#160;and&#160;richly&#160;applied&#160;satire,&#160;and&#160;some&#160;great&#160;plot&#160;twists<br/>−&#160;It&#160;was&#160;pathetic.&#160;The&#160;worst&#160;part&#160;about&#160;it&#160;was&#160;the&#160;boxing&#160;scenes...<br/>+&#160;...awesome&#160;caramel&#160;sauce&#160;and&#160;sweet&#160;toasty&#160;almonds.&#160;I&#160;love&#160;this&#160;place!<br/>−&#160;...awful&#160;pizza&#160;and&#160;ridiculously&#160;overpriced...<br/>
+spam&#160;detection<br/>
+Spam&#160;detection&#160;is&#160;another&#160;important&#160;commercial&#160;application,&#160;the&#160;binary&#160;clas-<br/>
+sification&#160;task&#160;of&#160;assigning&#160;an&#160;email&#160;to&#160;one&#160;of&#160;the&#160;two&#160;classes&#160;spam&#160;or&#160;not-spam.<br/>Many&#160;lexical&#160;and&#160;other&#160;features&#160;can&#160;be&#160;used&#160;to&#160;perform&#160;this&#160;classification.&#160;For&#160;ex-<br/>ample&#160;you&#160;might&#160;quite&#160;reasonably&#160;be&#160;suspicious&#160;of&#160;an&#160;email&#160;containing&#160;phrases&#160;like<br/>“online&#160;pharmaceutical”&#160;or&#160;“WITHOUT&#160;ANY&#160;COST”&#160;or&#160;“Dear&#160;Winner”.<br/>
+Another&#160;thing&#160;we&#160;might&#160;want&#160;to&#160;know&#160;about&#160;a&#160;text&#160;is&#160;the&#160;language&#160;it’s&#160;written<br/>
+in.&#160;Texts&#160;on&#160;social&#160;media,&#160;for&#160;example,&#160;can&#160;be&#160;in&#160;any&#160;number&#160;of&#160;languages&#160;and<br/>
+language&#160;id<br/>
+we’ll&#160;need&#160;to&#160;apply&#160;different&#160;processing.&#160;The&#160;task&#160;of&#160;language&#160;id&#160;is&#160;thus&#160;the&#160;first<br/>step&#160;in&#160;most&#160;language&#160;processing&#160;pipelines.&#160;Related&#160;text&#160;classification&#160;tasks&#160;like&#160;au-<br/>
+authorship<br/>
+thorship&#160;attribution—&#160;determining&#160;a&#160;text’s&#160;author—&#160;are&#160;also&#160;relevant&#160;to&#160;the&#160;digital<br/>
+attribution<br/>
+humanities,&#160;social&#160;sciences,&#160;and&#160;forensic&#160;linguistics.<br/>
+<hr/>
+<a name=2></a>2<br/>
+CHAPTER&#160;4<br/>
+•<br/>
+NAIVE&#160;BAYES,&#160;TEXT&#160;CLASSIFICATION,&#160;AND&#160;SENTIMENT<br/>
+Finally,&#160;one&#160;of&#160;the&#160;oldest&#160;tasks&#160;in&#160;text&#160;classification&#160;is&#160;assigning&#160;a&#160;library&#160;sub-<br/>
+ject&#160;category&#160;or&#160;topic&#160;label&#160;to&#160;a&#160;text.&#160;Deciding&#160;whether&#160;a&#160;research&#160;paper&#160;concerns<br/>epidemiology&#160;or&#160;instead,&#160;perhaps,&#160;embryology,&#160;is&#160;an&#160;important&#160;component&#160;of&#160;infor-<br/>mation&#160;retrieval.&#160;Various&#160;sets&#160;of&#160;subject&#160;categories&#160;exist,&#160;such&#160;as&#160;the&#160;MeSH&#160;(Medical<br/>Subject&#160;Headings)&#160;thesaurus.&#160;In&#160;fact,&#160;as&#160;we&#160;will&#160;see,&#160;subject&#160;category&#160;classification<br/>is&#160;the&#160;task&#160;for&#160;which&#160;the&#160;naive&#160;Bayes&#160;algorithm&#160;was&#160;invented&#160;in&#160;1961&#160;<a href="4s.html#22">Maron&#160;(1961).</a><br/>
+Classification&#160;is&#160;essential&#160;for&#160;tasks&#160;below&#160;the&#160;level&#160;of&#160;the&#160;document&#160;as&#160;well.<br/>
+We’ve&#160;already&#160;seen&#160;period&#160;disambiguation&#160;(deciding&#160;if&#160;a&#160;period&#160;is&#160;the&#160;end&#160;of&#160;a&#160;sen-<br/>tence&#160;or&#160;part&#160;of&#160;a&#160;word),&#160;and&#160;word&#160;tokenization&#160;(deciding&#160;if&#160;a&#160;character&#160;should&#160;be<br/>a&#160;word&#160;boundary).&#160;Even&#160;language&#160;modeling&#160;can&#160;be&#160;viewed&#160;as&#160;classification:&#160;each<br/>word&#160;can&#160;be&#160;thought&#160;of&#160;as&#160;a&#160;class,&#160;and&#160;so&#160;predicting&#160;the&#160;next&#160;word&#160;is&#160;classifying&#160;the<br/>context-so-far&#160;into&#160;a&#160;class&#160;for&#160;each&#160;next&#160;word.&#160;A&#160;part-of-speech&#160;tagger&#160;(Chapter&#160;8)<br/>classifies&#160;each&#160;occurrence&#160;of&#160;a&#160;word&#160;in&#160;a&#160;sentence&#160;as,&#160;e.g.,&#160;a&#160;noun&#160;or&#160;a&#160;verb.<br/>
+The&#160;goal&#160;of&#160;classification&#160;is&#160;to&#160;take&#160;a&#160;single&#160;observation,&#160;extract&#160;some&#160;useful<br/>
+features,&#160;and&#160;thereby&#160;classify&#160;the&#160;observation&#160;into&#160;one&#160;of&#160;a&#160;set&#160;of&#160;discrete&#160;classes.<br/>One&#160;method&#160;for&#160;classifying&#160;text&#160;is&#160;to&#160;use&#160;rules&#160;handwritten&#160;by&#160;humans.&#160;Handwrit-<br/>ten&#160;rule-based&#160;classifiers&#160;can&#160;be&#160;components&#160;of&#160;state-of-the-art&#160;systems&#160;in&#160;language<br/>processing.&#160;But&#160;rules&#160;can&#160;be&#160;fragile,&#160;as&#160;situations&#160;or&#160;data&#160;change&#160;over&#160;time,&#160;and&#160;for<br/>some&#160;tasks&#160;humans&#160;aren’t&#160;necessarily&#160;good&#160;at&#160;coming&#160;up&#160;with&#160;the&#160;rules.<br/>
+The&#160;most&#160;common&#160;way&#160;of&#160;doing&#160;text&#160;classification&#160;in&#160;language&#160;processing&#160;is<br/>
+supervised<br/>
+machine<br/>
+instead&#160;via&#160;supervised&#160;machine&#160;learning,&#160;the&#160;subject&#160;of&#160;this&#160;chapter.&#160;In&#160;supervised<br/>
+learning<br/>
+learning,&#160;we&#160;have&#160;a&#160;data&#160;set&#160;of&#160;input&#160;observations,&#160;each&#160;associated&#160;with&#160;some&#160;correct<br/>output&#160;(a&#160;‘supervision&#160;signal’).&#160;The&#160;goal&#160;of&#160;the&#160;algorithm&#160;is&#160;to&#160;learn&#160;how&#160;to&#160;map<br/>from&#160;a&#160;new&#160;observation&#160;to&#160;a&#160;correct&#160;output.<br/>
+Formally,&#160;the&#160;task&#160;of&#160;supervised&#160;classification&#160;is&#160;to&#160;take&#160;an&#160;input&#160;x&#160;and&#160;a&#160;fixed<br/>
+set&#160;of&#160;output&#160;classes&#160;Y&#160;=&#160;{y1,&#160;y2,&#160;...,&#160;yM}&#160;and&#160;return&#160;a&#160;predicted&#160;class&#160;y&#160;∈&#160;Y&#160;.&#160;For<br/>text&#160;classification,&#160;we’ll&#160;sometimes&#160;talk&#160;about&#160;c&#160;(for&#160;“class”)&#160;instead&#160;of&#160;y&#160;as&#160;our<br/>output&#160;variable,&#160;and&#160;d&#160;(for&#160;“document”)&#160;instead&#160;of&#160;x&#160;as&#160;our&#160;input&#160;variable.&#160;In&#160;the<br/>supervised&#160;situation&#160;we&#160;have&#160;a&#160;training&#160;set&#160;of&#160;N&#160;documents&#160;that&#160;have&#160;each&#160;been&#160;hand-<br/>labeled&#160;with&#160;a&#160;class:&#160;{(d1,&#160;c1),&#160;....,&#160;(dN,&#160;cN)}.&#160;Our&#160;goal&#160;is&#160;to&#160;learn&#160;a&#160;classifier&#160;that&#160;is<br/>capable&#160;of&#160;mapping&#160;from&#160;a&#160;new&#160;document&#160;d&#160;to&#160;its&#160;correct&#160;class&#160;c&#160;∈&#160;C,&#160;where&#160;C&#160;is<br/>some&#160;set&#160;of&#160;useful&#160;document&#160;classes.&#160;A&#160;probabilistic&#160;classifier&#160;additionally&#160;will&#160;tell<br/>us&#160;the&#160;probability&#160;of&#160;the&#160;observation&#160;being&#160;in&#160;the&#160;class.&#160;This&#160;full&#160;distribution&#160;over<br/>the&#160;classes&#160;can&#160;be&#160;useful&#160;information&#160;for&#160;downstream&#160;decisions;&#160;avoiding&#160;making<br/>discrete&#160;decisions&#160;early&#160;on&#160;can&#160;be&#160;useful&#160;when&#160;combining&#160;systems.<br/>
+Many&#160;kinds&#160;of&#160;machine&#160;learning&#160;algorithms&#160;are&#160;used&#160;to&#160;build&#160;classifiers.&#160;This<br/>
+chapter&#160;introduces&#160;naive&#160;Bayes;&#160;the&#160;following&#160;one&#160;introduces&#160;logistic&#160;regression.<br/>These&#160;exemplify&#160;two&#160;ways&#160;of&#160;doing&#160;classification.&#160;Generative&#160;classifiers&#160;like&#160;naive<br/>Bayes&#160;build&#160;a&#160;model&#160;of&#160;how&#160;a&#160;class&#160;could&#160;generate&#160;some&#160;input&#160;data.&#160;Given&#160;an&#160;ob-<br/>servation,&#160;they&#160;return&#160;the&#160;class&#160;most&#160;likely&#160;to&#160;have&#160;generated&#160;the&#160;observation.&#160;Dis-<br/>criminative&#160;classifiers&#160;like&#160;logistic&#160;regression&#160;instead&#160;learn&#160;what&#160;features&#160;from&#160;the<br/>input&#160;are&#160;most&#160;useful&#160;to&#160;discriminate&#160;between&#160;the&#160;different&#160;possible&#160;classes.&#160;While<br/>discriminative&#160;systems&#160;are&#160;often&#160;more&#160;accurate&#160;and&#160;hence&#160;more&#160;commonly&#160;used,<br/>generative&#160;classifiers&#160;still&#160;have&#160;a&#160;role.<br/>
+4.1<br/>
+Naive&#160;Bayes&#160;Classifiers<br/>
+naive&#160;Bayes<br/>
+In&#160;this&#160;section&#160;we&#160;introduce&#160;the&#160;multinomial&#160;naive&#160;Bayes&#160;classifier,&#160;so&#160;called&#160;be-<br/>
+classifier<br/>
+cause&#160;it&#160;is&#160;a&#160;Bayesian&#160;classifier&#160;that&#160;makes&#160;a&#160;simplifying&#160;(naive)&#160;assumption&#160;about<br/>
+<hr/>
+<a name=3></a>4.1<br/>
+•<br/>
+NAIVE&#160;BAYES&#160;CLASSIFIERS<br/>
+3<br/>
+how&#160;the&#160;features&#160;interact.<br/>
+The&#160;intuition&#160;of&#160;the&#160;classifier&#160;is&#160;shown&#160;in&#160;Fig.&#160;<a href="4s.html#3">4.1.&#160;</a>We&#160;represent&#160;a&#160;text&#160;document<br/>
+bag&#160;of&#160;words<br/>
+as&#160;if&#160;it&#160;were&#160;a&#160;bag&#160;of&#160;words,&#160;that&#160;is,&#160;an&#160;unordered&#160;set&#160;of&#160;words&#160;with&#160;their&#160;position<br/>ignored,&#160;keeping&#160;only&#160;their&#160;frequency&#160;in&#160;the&#160;document.&#160;In&#160;the&#160;example&#160;in&#160;the&#160;figure,<br/>instead&#160;of&#160;representing&#160;the&#160;word&#160;order&#160;in&#160;all&#160;the&#160;phrases&#160;like&#160;“I&#160;love&#160;this&#160;movie”&#160;and<br/>“I&#160;would&#160;recommend&#160;it”,&#160;we&#160;simply&#160;note&#160;that&#160;the&#160;word&#160;I&#160;occurred&#160;5&#160;times&#160;in&#160;the<br/>entire&#160;excerpt,&#160;the&#160;word&#160;it&#160;6&#160;times,&#160;the&#160;words&#160;love,&#160;recommend,&#160;and&#160;movie&#160;once,&#160;and<br/>so&#160;on.<br/>
+it&#160;<br/>
+6&#160;<br/>
+I<br/>
+5<br/>
+I&#160;love&#160;this&#160;movie!&#160;It's&#160;sweet,&#160;<br/>
+the<br/>
+4<br/>
+fairy<br/>
+it<br/>
+but&#160;with&#160;satirical&#160;humor.&#160;The&#160;<br/>
+always<br/>
+love<br/>
+to<br/>
+3<br/>
+it<br/>
+to<br/>
+dialogue&#160;is&#160;great&#160;and&#160;the&#160;<br/>
+whimsical<br/>
+it<br/>
+I<br/>
+and<br/>
+3<br/>
+and&#160;seen<br/>
+are<br/>
+adventure&#160;scenes&#160;are&#160;fun...&#160;<br/>
+seen<br/>
+2<br/>
+friend<br/>
+anyone<br/>
+It&#160;manages&#160;to&#160;be&#160;whimsical&#160;<br/>
+happy&#160;dialogue<br/>
+yet<br/>
+1<br/>
+recommend<br/>
+and&#160;romantic&#160;while&#160;laughing&#160;<br/>
+adventure<br/>
+would<br/>
+1<br/>
+satirical<br/>
+at&#160;the&#160;conventions&#160;of&#160;the&#160;<br/>
+whosweet&#160;of<br/>
+it<br/>
+whimsical&#160;1<br/>
+movie<br/>
+fairy&#160;tale&#160;genre.&#160;I&#160;would&#160;<br/>
+it<br/>
+I<br/>
+to<br/>
+but<br/>
+romantic<br/>
+times<br/>
+1<br/>
+I<br/>
+yet<br/>
+recommend&#160;it&#160;to&#160;just&#160;about&#160;<br/>
+several<br/>
+sweet<br/>
+1<br/>
+humor<br/>
+again<br/>
+anyone.&#160;I've&#160;seen&#160;it&#160;several&#160;<br/>
+it&#160;the<br/>
+satirical<br/>
+1<br/>
+the<br/>
+seen<br/>
+would<br/>
+times,&#160;and&#160;I'm&#160;always&#160;happy&#160;<br/>
+to&#160;scenes&#160;I<br/>
+adventure&#160;1<br/>
+the&#160;manages<br/>
+to&#160;see&#160;it&#160;again&#160;whenever&#160;I&#160;<br/>
+the<br/>
+genre<br/>
+1<br/>
+fun&#160;I<br/>
+times&#160;and<br/>
+have&#160;a&#160;friend&#160;who&#160;hasn't&#160;<br/>
+and<br/>
+fairy<br/>
+1<br/>
+about<br/>
+while<br/>
+seen&#160;it&#160;yet!<br/>
+whenever<br/>
+humor<br/>
+1<br/>
+have<br/>
+conventions<br/>
+have<br/>
+1<br/>
+with<br/>
+great<br/>
+1<br/>
+…<br/>
+…<br/>
+Figure&#160;4.1<br/>
+Intuition&#160;of&#160;the&#160;multinomial&#160;naive&#160;Bayes&#160;classifier&#160;applied&#160;to&#160;a&#160;movie&#160;review.&#160;The&#160;position&#160;of&#160;the<br/>
+words&#160;is&#160;ignored&#160;(the&#160;bag-of-words&#160;assumption)&#160;and&#160;we&#160;make&#160;use&#160;of&#160;the&#160;frequency&#160;of&#160;each&#160;word.<br/>
+Naive&#160;Bayes&#160;is&#160;a&#160;probabilistic&#160;classifier,&#160;meaning&#160;that&#160;for&#160;a&#160;document&#160;d,&#160;out&#160;of<br/>
+all&#160;classes&#160;c&#160;∈&#160;C&#160;the&#160;classifier&#160;returns&#160;the&#160;class&#160;ˆ<br/>
+c&#160;which&#160;has&#160;the&#160;maximum&#160;posterior<br/>
+ˆ<br/>
+probability&#160;given&#160;the&#160;document.&#160;In&#160;Eq.&#160;<a href="4s.html#3">4.1&#160;</a>we&#160;use&#160;the&#160;hat&#160;notation&#160;ˆ&#160;to&#160;mean&#160;“our<br/>estimate&#160;of&#160;the&#160;correct&#160;class”.<br/>
+ˆ<br/>
+c&#160;=&#160;argmax&#160;P(c|d)<br/>
+(4.1)<br/>
+c∈C<br/>
+Bayesian<br/>
+This&#160;idea&#160;of&#160;Bayesian&#160;inference&#160;has&#160;been&#160;known&#160;since&#160;the&#160;work&#160;of&#160;<a href="4s.html#22">Bayes&#160;(1763),</a><br/>
+inference<br/>
+and&#160;was&#160;first&#160;applied&#160;to&#160;text&#160;classification&#160;by&#160;<a href="4s.html#22">Mosteller&#160;and&#160;Wallace&#160;(1964).&#160;</a>The<br/>intuition&#160;of&#160;Bayesian&#160;classification&#160;is&#160;to&#160;use&#160;Bayes’&#160;rule&#160;to&#160;transform&#160;Eq.&#160;<a href="4s.html#3">4.1&#160;</a>into<br/>other&#160;probabilities&#160;that&#160;have&#160;some&#160;useful&#160;properties.&#160;Bayes’&#160;rule&#160;is&#160;presented&#160;in<br/>Eq.&#160;<a href="4s.html#3">4.2;&#160;</a>it&#160;gives&#160;us&#160;a&#160;way&#160;to&#160;break&#160;down&#160;any&#160;conditional&#160;probability&#160;P(x|y)&#160;into<br/>three&#160;other&#160;probabilities:<br/>
+P(y|x)P(x)<br/>
+P(x|y)&#160;=<br/>
+(4.2)<br/>
+P(y)<br/>
+We&#160;can&#160;then&#160;substitute&#160;Eq.&#160;<a href="4s.html#3">4.2&#160;</a>into&#160;Eq.&#160;<a href="4s.html#3">4.1&#160;</a>to&#160;get&#160;Eq.&#160;<a href="4s.html#3">4.3:</a><br/>
+P(d|c)P(c)<br/>
+ˆ<br/>
+c&#160;=&#160;argmax&#160;P(c|d)&#160;=&#160;argmax<br/>
+(4.3)<br/>
+c∈C<br/>
+c∈C<br/>
+P(d)<br/>
+<hr/>
+<a name=4></a>4<br/>
+CHAPTER&#160;4<br/>
+•<br/>
+NAIVE&#160;BAYES,&#160;TEXT&#160;CLASSIFICATION,&#160;AND&#160;SENTIMENT<br/>
+We&#160;can&#160;conveniently&#160;simplify&#160;Eq.&#160;<a href="4s.html#3">4.3&#160;</a>by&#160;dropping&#160;the&#160;denominator&#160;P(d).&#160;This<br/>
+is&#160;possible&#160;because&#160;we&#160;will&#160;be&#160;computing&#160;P(d|c)P(c)&#160;for&#160;each&#160;possible&#160;class.&#160;But&#160;P(d)<br/>
+P(d)<br/>
+doesn’t&#160;change&#160;for&#160;each&#160;class;&#160;we&#160;are&#160;always&#160;asking&#160;about&#160;the&#160;most&#160;likely&#160;class&#160;for<br/>the&#160;same&#160;document&#160;d,&#160;which&#160;must&#160;have&#160;the&#160;same&#160;probability&#160;P(d).&#160;Thus,&#160;we&#160;can<br/>choose&#160;the&#160;class&#160;that&#160;maximizes&#160;this&#160;simpler&#160;formula:<br/>
+ˆ<br/>
+c&#160;=&#160;argmax&#160;P(c|d)&#160;=&#160;argmax&#160;P(d|c)P(c)<br/>
+(4.4)<br/>
+c∈C<br/>
+c∈C<br/>
+We&#160;call&#160;Naive&#160;Bayes&#160;a&#160;generative&#160;model&#160;because&#160;we&#160;can&#160;read&#160;Eq.&#160;<a href="4s.html#4">4.4&#160;</a>as&#160;stating<br/>
+a&#160;kind&#160;of&#160;implicit&#160;assumption&#160;about&#160;how&#160;a&#160;document&#160;is&#160;generated:&#160;first&#160;a&#160;class&#160;is<br/>sampled&#160;from&#160;P(c),&#160;and&#160;then&#160;the&#160;words&#160;are&#160;generated&#160;by&#160;sampling&#160;from&#160;P(d|c).&#160;(In<br/>fact&#160;we&#160;could&#160;imagine&#160;generating&#160;artificial&#160;documents,&#160;or&#160;at&#160;least&#160;their&#160;word&#160;counts,<br/>by&#160;following&#160;this&#160;process).&#160;We’ll&#160;say&#160;more&#160;about&#160;this&#160;intuition&#160;of&#160;generative&#160;models<br/>in&#160;Chapter&#160;5.<br/>
+To&#160;return&#160;to&#160;classification:&#160;we&#160;compute&#160;the&#160;most&#160;probable&#160;class&#160;ˆ<br/>
+c&#160;given&#160;some<br/>
+document&#160;d&#160;by&#160;choosing&#160;the&#160;class&#160;which&#160;has&#160;the&#160;highest&#160;product&#160;of&#160;two&#160;probabilities:<br/>
+prior<br/>
+probability<br/>
+the&#160;prior&#160;probability&#160;of&#160;the&#160;class&#160;P(c)&#160;and&#160;the&#160;likelihood&#160;of&#160;the&#160;document&#160;P(d|c):<br/>
+likelihood<br/>
+likelihood&#160;prior<br/>
+z&#160;}|&#160;{<br/>
+z}|{<br/>
+ˆ<br/>
+c&#160;=&#160;argmax&#160;P(d|c)<br/>
+P(c)<br/>
+(4.5)<br/>
+c∈C<br/>
+Without&#160;loss&#160;of&#160;generalization,&#160;we&#160;can&#160;represent&#160;a&#160;document&#160;d&#160;as&#160;a&#160;set&#160;of&#160;features<br/>
+f1,&#160;f2,&#160;...,&#160;fn:<br/>
+likelihood<br/>
+prior<br/>
+z<br/>
+}|<br/>
+{<br/>
+z}|{<br/>
+ˆ<br/>
+c&#160;=&#160;argmax&#160;P(&#160;f1,&#160;f2,&#160;....,&#160;fn|c)&#160;P(c)<br/>
+(4.6)<br/>
+c∈C<br/>
+Unfortunately,&#160;Eq.&#160;<a href="4s.html#4">4.6&#160;</a>is&#160;still&#160;too&#160;hard&#160;to&#160;compute&#160;directly:&#160;without&#160;some&#160;sim-<br/>
+plifying&#160;assumptions,&#160;estimating&#160;the&#160;probability&#160;of&#160;every&#160;possible&#160;combination&#160;of<br/>features&#160;(for&#160;example,&#160;every&#160;possible&#160;set&#160;of&#160;words&#160;and&#160;positions)&#160;would&#160;require&#160;huge<br/>numbers&#160;of&#160;parameters&#160;and&#160;impossibly&#160;large&#160;training&#160;sets.&#160;Naive&#160;Bayes&#160;classifiers<br/>therefore&#160;make&#160;two&#160;simplifying&#160;assumptions.<br/>
+The&#160;first&#160;is&#160;the&#160;bag-of-words&#160;assumption&#160;discussed&#160;intuitively&#160;above:&#160;we&#160;assume<br/>
+position&#160;doesn’t&#160;matter,&#160;and&#160;that&#160;the&#160;word&#160;“love”&#160;has&#160;the&#160;same&#160;effect&#160;on&#160;classification<br/>whether&#160;it&#160;occurs&#160;as&#160;the&#160;1st,&#160;20th,&#160;or&#160;last&#160;word&#160;in&#160;the&#160;document.&#160;Thus&#160;we&#160;assume<br/>that&#160;the&#160;features&#160;f1,&#160;f2,&#160;...,&#160;fn&#160;only&#160;encode&#160;word&#160;identity&#160;and&#160;not&#160;position.<br/>
+naive&#160;Bayes<br/>
+The&#160;second&#160;is&#160;commonly&#160;called&#160;the&#160;naive&#160;Bayes&#160;assumption:&#160;this&#160;is&#160;the&#160;condi-<br/>
+assumption<br/>
+tional&#160;independence&#160;assumption&#160;that&#160;the&#160;probabilities&#160;P(&#160;fi|c)&#160;are&#160;independent&#160;given<br/>the&#160;class&#160;c&#160;and&#160;hence&#160;can&#160;be&#160;‘naively’&#160;multiplied&#160;as&#160;follows:<br/>
+P(&#160;f1,&#160;f2,&#160;....,&#160;fn|c)&#160;=&#160;P(&#160;f1|c)&#160;·&#160;P(&#160;f2|c)&#160;·&#160;...&#160;·&#160;P(&#160;fn|c)<br/>
+(4.7)<br/>
+The&#160;final&#160;equation&#160;for&#160;the&#160;class&#160;chosen&#160;by&#160;a&#160;naive&#160;Bayes&#160;classifier&#160;is&#160;thus:<br/>
+Y<br/>
+cNB&#160;=&#160;argmax&#160;P(c)<br/>
+P(&#160;f&#160;|c)<br/>
+(4.8)<br/>
+c∈C<br/>
+f&#160;∈F<br/>
+To&#160;apply&#160;the&#160;naive&#160;Bayes&#160;classifier&#160;to&#160;text,&#160;we&#160;need&#160;to&#160;consider&#160;word&#160;positions,&#160;by<br/>simply&#160;walking&#160;an&#160;index&#160;through&#160;every&#160;word&#160;position&#160;in&#160;the&#160;document:<br/>
+positions&#160;←&#160;all&#160;word&#160;positions&#160;in&#160;test&#160;document<br/>
+Y<br/>
+cNB&#160;=&#160;argmax&#160;P(c)<br/>
+P(wi|c)<br/>
+(4.9)<br/>
+c∈C<br/>
+i∈positions<br/>
+<hr/>
+<a name=5></a>4.2<br/>
+•<br/>
+TRAINING&#160;THE&#160;NAIVE&#160;BAYES&#160;CLASSIFIER<br/>
+5<br/>
+Naive&#160;Bayes&#160;calculations,&#160;like&#160;calculations&#160;for&#160;language&#160;modeling,&#160;are&#160;done&#160;in&#160;log<br/>space,&#160;to&#160;avoid&#160;underflow&#160;and&#160;increase&#160;speed.&#160;Thus&#160;Eq.&#160;<a href="4s.html#4">4.9&#160;</a>is&#160;generally&#160;instead<br/>e<a href="4s.html#5">xpressed1&#160;</a>as<br/>
+X<br/>
+cNB&#160;=&#160;argmax&#160;log&#160;P(c)&#160;+<br/>
+log&#160;P(wi|c)<br/>
+(4.10)<br/>
+c∈C<br/>
+i∈positions<br/>
+By&#160;considering&#160;features&#160;in&#160;log&#160;space,&#160;Eq.&#160;<a href="4s.html#5">4.10&#160;</a>computes&#160;the&#160;predicted&#160;class&#160;as&#160;a&#160;lin-<br/>ear&#160;function&#160;of&#160;input&#160;features.&#160;Classifiers&#160;that&#160;use&#160;a&#160;linear&#160;combination&#160;of&#160;the&#160;inputs<br/>to&#160;make&#160;a&#160;classification&#160;decision&#160;—like&#160;naive&#160;Bayes&#160;and&#160;also&#160;logistic&#160;regression—<br/>
+linear<br/>
+are&#160;called&#160;linear&#160;classifiers.<br/>
+classifiers<br/>
+4.2<br/>
+Training&#160;the&#160;Naive&#160;Bayes&#160;Classifier<br/>
+How&#160;can&#160;we&#160;learn&#160;the&#160;probabilities&#160;P(c)&#160;and&#160;P(&#160;fi|c)?&#160;Let’s&#160;first&#160;consider&#160;the&#160;maxi-<br/>mum&#160;likelihood&#160;estimate.&#160;We’ll&#160;simply&#160;use&#160;the&#160;frequencies&#160;in&#160;the&#160;data.&#160;For&#160;the&#160;class<br/>prior&#160;P(c)&#160;we&#160;ask&#160;what&#160;percentage&#160;of&#160;the&#160;documents&#160;in&#160;our&#160;training&#160;set&#160;are&#160;in&#160;each<br/>class&#160;c.&#160;Let&#160;Nc&#160;be&#160;the&#160;number&#160;of&#160;documents&#160;in&#160;our&#160;training&#160;data&#160;with&#160;class&#160;c&#160;and<br/>Ndoc&#160;be&#160;the&#160;total&#160;number&#160;of&#160;documents.&#160;Then:<br/>
+N<br/>
+ˆ<br/>
+c<br/>
+P(c)&#160;=<br/>
+(4.11)<br/>
+Ndoc<br/>
+To&#160;learn&#160;the&#160;probability&#160;P(&#160;fi|c),&#160;we’ll&#160;assume&#160;a&#160;feature&#160;is&#160;just&#160;the&#160;existence&#160;of&#160;a&#160;word<br/>in&#160;the&#160;document’s&#160;bag&#160;of&#160;words,&#160;and&#160;so&#160;we’ll&#160;want&#160;P(wi|c),&#160;which&#160;we&#160;compute&#160;as<br/>the&#160;fraction&#160;of&#160;times&#160;the&#160;word&#160;wi&#160;appears&#160;among&#160;all&#160;words&#160;in&#160;all&#160;documents&#160;of&#160;topic<br/>c.&#160;We&#160;first&#160;concatenate&#160;all&#160;documents&#160;with&#160;category&#160;c&#160;into&#160;one&#160;big&#160;“category&#160;c”&#160;text.<br/>Then&#160;we&#160;use&#160;the&#160;frequency&#160;of&#160;wi&#160;in&#160;this&#160;concatenated&#160;document&#160;to&#160;give&#160;a&#160;maximum<br/>likelihood&#160;estimate&#160;of&#160;the&#160;probability:<br/>
+count(w<br/>
+ˆ<br/>
+i,&#160;c)<br/>
+P(wi|c)&#160;=<br/>
+(4.12)<br/>
+P<br/>
+count(w,&#160;c)<br/>
+w∈V<br/>
+Here&#160;the&#160;vocabulary&#160;V&#160;consists&#160;of&#160;the&#160;union&#160;of&#160;all&#160;the&#160;word&#160;types&#160;in&#160;all&#160;classes,&#160;not<br/>just&#160;the&#160;words&#160;in&#160;one&#160;class&#160;c.<br/>
+There&#160;is&#160;a&#160;problem,&#160;however,&#160;with&#160;maximum&#160;likelihood&#160;training.&#160;Imagine&#160;we<br/>
+are&#160;trying&#160;to&#160;estimate&#160;the&#160;likelihood&#160;of&#160;the&#160;word&#160;“fantastic”&#160;given&#160;class&#160;positive,&#160;but<br/>suppose&#160;there&#160;are&#160;no&#160;training&#160;documents&#160;that&#160;both&#160;contain&#160;the&#160;word&#160;“fantastic”&#160;and<br/>are&#160;classified&#160;as&#160;positive.&#160;Perhaps&#160;the&#160;word&#160;“fantastic”&#160;happens&#160;to&#160;occur&#160;(sarcasti-<br/>cally?)&#160;in&#160;the&#160;class&#160;negative.&#160;In&#160;such&#160;a&#160;case&#160;the&#160;probability&#160;for&#160;this&#160;feature&#160;will&#160;be<br/>zero:<br/>
+count(“fantastic”,&#160;positive)<br/>
+ˆ<br/>
+P(“fantastic”|positive)&#160;=<br/>
+=&#160;0<br/>
+(4.13)<br/>
+P<br/>
+count(w,&#160;positive)<br/>
+w∈V<br/>
+But&#160;since&#160;naive&#160;Bayes&#160;naively&#160;multiplies&#160;all&#160;the&#160;feature&#160;likelihoods&#160;together,&#160;zero<br/>probabilities&#160;in&#160;the&#160;likelihood&#160;term&#160;for&#160;any&#160;class&#160;will&#160;cause&#160;the&#160;probability&#160;of&#160;the<br/>class&#160;to&#160;be&#160;zero,&#160;no&#160;matter&#160;the&#160;other&#160;evidence!<br/>
+The&#160;simplest&#160;solution&#160;is&#160;the&#160;add-one&#160;(Laplace)&#160;smoothing&#160;introduced&#160;in&#160;Chap-<br/>
+ter&#160;3.&#160;While&#160;Laplace&#160;smoothing&#160;is&#160;usually&#160;replaced&#160;by&#160;more&#160;sophisticated&#160;smoothing<br/>
+1<br/>
+In&#160;practice&#160;throughout&#160;this&#160;book,&#160;we’ll&#160;use&#160;log&#160;to&#160;mean&#160;natural&#160;log&#160;(ln)&#160;when&#160;the&#160;base&#160;is&#160;not&#160;specified.<br/>
+<hr/>
+<a name=6></a>6<br/>
+CHAPTER&#160;4<br/>
+•<br/>
+NAIVE&#160;BAYES,&#160;TEXT&#160;CLASSIFICATION,&#160;AND&#160;SENTIMENT<br/>
+algorithms&#160;in&#160;language&#160;modeling,&#160;it&#160;is&#160;commonly&#160;used&#160;in&#160;naive&#160;Bayes&#160;text&#160;catego-<br/>rization:<br/>
+count(w<br/>
+count(w<br/>
+ˆ<br/>
+i,&#160;c)&#160;+&#160;1<br/>
+i,&#160;c)&#160;+&#160;1<br/>
+P(wi|c)&#160;=<br/>
+=<br/>
+(4.14)<br/>
+P<br/>
+(count(w,&#160;c)&#160;+&#160;1)<br/>
+P<br/>
+w∈V<br/>
+count(w,&#160;c)&#160;+&#160;|V&#160;|<br/>
+w∈V<br/>
+Note&#160;once&#160;again&#160;that&#160;it&#160;is&#160;crucial&#160;that&#160;the&#160;vocabulary&#160;V&#160;consists&#160;of&#160;the&#160;union&#160;of&#160;all&#160;the<br/>word&#160;types&#160;in&#160;all&#160;classes,&#160;not&#160;just&#160;the&#160;words&#160;in&#160;one&#160;class&#160;c&#160;(try&#160;to&#160;convince&#160;yourself<br/>why&#160;this&#160;must&#160;be&#160;true;&#160;see&#160;the&#160;exercise&#160;at&#160;the&#160;end&#160;of&#160;the&#160;chapter).<br/>
+What&#160;do&#160;we&#160;do&#160;about&#160;words&#160;that&#160;occur&#160;in&#160;our&#160;test&#160;data&#160;but&#160;are&#160;not&#160;in&#160;our&#160;vocab-<br/>
+ulary&#160;at&#160;all&#160;because&#160;they&#160;did&#160;not&#160;occur&#160;in&#160;any&#160;training&#160;document&#160;in&#160;any&#160;class?&#160;The<br/>
+unknown&#160;word<br/>
+solution&#160;for&#160;such&#160;unknown&#160;words&#160;is&#160;to&#160;ignore&#160;them—remove&#160;them&#160;from&#160;the&#160;test<br/>document&#160;and&#160;not&#160;include&#160;any&#160;probability&#160;for&#160;them&#160;at&#160;all.<br/>
+Finally,&#160;some&#160;systems&#160;choose&#160;to&#160;completely&#160;ignore&#160;another&#160;class&#160;of&#160;words:&#160;stop<br/>
+stop&#160;words<br/>
+words,&#160;very&#160;frequent&#160;words&#160;like&#160;the&#160;and&#160;a.&#160;This&#160;can&#160;be&#160;done&#160;by&#160;sorting&#160;the&#160;vocabu-<br/>lary&#160;by&#160;frequency&#160;in&#160;the&#160;training&#160;set,&#160;and&#160;defining&#160;the&#160;top&#160;10–100&#160;vocabulary&#160;entries<br/>as&#160;stop&#160;words,&#160;or&#160;alternatively&#160;by&#160;using&#160;one&#160;of&#160;the&#160;many&#160;predefined&#160;stop&#160;word&#160;lists<br/>available&#160;online.&#160;Then&#160;each&#160;instance&#160;of&#160;these&#160;stop&#160;words&#160;is&#160;simply&#160;removed&#160;from<br/>both&#160;training&#160;and&#160;test&#160;documents&#160;as&#160;if&#160;it&#160;had&#160;never&#160;occurred.&#160;In&#160;most&#160;text&#160;classifica-<br/>tion&#160;applications,&#160;however,&#160;using&#160;a&#160;stop&#160;word&#160;list&#160;doesn’t&#160;improve&#160;performance,&#160;and<br/>so&#160;it&#160;is&#160;more&#160;common&#160;to&#160;make&#160;use&#160;of&#160;the&#160;entire&#160;vocabulary&#160;and&#160;not&#160;use&#160;a&#160;stop&#160;word<br/>list.<br/>
+Fig.&#160;<a href="4s.html#6">4.2&#160;</a>shows&#160;the&#160;final&#160;algorithm.<br/>
+function&#160;TRAIN&#160;NAIVE&#160;BAYES(D,&#160;C)&#160;returns&#160;log&#160;P(c)&#160;and&#160;log&#160;P(w|c)<br/>
+for&#160;each&#160;class&#160;c&#160;∈&#160;C<br/>
+#&#160;Calculate&#160;P(c)&#160;terms<br/>
+Ndoc&#160;=&#160;number&#160;of&#160;documents&#160;in&#160;D<br/>Nc&#160;=&#160;number&#160;of&#160;documents&#160;from&#160;D&#160;in&#160;class&#160;c<br/>
+Nc<br/>
+logprior[c]&#160;←&#160;log&#160;Ndoc<br/>
+V&#160;←&#160;vocabulary&#160;of&#160;D<br/>bigdoc[c]&#160;←&#160;append(d)&#160;for&#160;d&#160;∈&#160;D&#160;with&#160;class&#160;c<br/>for&#160;each&#160;word&#160;w&#160;in&#160;V<br/>
+#&#160;Calculate&#160;P(w|c)&#160;terms<br/>
+count(w,c)&#160;←&#160;#&#160;of&#160;occurrences&#160;of&#160;w&#160;in&#160;bigdoc[c]<br/>
+count(w,&#160;c)&#160;+&#160;1<br/>
+loglikelihood[w,c]&#160;←&#160;log&#160;P<br/>
+(count&#160;(w0,&#160;c)&#160;+<br/>
+w0&#160;in&#160;V<br/>
+1)<br/>
+return&#160;logprior,&#160;loglikelihood,&#160;V<br/>
+function&#160;TEST&#160;NAIVE&#160;BAYES(testdoc,&#160;logprior,&#160;loglikelihood,&#160;C,&#160;V)&#160;returns&#160;best&#160;c<br/>
+for&#160;each&#160;class&#160;c&#160;∈&#160;C<br/>
+sum[c]&#160;←&#160;logprior[c]<br/>for&#160;each&#160;position&#160;i&#160;in&#160;testdoc<br/>
+word&#160;←&#160;testdoc[i]<br/>if&#160;word&#160;∈&#160;V<br/>
+sum[c]&#160;←&#160;sum[c]+&#160;loglikelihood[word,c]<br/>
+return&#160;argmaxc&#160;sum[c]<br/>
+Figure&#160;4.2<br/>
+The&#160;naive&#160;Bayes&#160;algorithm,&#160;using&#160;add-1&#160;smoothing.&#160;To&#160;use&#160;add-α&#160;smoothing<br/>
+instead,&#160;change&#160;the&#160;+1&#160;to&#160;+α&#160;for&#160;loglikelihood&#160;counts&#160;in&#160;training.<br/>
+<hr/>
+<a name=7></a>4.3<br/>
+•<br/>
+WORKED&#160;EXAMPLE<br/>
+7<br/>
+4.3<br/>
+Worked&#160;example<br/>
+Let’s&#160;walk&#160;through&#160;an&#160;example&#160;of&#160;training&#160;and&#160;testing&#160;naive&#160;Bayes&#160;with&#160;add-one<br/>smoothing.&#160;We’ll&#160;use&#160;a&#160;sentiment&#160;analysis&#160;domain&#160;with&#160;the&#160;two&#160;classes&#160;positive<br/>(+)&#160;and&#160;negative&#160;(-),&#160;and&#160;take&#160;the&#160;following&#160;miniature&#160;training&#160;and&#160;test&#160;documents<br/>simplified&#160;from&#160;actual&#160;movie&#160;reviews.<br/>
+Cat<br/>
+Documents<br/>
+Training&#160;-<br/>
+just&#160;plain&#160;boring<br/>
+-<br/>
+entirely&#160;predictable&#160;and&#160;lacks&#160;energy<br/>
+-<br/>
+no&#160;surprises&#160;and&#160;very&#160;few&#160;laughs<br/>
++<br/>
+very&#160;powerful<br/>
++<br/>
+the&#160;most&#160;fun&#160;film&#160;of&#160;the&#160;summer<br/>
+Test<br/>
+?<br/>
+predictable&#160;with&#160;no&#160;fun<br/>
+The&#160;prior&#160;P(c)&#160;for&#160;the&#160;two&#160;classes&#160;is&#160;computed&#160;via&#160;Eq.&#160;<a href="4s.html#5">4.11&#160;</a>as&#160;Nc&#160;:<br/>
+Ndoc<br/>
+3<br/>
+2<br/>
+P(−)&#160;=<br/>
+P(+)&#160;=<br/>
+5<br/>
+5<br/>
+The&#160;word&#160;with&#160;doesn’t&#160;occur&#160;in&#160;the&#160;training&#160;set,&#160;so&#160;we&#160;drop&#160;it&#160;completely&#160;(as<br/>
+mentioned&#160;above,&#160;we&#160;don’t&#160;use&#160;unknown&#160;word&#160;models&#160;for&#160;naive&#160;Bayes).&#160;The&#160;like-<br/>lihoods&#160;from&#160;the&#160;training&#160;set&#160;for&#160;the&#160;remaining&#160;three&#160;words&#160;“predictable”,&#160;“no”,&#160;and<br/>“fun”,&#160;are&#160;as&#160;follows,&#160;from&#160;Eq.&#160;<a href="4s.html#6">4.14&#160;</a>(computing&#160;the&#160;probabilities&#160;for&#160;the&#160;remainder<br/>of&#160;the&#160;words&#160;in&#160;the&#160;training&#160;set&#160;is&#160;left&#160;as&#160;an&#160;exercise&#160;for&#160;the&#160;reader):<br/>
+1&#160;+&#160;1<br/>
+0&#160;+&#160;1<br/>
+P(“predictable”|−)&#160;=<br/>
+P(“predictable”|+)&#160;=<br/>
+14&#160;+&#160;20<br/>
+9&#160;+&#160;20<br/>
+1&#160;+&#160;1<br/>
+0&#160;+&#160;1<br/>
+P(“no”|−)&#160;=<br/>
+P(“no”|+)&#160;=<br/>
+14&#160;+&#160;20<br/>
+9&#160;+&#160;20<br/>
+0&#160;+&#160;1<br/>
+1&#160;+&#160;1<br/>
+P(“fun”|−)&#160;=<br/>
+P(“fun”|+)&#160;=<br/>
+14&#160;+&#160;20<br/>
+9&#160;+&#160;20<br/>
+For&#160;the&#160;test&#160;sentence&#160;S&#160;=&#160;“predictable&#160;with&#160;no&#160;fun”,&#160;after&#160;removing&#160;the&#160;word&#160;‘with’,<br/>the&#160;chosen&#160;class,&#160;via&#160;Eq.&#160;<a href="4s.html#4">4.9,&#160;</a>is&#160;therefore&#160;computed&#160;as&#160;follows:<br/>
+3<br/>
+2&#160;×&#160;2&#160;×&#160;1<br/>
+P(−)P(S|−)&#160;=<br/>
+×<br/>
+=&#160;6.1&#160;×&#160;10−5<br/>
+5<br/>
+343<br/>
+2<br/>
+1&#160;×&#160;1&#160;×&#160;2<br/>
+P(+)P(S|+)&#160;=<br/>
+×<br/>
+=&#160;3.2&#160;×&#160;10−5<br/>
+5<br/>
+293<br/>
+The&#160;model&#160;thus&#160;predicts&#160;the&#160;class&#160;negative&#160;for&#160;the&#160;test&#160;sentence.<br/>
+4.4<br/>
+Optimizing&#160;for&#160;Sentiment&#160;Analysis<br/>
+While&#160;standard&#160;naive&#160;Bayes&#160;text&#160;classification&#160;can&#160;work&#160;well&#160;for&#160;sentiment&#160;analysis,<br/>some&#160;small&#160;changes&#160;are&#160;generally&#160;employed&#160;that&#160;improve&#160;performance.<br/>
+First,&#160;for&#160;sentiment&#160;classification&#160;and&#160;a&#160;number&#160;of&#160;other&#160;text&#160;classification&#160;tasks,<br/>
+whether&#160;a&#160;word&#160;occurs&#160;or&#160;not&#160;seems&#160;to&#160;matter&#160;more&#160;than&#160;its&#160;frequency.&#160;Thus&#160;it&#160;often<br/>improves&#160;performance&#160;to&#160;clip&#160;the&#160;word&#160;counts&#160;in&#160;each&#160;document&#160;at&#160;1&#160;(see&#160;the&#160;end<br/>
+<hr/>
+<a name=8></a>8<br/>
+CHAPTER&#160;4<br/>
+•<br/>
+NAIVE&#160;BAYES,&#160;TEXT&#160;CLASSIFICATION,&#160;AND&#160;SENTIMENT<br/>
+of&#160;the&#160;chapter&#160;for&#160;pointers&#160;to&#160;these&#160;results).&#160;This&#160;variant&#160;is&#160;called&#160;binary&#160;multino-<br/>
+binary&#160;naive<br/>
+mial&#160;naive&#160;Bayes&#160;or&#160;binary&#160;naive&#160;Bayes.&#160;The&#160;variant&#160;uses&#160;the&#160;same&#160;algorithm&#160;as<br/>
+Bayes<br/>
+in&#160;Fig.&#160;<a href="4s.html#6">4.2&#160;</a>except&#160;that&#160;for&#160;each&#160;document&#160;we&#160;remove&#160;all&#160;duplicate&#160;words&#160;before&#160;con-<br/>catenating&#160;them&#160;into&#160;the&#160;single&#160;big&#160;document&#160;during&#160;training&#160;and&#160;we&#160;also&#160;remove<br/>duplicate&#160;words&#160;from&#160;test&#160;documents.&#160;Fig.&#160;<a href="4s.html#8">4.3&#160;</a>shows&#160;an&#160;example&#160;in&#160;which&#160;a&#160;set<br/>of&#160;four&#160;documents&#160;(shortened&#160;and&#160;text-normalized&#160;for&#160;this&#160;example)&#160;are&#160;remapped<br/>to&#160;binary,&#160;with&#160;the&#160;modified&#160;counts&#160;shown&#160;in&#160;the&#160;table&#160;on&#160;the&#160;right.&#160;The&#160;example<br/>is&#160;worked&#160;without&#160;add-1&#160;smoothing&#160;to&#160;make&#160;the&#160;differences&#160;clearer.&#160;Note&#160;that&#160;the<br/>results&#160;counts&#160;need&#160;not&#160;be&#160;1;&#160;the&#160;word&#160;great&#160;has&#160;a&#160;count&#160;of&#160;2&#160;even&#160;for&#160;binary&#160;naive<br/>Bayes,&#160;because&#160;it&#160;appears&#160;in&#160;multiple&#160;documents.<br/>
+NB<br/>
+Binary<br/>
+Counts<br/>
+Counts<br/>
+Four&#160;original&#160;documents:<br/>
++<br/>
+−<br/>
++<br/>
+−<br/>
+−&#160;it&#160;was&#160;pathetic&#160;the&#160;worst&#160;part&#160;was&#160;the<br/>
+and<br/>
+2<br/>
+0<br/>
+1<br/>
+0<br/>
+boxing<br/>
+0<br/>
+1<br/>
+0<br/>
+1<br/>
+boxing&#160;scenes<br/>
+film<br/>
+1<br/>
+0<br/>
+1<br/>
+0<br/>
+−&#160;no&#160;plot&#160;twists&#160;or&#160;great&#160;scenes<br/>
+great<br/>
+3<br/>
+1<br/>
+2<br/>
+1<br/>
++&#160;and&#160;satire&#160;and&#160;great&#160;plot&#160;twists<br/>
+it<br/>
+0<br/>
+1<br/>
+0<br/>
+1<br/>
++&#160;great&#160;scenes&#160;great&#160;film<br/>
+no<br/>
+0<br/>
+1<br/>
+0<br/>
+1<br/>
+or<br/>
+0<br/>
+1<br/>
+0<br/>
+1<br/>
+After&#160;per-document&#160;binarization:<br/>
+part<br/>
+0<br/>
+1<br/>
+0<br/>
+1<br/>
+−&#160;it&#160;was&#160;pathetic&#160;the&#160;worst&#160;part&#160;boxing<br/>
+pathetic&#160;0<br/>
+1<br/>
+0<br/>
+1<br/>
+plot<br/>
+1<br/>
+1<br/>
+1<br/>
+1<br/>
+scenes<br/>
+satire<br/>
+1<br/>
+0<br/>
+1<br/>
+0<br/>
+−&#160;no&#160;plot&#160;twists&#160;or&#160;great&#160;scenes<br/>
+scenes<br/>
+1<br/>
+2<br/>
+1<br/>
+2<br/>
++&#160;and&#160;satire&#160;great&#160;plot&#160;twists<br/>
+the<br/>
+0<br/>
+2<br/>
+0<br/>
+1<br/>
++&#160;great&#160;scenes&#160;film<br/>
+twists<br/>
+1<br/>
+1<br/>
+1<br/>
+1<br/>
+was<br/>
+0<br/>
+2<br/>
+0<br/>
+1<br/>
+worst<br/>
+0<br/>
+1<br/>
+0<br/>
+1<br/>
+Figure&#160;4.3<br/>
+An&#160;example&#160;of&#160;binarization&#160;for&#160;the&#160;binary&#160;naive&#160;Bayes&#160;algorithm.<br/>
+A&#160;second&#160;important&#160;addition&#160;commonly&#160;made&#160;when&#160;doing&#160;text&#160;classification&#160;for<br/>
+sentiment&#160;is&#160;to&#160;deal&#160;with&#160;negation.&#160;Consider&#160;the&#160;difference&#160;between&#160;I&#160;really&#160;like&#160;this<br/>movie&#160;(positive)&#160;and&#160;I&#160;didn’t&#160;like&#160;this&#160;movie&#160;(negative).&#160;The&#160;negation&#160;expressed&#160;by<br/>didn’t&#160;completely&#160;alters&#160;the&#160;inferences&#160;we&#160;draw&#160;from&#160;the&#160;predicate&#160;like.&#160;Similarly,<br/>negation&#160;can&#160;modify&#160;a&#160;negative&#160;word&#160;to&#160;produce&#160;a&#160;positive&#160;review&#160;(don’t&#160;dismiss&#160;this<br/>film,&#160;doesn’t&#160;let&#160;us&#160;get&#160;bored).<br/>
+A&#160;very&#160;simple&#160;baseline&#160;that&#160;is&#160;commonly&#160;used&#160;in&#160;sentiment&#160;analysis&#160;to&#160;deal&#160;with<br/>
+negation&#160;is&#160;the&#160;following:&#160;during&#160;text&#160;normalization,&#160;prepend&#160;the&#160;prefix&#160;NOT&#160;to<br/>every&#160;word&#160;after&#160;a&#160;token&#160;of&#160;logical&#160;negation&#160;(n’t,&#160;not,&#160;no,&#160;never)&#160;until&#160;the&#160;next&#160;punc-<br/>tuation&#160;mark.&#160;Thus&#160;the&#160;phrase<br/>
+didn’t&#160;like&#160;this&#160;movie&#160;,&#160;but&#160;I<br/>
+becomes<br/>
+didn’t&#160;NOT_like&#160;NOT_this&#160;NOT_movie&#160;,&#160;but&#160;I<br/>
+Newly&#160;formed&#160;‘words’&#160;like&#160;NOT&#160;like,&#160;NOT&#160;recommend&#160;will&#160;thus&#160;occur&#160;more&#160;of-<br/>
+ten&#160;in&#160;negative&#160;document&#160;and&#160;act&#160;as&#160;cues&#160;for&#160;negative&#160;sentiment,&#160;while&#160;words&#160;like<br/>NOT&#160;bored,&#160;NOT&#160;dismiss&#160;will&#160;acquire&#160;positive&#160;associations.&#160;We&#160;will&#160;return&#160;in&#160;Chap-<br/>ter&#160;20&#160;to&#160;the&#160;use&#160;of&#160;parsing&#160;to&#160;deal&#160;more&#160;accurately&#160;with&#160;the&#160;scope&#160;relationship&#160;be-<br/>tween&#160;these&#160;negation&#160;words&#160;and&#160;the&#160;predicates&#160;they&#160;modify,&#160;but&#160;this&#160;simple&#160;baseline<br/>works&#160;quite&#160;well&#160;in&#160;practice.<br/>
+<hr/>
+<a name=9></a>4.5<br/>
+•<br/>
+NAIVE&#160;BAYES&#160;FOR&#160;OTHER&#160;TEXT&#160;CLASSIFICATION&#160;TASKS<br/>
+9<br/>
+Finally,&#160;in&#160;some&#160;situations&#160;we&#160;might&#160;have&#160;insufficient&#160;labeled&#160;training&#160;data&#160;to<br/>
+train&#160;accurate&#160;naive&#160;Bayes&#160;classifiers&#160;using&#160;all&#160;words&#160;in&#160;the&#160;training&#160;set&#160;to&#160;estimate<br/>positive&#160;and&#160;negative&#160;sentiment.&#160;In&#160;such&#160;cases&#160;we&#160;can&#160;instead&#160;derive&#160;the&#160;positive<br/>
+sentiment<br/>
+and&#160;negative&#160;word&#160;features&#160;from&#160;sentiment&#160;lexicons,&#160;lists&#160;of&#160;words&#160;that&#160;are&#160;pre-<br/>
+lexicons<br/>
+annotated&#160;with&#160;positive&#160;or&#160;negative&#160;sentiment.&#160;Four&#160;popular&#160;lexicons&#160;are&#160;the&#160;General<br/>
+General<br/>
+Inquirer&#160;<a href="4s.html#23">(Stone&#160;et&#160;al.,&#160;1966),&#160;</a>LIWC&#160;<a href="4s.html#23">(Pennebaker&#160;et&#160;al.,&#160;2007),&#160;</a>the&#160;opinion&#160;lexicon<br/>
+Inquirer<br/>
+LIWC<br/>
+of&#160;<a href="4s.html#22">Hu&#160;and&#160;Liu&#160;(2004)&#160;</a>and&#160;the&#160;MPQA&#160;Subjectivity&#160;Lexicon&#160;<a href="4s.html#23">(Wilson&#160;et&#160;al.,&#160;2005).</a><br/>
+For&#160;example&#160;the&#160;MPQA&#160;subjectivity&#160;lexicon&#160;has&#160;6885&#160;words&#160;each&#160;marked&#160;for<br/>
+whether&#160;it&#160;is&#160;strongly&#160;or&#160;weakly&#160;biased&#160;positive&#160;or&#160;negative.&#160;Some&#160;examples:<br/>
++&#160;:&#160;admirable,&#160;beautiful,&#160;confident,&#160;dazzling,&#160;ecstatic,&#160;favor,&#160;glee,&#160;great<br/>−&#160;:&#160;awful,&#160;bad,&#160;bias,&#160;catastrophe,&#160;cheat,&#160;deny,&#160;envious,&#160;foul,&#160;harsh,&#160;hate<br/>
+A&#160;common&#160;way&#160;to&#160;use&#160;lexicons&#160;in&#160;a&#160;naive&#160;Bayes&#160;classifier&#160;is&#160;to&#160;add&#160;a&#160;feature<br/>
+that&#160;is&#160;counted&#160;whenever&#160;a&#160;word&#160;from&#160;that&#160;lexicon&#160;occurs.&#160;Thus&#160;we&#160;might&#160;add&#160;a<br/>feature&#160;called&#160;‘this&#160;word&#160;occurs&#160;in&#160;the&#160;positive&#160;lexicon’,&#160;and&#160;treat&#160;all&#160;instances&#160;of<br/>words&#160;in&#160;the&#160;lexicon&#160;as&#160;counts&#160;for&#160;that&#160;one&#160;feature,&#160;instead&#160;of&#160;counting&#160;each&#160;word<br/>separately.&#160;Similarly,&#160;we&#160;might&#160;add&#160;as&#160;a&#160;second&#160;feature&#160;‘this&#160;word&#160;occurs&#160;in&#160;the<br/>negative&#160;lexicon’&#160;of&#160;words&#160;in&#160;the&#160;negative&#160;lexicon.&#160;If&#160;we&#160;have&#160;lots&#160;of&#160;training&#160;data,<br/>and&#160;if&#160;the&#160;test&#160;data&#160;matches&#160;the&#160;training&#160;data,&#160;using&#160;just&#160;two&#160;features&#160;won’t&#160;work&#160;as<br/>well&#160;as&#160;using&#160;all&#160;the&#160;words.&#160;But&#160;when&#160;training&#160;data&#160;is&#160;sparse&#160;or&#160;not&#160;representative&#160;of<br/>the&#160;test&#160;set,&#160;using&#160;dense&#160;lexicon&#160;features&#160;instead&#160;of&#160;sparse&#160;individual-word&#160;features<br/>may&#160;generalize&#160;better.<br/>
+We’ll&#160;return&#160;to&#160;this&#160;use&#160;of&#160;lexicons&#160;in&#160;Chapter&#160;25,&#160;showing&#160;how&#160;these&#160;lexicons<br/>
+can&#160;be&#160;learned&#160;automatically,&#160;and&#160;how&#160;they&#160;can&#160;be&#160;applied&#160;to&#160;many&#160;other&#160;tasks&#160;be-<br/>yond&#160;sentiment&#160;classification.<br/>
+4.5<br/>
+Naive&#160;Bayes&#160;for&#160;other&#160;text&#160;classification&#160;tasks<br/>
+In&#160;the&#160;previous&#160;section&#160;we&#160;pointed&#160;out&#160;that&#160;naive&#160;Bayes&#160;doesn’t&#160;require&#160;that&#160;our<br/>classifier&#160;use&#160;all&#160;the&#160;words&#160;in&#160;the&#160;training&#160;data&#160;as&#160;features.&#160;In&#160;fact&#160;features&#160;in&#160;naive<br/>Bayes&#160;can&#160;express&#160;any&#160;property&#160;of&#160;the&#160;input&#160;text&#160;we&#160;want.<br/>
+spam&#160;detection<br/>
+Consider&#160;the&#160;task&#160;of&#160;spam&#160;detection,&#160;deciding&#160;if&#160;a&#160;particular&#160;piece&#160;of&#160;email&#160;is<br/>
+an&#160;example&#160;of&#160;spam&#160;(unsolicited&#160;bulk&#160;email)—one&#160;of&#160;the&#160;first&#160;applications&#160;of&#160;naive<br/>Bayes&#160;to&#160;text&#160;classification&#160;<a href="4s.html#23">(Sahami&#160;et&#160;al.,&#160;1998).</a><br/>
+A&#160;common&#160;solution&#160;here,&#160;rather&#160;than&#160;using&#160;all&#160;the&#160;words&#160;as&#160;individual&#160;features,<br/>
+is&#160;to&#160;predefine&#160;likely&#160;sets&#160;of&#160;words&#160;or&#160;phrases&#160;as&#160;features,&#160;combined&#160;with&#160;features<br/>that&#160;are&#160;not&#160;purely&#160;linguistic.&#160;For&#160;example&#160;the&#160;open-source&#160;SpamAssassin&#160;<a href="4s.html#9">tool2<br/></a>predefines&#160;features&#160;like&#160;the&#160;phrase&#160;“one&#160;hundred&#160;percent&#160;guaranteed”,&#160;or&#160;the&#160;feature<br/>mentions&#160;millions&#160;of&#160;dollars,&#160;which&#160;is&#160;a&#160;regular&#160;expression&#160;that&#160;matches&#160;suspiciously<br/>large&#160;sums&#160;of&#160;money.&#160;But&#160;it&#160;also&#160;includes&#160;features&#160;like&#160;HTML&#160;has&#160;a&#160;low&#160;ratio&#160;of&#160;text<br/>to&#160;image&#160;area,&#160;that&#160;aren’t&#160;purely&#160;linguistic&#160;and&#160;might&#160;require&#160;some&#160;sophisticated<br/>computation,&#160;or&#160;totally&#160;non-linguistic&#160;features&#160;about,&#160;say,&#160;the&#160;path&#160;that&#160;the&#160;email<br/>took&#160;to&#160;arrive.&#160;More&#160;sample&#160;SpamAssassin&#160;features:<br/>
+•&#160;Email&#160;subject&#160;line&#160;is&#160;all&#160;capital&#160;letters<br/>•&#160;Contains&#160;phrases&#160;of&#160;urgency&#160;like&#160;“urgent&#160;reply”<br/>•&#160;Email&#160;subject&#160;line&#160;contains&#160;“online&#160;pharmaceutical”<br/>•&#160;HTML&#160;has&#160;unbalanced&#160;“head”&#160;tags<br/>
+2<br/>
+<a href="https://spamassassin.apache.org">https://spamassassin.apache.org</a><br/>
+<hr/>
+<a name=10></a>10<br/>
+CHAPTER&#160;4<br/>
+•<br/>
+NAIVE&#160;BAYES,&#160;TEXT&#160;CLASSIFICATION,&#160;AND&#160;SENTIMENT<br/>
+•&#160;Claims&#160;you&#160;can&#160;be&#160;removed&#160;from&#160;the&#160;list<br/>
+language&#160;id<br/>
+For&#160;other&#160;tasks,&#160;like&#160;language&#160;id—determining&#160;what&#160;language&#160;a&#160;given&#160;piece<br/>
+of&#160;text&#160;is&#160;written&#160;in—the&#160;most&#160;effective&#160;naive&#160;Bayes&#160;features&#160;are&#160;not&#160;words&#160;at&#160;all,<br/>but&#160;character&#160;n-grams,&#160;2-grams&#160;(‘zw’)&#160;3-grams&#160;(‘nya’,&#160;‘&#160;Vo’),&#160;or&#160;4-grams&#160;(‘ie&#160;z’,<br/>‘thei’),&#160;or,&#160;even&#160;simpler&#160;byte&#160;n-grams,&#160;where&#160;instead&#160;of&#160;using&#160;the&#160;multibyte&#160;Unicode<br/>character&#160;representations&#160;called&#160;codepoints,&#160;we&#160;just&#160;pretend&#160;everything&#160;is&#160;a&#160;string&#160;of<br/>raw&#160;bytes.&#160;Because&#160;spaces&#160;count&#160;as&#160;a&#160;byte,&#160;byte&#160;n-grams&#160;can&#160;model&#160;statistics&#160;about<br/>the&#160;beginning&#160;or&#160;ending&#160;of&#160;words.&#160;A&#160;widely&#160;used&#160;naive&#160;Bayes&#160;system,&#160;langid.py<br/><a href="4s.html#22">(Lui&#160;and&#160;Baldwin,&#160;2012)&#160;</a>begins&#160;with&#160;all&#160;possible&#160;n-grams&#160;of&#160;lengths&#160;1-4,&#160;using&#160;fea-<br/>ture&#160;selection&#160;to&#160;winnow&#160;down&#160;to&#160;the&#160;most&#160;informative&#160;7000&#160;final&#160;features.<br/>
+Language&#160;ID&#160;systems&#160;are&#160;trained&#160;on&#160;multilingual&#160;text,&#160;such&#160;as&#160;Wikipedia&#160;(Wiki-<br/>
+pedia&#160;text&#160;in&#160;68&#160;different&#160;languages&#160;was&#160;used&#160;in&#160;<a href="4s.html#22">(Lui&#160;and&#160;Baldwin,&#160;2011)),&#160;</a>or&#160;newswire.<br/>To&#160;make&#160;sure&#160;that&#160;this&#160;multilingual&#160;text&#160;correctly&#160;reflects&#160;different&#160;regions,&#160;dialects,<br/>and&#160;socioeconomic&#160;classes,&#160;systems&#160;also&#160;add&#160;Twitter&#160;text&#160;in&#160;many&#160;languages&#160;geo-<br/>tagged&#160;to&#160;many&#160;regions&#160;(important&#160;for&#160;getting&#160;world&#160;English&#160;dialects&#160;from&#160;countries<br/>with&#160;large&#160;Anglophone&#160;populations&#160;like&#160;Nigeria&#160;or&#160;India),&#160;Bible&#160;and&#160;Quran&#160;transla-<br/>tions,&#160;slang&#160;websites&#160;like&#160;Urban&#160;Dictionary,&#160;corpora&#160;of&#160;African&#160;American&#160;Vernacular<br/>English&#160;<a href="4s.html#22">(Blodgett&#160;et&#160;al.,&#160;2016),&#160;</a>and&#160;so&#160;on&#160;<a href="4s.html#22">(Jurgens&#160;et&#160;al.,&#160;2017).</a><br/>
+4.6<br/>
+Naive&#160;Bayes&#160;as&#160;a&#160;Language&#160;Model<br/>
+As&#160;we&#160;saw&#160;in&#160;the&#160;previous&#160;section,&#160;naive&#160;Bayes&#160;classifiers&#160;can&#160;use&#160;any&#160;sort&#160;of&#160;fea-<br/>ture:&#160;dictionaries,&#160;URLs,&#160;email&#160;addresses,&#160;network&#160;features,&#160;phrases,&#160;and&#160;so&#160;on.&#160;But<br/>if,&#160;as&#160;in&#160;the&#160;previous&#160;section,&#160;we&#160;use&#160;only&#160;individual&#160;word&#160;features,&#160;and&#160;we&#160;use&#160;all<br/>of&#160;the&#160;words&#160;in&#160;the&#160;text&#160;(not&#160;a&#160;subset),&#160;then&#160;naive&#160;Bayes&#160;has&#160;an&#160;important&#160;similar-<br/>ity&#160;to&#160;language&#160;modeling.&#160;Specifically,&#160;a&#160;naive&#160;Bayes&#160;model&#160;can&#160;be&#160;viewed&#160;as&#160;a<br/>set&#160;of&#160;class-specific&#160;unigram&#160;language&#160;models,&#160;in&#160;which&#160;the&#160;model&#160;for&#160;each&#160;class<br/>instantiates&#160;a&#160;unigram&#160;language&#160;model.<br/>
+Since&#160;the&#160;likelihood&#160;features&#160;from&#160;the&#160;naive&#160;Bayes&#160;model&#160;assign&#160;a&#160;probability&#160;to<br/>
+each&#160;word&#160;P(word|c),&#160;the&#160;model&#160;also&#160;assigns&#160;a&#160;probability&#160;to&#160;each&#160;sentence:<br/>
+Y<br/>
+P(s|c)&#160;=<br/>
+P(wi|c)<br/>
+(4.15)<br/>
+i∈positions<br/>
+Thus&#160;consider&#160;a&#160;naive&#160;Bayes&#160;model&#160;with&#160;the&#160;classes&#160;positive&#160;(+)&#160;and&#160;negative&#160;(-)<br/>
+and&#160;the&#160;following&#160;model&#160;parameters:<br/>
+w<br/>
+P(w|+)&#160;P(w|-)<br/>
+I<br/>
+0.1<br/>
+0.2<br/>
+love&#160;0.1<br/>
+0.001<br/>
+this&#160;0.01<br/>
+0.01<br/>
+fun<br/>
+0.05<br/>
+0.005<br/>
+film&#160;0.1<br/>
+0.1<br/>
+...<br/>
+...<br/>
+...<br/>
+Each&#160;of&#160;the&#160;two&#160;columns&#160;above&#160;instantiates&#160;a&#160;language&#160;model&#160;that&#160;can&#160;assign&#160;a<br/>
+probability&#160;to&#160;the&#160;sentence&#160;“I&#160;love&#160;this&#160;fun&#160;film”:<br/>
+P(“I&#160;love&#160;this&#160;fun&#160;film”|+)&#160;=&#160;0.1&#160;×&#160;0.1&#160;×&#160;0.01&#160;×&#160;0.05&#160;×&#160;0.1&#160;=&#160;0.0000005<br/>
+P(“I&#160;love&#160;this&#160;fun&#160;film”|−)&#160;=&#160;0.2&#160;×&#160;0.001&#160;×&#160;0.01&#160;×&#160;0.005&#160;×&#160;0.1&#160;=&#160;.0000000010<br/>
+<hr/>
+<a name=11></a>4.7<br/>
+•<br/>
+EVALUATION:&#160;PRECISION,&#160;RECALL,&#160;F-MEASURE<br/>
+11<br/>
+As&#160;it&#160;happens,&#160;the&#160;positive&#160;model&#160;assigns&#160;a&#160;higher&#160;probability&#160;to&#160;the&#160;sentence:<br/>
+P(s|pos)&#160;&gt;&#160;P(s|neg).&#160;Note&#160;that&#160;this&#160;is&#160;just&#160;the&#160;likelihood&#160;part&#160;of&#160;the&#160;naive&#160;Bayes<br/>model;&#160;once&#160;we&#160;multiply&#160;in&#160;the&#160;prior&#160;a&#160;full&#160;naive&#160;Bayes&#160;model&#160;might&#160;well&#160;make&#160;a<br/>different&#160;classification&#160;decision.<br/>
+4.7<br/>
+Evaluation:&#160;Precision,&#160;Recall,&#160;F-measure<br/>
+To&#160;introduce&#160;the&#160;methods&#160;for&#160;evaluating&#160;text&#160;classification,&#160;let’s&#160;first&#160;consider&#160;some<br/>simple&#160;binary&#160;detection&#160;tasks.&#160;For&#160;example,&#160;in&#160;spam&#160;detection,&#160;our&#160;goal&#160;is&#160;to&#160;label<br/>every&#160;text&#160;as&#160;being&#160;in&#160;the&#160;spam&#160;category&#160;(“positive”)&#160;or&#160;not&#160;in&#160;the&#160;spam&#160;category<br/>(“negative”).&#160;For&#160;each&#160;item&#160;(email&#160;document)&#160;we&#160;therefore&#160;need&#160;to&#160;know&#160;whether<br/>our&#160;system&#160;called&#160;it&#160;spam&#160;or&#160;not.&#160;We&#160;also&#160;need&#160;to&#160;know&#160;whether&#160;the&#160;email&#160;is&#160;actually<br/>spam&#160;or&#160;not,&#160;i.e.&#160;the&#160;human-defined&#160;labels&#160;for&#160;each&#160;document&#160;that&#160;we&#160;are&#160;trying&#160;to<br/>
+gold&#160;labels<br/>
+match.&#160;We&#160;will&#160;refer&#160;to&#160;these&#160;human&#160;labels&#160;as&#160;the&#160;gold&#160;labels.<br/>
+Or&#160;imagine&#160;you’re&#160;the&#160;CEO&#160;of&#160;the&#160;Delicious&#160;Pie&#160;Company&#160;and&#160;you&#160;need&#160;to&#160;know<br/>
+what&#160;people&#160;are&#160;saying&#160;about&#160;your&#160;pies&#160;on&#160;social&#160;media,&#160;so&#160;you&#160;build&#160;a&#160;system&#160;that<br/>detects&#160;tweets&#160;concerning&#160;Delicious&#160;Pie.&#160;Here&#160;the&#160;positive&#160;class&#160;is&#160;tweets&#160;about<br/>Delicious&#160;Pie&#160;and&#160;the&#160;negative&#160;class&#160;is&#160;all&#160;other&#160;tweets.<br/>
+In&#160;both&#160;cases,&#160;we&#160;need&#160;a&#160;metric&#160;for&#160;knowing&#160;how&#160;well&#160;our&#160;spam&#160;detector&#160;(or<br/>
+pie-tweet-detector)&#160;is&#160;doing.&#160;To&#160;evaluate&#160;any&#160;system&#160;for&#160;detecting&#160;things,&#160;we&#160;start<br/>
+confusion<br/>
+by&#160;building&#160;a&#160;confusion&#160;matrix&#160;like&#160;the&#160;one&#160;shown&#160;in&#160;Fig.&#160;<a href="4s.html#11">4.4.&#160;</a>A&#160;confusion&#160;matrix<br/>
+matrix<br/>
+is&#160;a&#160;table&#160;for&#160;visualizing&#160;how&#160;an&#160;algorithm&#160;performs&#160;with&#160;respect&#160;to&#160;the&#160;human&#160;gold<br/>labels,&#160;using&#160;two&#160;dimensions&#160;(system&#160;output&#160;and&#160;gold&#160;labels),&#160;and&#160;each&#160;cell&#160;labeling<br/>a&#160;set&#160;of&#160;possible&#160;outcomes.&#160;In&#160;the&#160;spam&#160;detection&#160;case,&#160;for&#160;example,&#160;true&#160;positives<br/>are&#160;documents&#160;that&#160;are&#160;indeed&#160;spam&#160;(indicated&#160;by&#160;human-created&#160;gold&#160;labels)&#160;that<br/>our&#160;system&#160;correctly&#160;said&#160;were&#160;spam.&#160;False&#160;negatives&#160;are&#160;documents&#160;that&#160;are&#160;indeed<br/>spam&#160;but&#160;our&#160;system&#160;incorrectly&#160;labeled&#160;as&#160;non-spam.<br/>
+To&#160;the&#160;bottom&#160;right&#160;of&#160;the&#160;table&#160;is&#160;the&#160;equation&#160;for&#160;accuracy,&#160;which&#160;asks&#160;what<br/>
+percentage&#160;of&#160;all&#160;the&#160;observations&#160;(for&#160;the&#160;spam&#160;or&#160;pie&#160;examples&#160;that&#160;means&#160;all&#160;emails<br/>or&#160;tweets)&#160;our&#160;system&#160;labeled&#160;correctly.&#160;Although&#160;accuracy&#160;might&#160;seem&#160;a&#160;natural<br/>metric,&#160;we&#160;generally&#160;don’t&#160;use&#160;it&#160;for&#160;text&#160;classification&#160;tasks.&#160;That’s&#160;because&#160;accuracy<br/>doesn’t&#160;work&#160;well&#160;when&#160;the&#160;classes&#160;are&#160;unbalanced&#160;(as&#160;indeed&#160;they&#160;are&#160;with&#160;spam,<br/>which&#160;is&#160;a&#160;large&#160;majority&#160;of&#160;email,&#160;or&#160;with&#160;tweets,&#160;which&#160;are&#160;mainly&#160;not&#160;about&#160;pie).<br/>
+<i>gold standard labels</i><br/>
+gold positive<br/>
+gold negative<br/>
+system<br/>
+<i>system</i><br/>
+tp<br/>
+<b>true&#160;positive&#160;false&#160;positive</b><br/>
+positive<br/>
+<b>precision</b>&#160;=&#160;<br/>
+<i>output</i><br/>
+tp+fp<br/>
+system<br/>
+<i>labels</i><br/>
+<b>false&#160;negative&#160;true&#160;negative</b><br/>
+negative<br/>
+tp<br/>
+tp+tn<br/>
+<b>recall</b>&#160;=&#160;<br/>
+<b>accuracy</b>&#160;=&#160;<br/>
+tp+fn<br/>
+tp+fp+tn+fn<br/>
+Figure&#160;4.4<br/>
+A&#160;confusion&#160;matrix&#160;for&#160;visualizing&#160;how&#160;well&#160;a&#160;binary&#160;classification&#160;system&#160;per-<br/>
+forms&#160;against&#160;gold&#160;standard&#160;labels.<br/>
+To&#160;make&#160;this&#160;more&#160;explicit,&#160;imagine&#160;that&#160;we&#160;looked&#160;at&#160;a&#160;million&#160;tweets,&#160;and<br/>
+let’s&#160;say&#160;that&#160;only&#160;100&#160;of&#160;them&#160;are&#160;discussing&#160;their&#160;love&#160;(or&#160;hatred)&#160;for&#160;our&#160;pie,<br/>
+<hr/>
+<a name=12></a>12<br/>
+CHAPTER&#160;4<br/>
+•<br/>
+NAIVE&#160;BAYES,&#160;TEXT&#160;CLASSIFICATION,&#160;AND&#160;SENTIMENT<br/>
+while&#160;the&#160;other&#160;999,900&#160;are&#160;tweets&#160;about&#160;something&#160;completely&#160;unrelated.&#160;Imagine&#160;a<br/>simple&#160;classifier&#160;that&#160;stupidly&#160;classified&#160;every&#160;tweet&#160;as&#160;“not&#160;about&#160;pie”.&#160;This&#160;classifier<br/>would&#160;have&#160;999,900&#160;true&#160;negatives&#160;and&#160;only&#160;100&#160;false&#160;negatives&#160;for&#160;an&#160;accuracy&#160;of<br/>999,900/1,000,000&#160;or&#160;99.99%!&#160;What&#160;an&#160;amazing&#160;accuracy&#160;level!&#160;Surely&#160;we&#160;should<br/>be&#160;happy&#160;with&#160;this&#160;classifier?&#160;But&#160;of&#160;course&#160;this&#160;fabulous&#160;‘no&#160;pie’&#160;classifier&#160;would<br/>be&#160;completely&#160;useless,&#160;since&#160;it&#160;wouldn’t&#160;find&#160;a&#160;single&#160;one&#160;of&#160;the&#160;customer&#160;comments<br/>we&#160;are&#160;looking&#160;for.&#160;In&#160;other&#160;words,&#160;accuracy&#160;is&#160;not&#160;a&#160;good&#160;metric&#160;when&#160;the&#160;goal&#160;is<br/>to&#160;discover&#160;something&#160;that&#160;is&#160;rare,&#160;or&#160;at&#160;least&#160;not&#160;completely&#160;balanced&#160;in&#160;frequency,<br/>which&#160;is&#160;a&#160;very&#160;common&#160;situation&#160;in&#160;the&#160;world.<br/>
+That’s&#160;why&#160;instead&#160;of&#160;accuracy&#160;we&#160;generally&#160;turn&#160;to&#160;two&#160;other&#160;metrics&#160;shown&#160;in<br/>
+precision<br/>
+Fig.&#160;<a href="4s.html#11">4.4:&#160;</a>precision&#160;and&#160;recall.&#160;Precision&#160;measures&#160;the&#160;percentage&#160;of&#160;the&#160;items&#160;that<br/>the&#160;system&#160;detected&#160;(i.e.,&#160;the&#160;system&#160;labeled&#160;as&#160;positive)&#160;that&#160;are&#160;in&#160;fact&#160;positive&#160;(i.e.,<br/>are&#160;positive&#160;according&#160;to&#160;the&#160;human&#160;gold&#160;labels).&#160;Precision&#160;is&#160;defined&#160;as<br/>
+true&#160;positives<br/>
+Precision&#160;=&#160;true&#160;positives&#160;+&#160;false&#160;positives<br/>
+recall<br/>
+Recall&#160;measures&#160;the&#160;percentage&#160;of&#160;items&#160;actually&#160;present&#160;in&#160;the&#160;input&#160;that&#160;were<br/>
+correctly&#160;identified&#160;by&#160;the&#160;system.&#160;Recall&#160;is&#160;defined&#160;as<br/>
+true&#160;positives<br/>
+Recall&#160;=&#160;true&#160;positives&#160;+&#160;false&#160;negatives<br/>
+Precision&#160;and&#160;recall&#160;will&#160;help&#160;solve&#160;the&#160;problem&#160;with&#160;the&#160;useless&#160;“nothing&#160;is<br/>
+pie”&#160;classifier.&#160;This&#160;classifier,&#160;despite&#160;having&#160;a&#160;fabulous&#160;accuracy&#160;of&#160;99.99%,&#160;has<br/>a&#160;terrible&#160;recall&#160;of&#160;0&#160;(since&#160;there&#160;are&#160;no&#160;true&#160;positives,&#160;and&#160;100&#160;false&#160;negatives,&#160;the<br/>recall&#160;is&#160;0/100).&#160;You&#160;should&#160;convince&#160;yourself&#160;that&#160;the&#160;precision&#160;at&#160;finding&#160;relevant<br/>tweets&#160;is&#160;equally&#160;problematic.&#160;Thus&#160;precision&#160;and&#160;recall,&#160;unlike&#160;accuracy,&#160;emphasize<br/>true&#160;positives:&#160;finding&#160;the&#160;things&#160;that&#160;we&#160;are&#160;supposed&#160;to&#160;be&#160;looking&#160;for.<br/>
+There&#160;are&#160;many&#160;ways&#160;to&#160;define&#160;a&#160;single&#160;metric&#160;that&#160;incorporates&#160;aspects&#160;of&#160;both<br/>
+F-measure<br/>
+precision&#160;and&#160;recall.&#160;The&#160;simplest&#160;of&#160;these&#160;combinations&#160;is&#160;the&#160;F-measure&#160;<a href="4s.html#23">(van<br/>Rijsbergen,&#160;1975)&#160;</a>,&#160;defined&#160;as:<br/>
+(&#160;2<br/>
+β&#160;+&#160;1)PR<br/>
+F&#160;=<br/>
+β<br/>
+β&#160;2P&#160;+&#160;R<br/>
+The&#160;β&#160;parameter&#160;differentially&#160;weights&#160;the&#160;importance&#160;of&#160;recall&#160;and&#160;precision,<br/>
+based&#160;perhaps&#160;on&#160;the&#160;needs&#160;of&#160;an&#160;application.&#160;Values&#160;of&#160;β&#160;&gt;&#160;1&#160;favor&#160;recall,&#160;while<br/>values&#160;of&#160;β&#160;&lt;&#160;1&#160;favor&#160;precision.&#160;When&#160;β&#160;=&#160;1,&#160;precision&#160;and&#160;recall&#160;are&#160;equally&#160;bal-<br/>
+F1<br/>
+anced;&#160;this&#160;is&#160;the&#160;most&#160;frequently&#160;used&#160;metric,&#160;and&#160;is&#160;called&#160;Fβ=1&#160;or&#160;just&#160;F1:<br/>
+2PR<br/>
+F1&#160;=<br/>
+(4.16)<br/>
+P&#160;+&#160;R<br/>
+F-measure&#160;comes&#160;from&#160;a&#160;weighted&#160;harmonic&#160;mean&#160;of&#160;precision&#160;and&#160;recall.&#160;The<br/>
+harmonic&#160;mean&#160;of&#160;a&#160;set&#160;of&#160;numbers&#160;is&#160;the&#160;reciprocal&#160;of&#160;the&#160;arithmetic&#160;mean&#160;of&#160;recip-<br/>rocals:<br/>
+n<br/>
+HarmonicMean(a1,&#160;a2,&#160;a3,&#160;a4,&#160;...,&#160;an)&#160;=<br/>
+(4.17)<br/>
+1&#160;+&#160;1&#160;+&#160;1&#160;+&#160;...&#160;+&#160;1<br/>
+a1<br/>
+a2<br/>
+a3<br/>
+an<br/>
+and&#160;hence&#160;F-measure&#160;is<br/>
+1<br/>
+<br/>
+1&#160;−<br/>
+<br/>
+2<br/>
+α<br/>
+(β&#160;+&#160;1)PR<br/>
+F&#160;=<br/>
+or&#160;with<br/>
+2<br/>
+β<br/>
+=<br/>
+F&#160;=<br/>
+(4.18)<br/>
+1<br/>
+α<br/>
++&#160;(1&#160;−<br/>
+α<br/>
+β&#160;2P&#160;+&#160;R<br/>
+P<br/>
+α&#160;)&#160;1<br/>
+R<br/>
+<hr/>
+<a name=13></a>4.8<br/>
+•<br/>
+TEST&#160;SETS&#160;AND&#160;CROSS-VALIDATION<br/>
+13<br/>
+Harmonic&#160;mean&#160;is&#160;used&#160;because&#160;the&#160;harmonic&#160;mean&#160;of&#160;two&#160;values&#160;is&#160;closer&#160;to&#160;the<br/>minimum&#160;of&#160;the&#160;two&#160;values&#160;than&#160;the&#160;arithmetic&#160;mean&#160;is.&#160;Thus&#160;it&#160;weighs&#160;the&#160;lower&#160;of<br/>the&#160;two&#160;numbers&#160;more&#160;heavily,&#160;which&#160;is&#160;more&#160;conservative&#160;in&#160;this&#160;situation.<br/>
+4.7.1<br/>
+Evaluating&#160;with&#160;more&#160;than&#160;two&#160;classes<br/>
+Up&#160;to&#160;now&#160;we&#160;have&#160;been&#160;describing&#160;text&#160;classification&#160;tasks&#160;with&#160;only&#160;two&#160;classes.<br/>But&#160;lots&#160;of&#160;classification&#160;tasks&#160;in&#160;language&#160;processing&#160;have&#160;more&#160;than&#160;two&#160;classes.<br/>For&#160;sentiment&#160;analysis&#160;we&#160;generally&#160;have&#160;3&#160;classes&#160;(positive,&#160;negative,&#160;neutral)&#160;and<br/>even&#160;more&#160;classes&#160;are&#160;common&#160;for&#160;tasks&#160;like&#160;part-of-speech&#160;tagging,&#160;word&#160;sense<br/>disambiguation,&#160;semantic&#160;role&#160;labeling,&#160;emotion&#160;detection,&#160;and&#160;so&#160;on.&#160;Luckily&#160;the<br/>naive&#160;Bayes&#160;algorithm&#160;is&#160;already&#160;a&#160;multi-class&#160;classification&#160;algorithm.<br/>
+<i>gold labels</i><br/>
+urgent<br/>
+normal<br/>
+spam<br/>
+urgent<br/>
+8<br/>
+10<br/>
+8<br/>
+1<br/>
+<b>precision</b>u=&#160;&#160;8+10+1<br/>
+<i>system</i><br/>
+60<br/>
+<i>output&#160;</i>normal<br/>
+5<br/>
+60<br/>
+50<br/>
+<b>precision</b>n=&#160;5+60+50<br/>
+200<br/>
+spam<br/>
+3<br/>
+30<br/>
+200<br/>
+<b>precision</b>s=&#160;3+30+200<br/>
+<b>recall</b>u<b>&#160;=</b>&#160;&#160;<b>recall</b>n<b>&#160;=</b>&#160;<b>recall</b>s<b>&#160;=</b>&#160;<br/>
+8<br/>
+60<br/>
+200<br/>
+8+5+3&#160;10+60+30&#160;1+50+200<br/>
+Figure&#160;4.5<br/>
+Confusion&#160;matrix&#160;for&#160;a&#160;three-class&#160;categorization&#160;task,&#160;showing&#160;for&#160;each&#160;pair&#160;of<br/>
+classes&#160;(c1,&#160;c2),&#160;how&#160;many&#160;documents&#160;from&#160;c1&#160;were&#160;(in)correctly&#160;assigned&#160;to&#160;c2.<br/>
+But&#160;we’ll&#160;need&#160;to&#160;slightly&#160;modify&#160;our&#160;definitions&#160;of&#160;precision&#160;and&#160;recall.&#160;Con-<br/>
+sider&#160;the&#160;sample&#160;confusion&#160;matrix&#160;for&#160;a&#160;hypothetical&#160;3-way&#160;one-of&#160;email&#160;catego-<br/>rization&#160;decision&#160;(urgent,&#160;normal,&#160;spam)&#160;shown&#160;in&#160;Fig.&#160;<a href="4s.html#13">4.5.&#160;</a>The&#160;matrix&#160;shows,&#160;for<br/>example,&#160;that&#160;the&#160;system&#160;mistakenly&#160;labeled&#160;one&#160;spam&#160;document&#160;as&#160;urgent,&#160;and&#160;we<br/>have&#160;shown&#160;how&#160;to&#160;compute&#160;a&#160;distinct&#160;precision&#160;and&#160;recall&#160;value&#160;for&#160;each&#160;class.&#160;In<br/>order&#160;to&#160;derive&#160;a&#160;single&#160;metric&#160;that&#160;tells&#160;us&#160;how&#160;well&#160;the&#160;system&#160;is&#160;doing,&#160;we&#160;can&#160;com-<br/>
+macroaveraging<br/>
+bine&#160;these&#160;values&#160;in&#160;two&#160;ways.&#160;In&#160;macroaveraging,&#160;we&#160;compute&#160;the&#160;performance<br/>
+microaveraging<br/>
+for&#160;each&#160;class,&#160;and&#160;then&#160;average&#160;over&#160;classes.&#160;In&#160;microaveraging,&#160;we&#160;collect&#160;the&#160;de-<br/>cisions&#160;for&#160;all&#160;classes&#160;into&#160;a&#160;single&#160;confusion&#160;matrix,&#160;and&#160;then&#160;compute&#160;precision&#160;and<br/>recall&#160;from&#160;that&#160;table.&#160;Fig.&#160;<a href="4s.html#14">4.6&#160;</a>shows&#160;the&#160;confusion&#160;matrix&#160;for&#160;each&#160;class&#160;separately,<br/>and&#160;shows&#160;the&#160;computation&#160;of&#160;microaveraged&#160;and&#160;macroaveraged&#160;precision.<br/>
+As&#160;the&#160;figure&#160;shows,&#160;a&#160;microaverage&#160;is&#160;dominated&#160;by&#160;the&#160;more&#160;frequent&#160;class&#160;(in<br/>
+this&#160;case&#160;spam),&#160;since&#160;the&#160;counts&#160;are&#160;pooled.&#160;The&#160;macroaverage&#160;better&#160;reflects&#160;the<br/>statistics&#160;of&#160;the&#160;smaller&#160;classes,&#160;and&#160;so&#160;is&#160;more&#160;appropriate&#160;when&#160;performance&#160;on&#160;all<br/>the&#160;classes&#160;is&#160;equally&#160;important.<br/>
+4.8<br/>
+Test&#160;sets&#160;and&#160;Cross-validation<br/>
+The&#160;training&#160;and&#160;testing&#160;procedure&#160;for&#160;text&#160;classification&#160;follows&#160;what&#160;we&#160;saw&#160;with<br/>language&#160;modeling&#160;(Section&#160;??):&#160;we&#160;use&#160;the&#160;training&#160;set&#160;to&#160;train&#160;the&#160;model,&#160;then&#160;use<br/>
+development<br/>
+the&#160;development&#160;test&#160;set&#160;(also&#160;called&#160;a&#160;devset)&#160;to&#160;perhaps&#160;tune&#160;some&#160;parameters,<br/>
+test&#160;set<br/>
+devset<br/>
+<hr/>
+<a name=14></a>14<br/>
+CHAPTER&#160;4<br/>
+•<br/>
+NAIVE&#160;BAYES,&#160;TEXT&#160;CLASSIFICATION,&#160;AND&#160;SENTIMENT<br/>
+<b>Class&#160;1: Urgent</b><br/>
+<b>Class&#160;2: Normal</b><br/>
+<b>Class&#160;3: Spam</b><br/>
+<b>Pooled</b><br/>
+true<br/>
+true<br/>
+true<br/>
+true<br/>
+true<br/>
+true<br/>
+true<br/>
+true<br/>
+urgent&#160;not<br/>
+normal&#160;not<br/>
+spam<br/>
+not<br/>
+yes<br/>
+no<br/>
+system<br/>
+system<br/>
+system<br/>
+system<br/>
+urgent<br/>
+8<br/>
+11<br/>
+normal&#160;60<br/>
+55<br/>
+spam&#160;200&#160;33<br/>
+yes<br/>
+268&#160;99<br/>
+system<br/>
+system<br/>
+system<br/>
+system<br/>
+not<br/>
+8&#160;340<br/>
+not<br/>
+40&#160;212<br/>
+not<br/>
+51&#160;83<br/>
+no<br/>
+99&#160;635<br/>
+8<br/>
+60<br/>
+200<br/>
+268<br/>
+precision =<br/>
+= .42<br/>
+precision =<br/>
+= .52<br/>
+precision =<br/>
+= .86<br/>
+microaverage&#160;=<br/>
+=&#160;<b>.73</b><br/>
+8+11<br/>
+60+55<br/>
+200+33<br/>
+precision<br/>
+268+99<br/>
+macroaverage<br/>
+.42+.52+.86<br/>
+=<br/>
+=<b>&#160;.60</b><br/>
+precision<br/>
+3<br/>
+Figure&#160;4.6<br/>
+Separate&#160;confusion&#160;matrices&#160;for&#160;the&#160;3&#160;classes&#160;from&#160;the&#160;previous&#160;figure,&#160;showing&#160;the&#160;pooled&#160;confu-<br/>
+sion&#160;matrix&#160;and&#160;the&#160;microaveraged&#160;and&#160;macroaveraged&#160;precision.<br/>
+and&#160;in&#160;general&#160;decide&#160;what&#160;the&#160;best&#160;model&#160;is.&#160;Once&#160;we&#160;come&#160;up&#160;with&#160;what&#160;we&#160;think<br/>is&#160;the&#160;best&#160;model,&#160;we&#160;run&#160;it&#160;on&#160;the&#160;(hitherto&#160;unseen)&#160;test&#160;set&#160;to&#160;report&#160;its&#160;performance.<br/>
+While&#160;the&#160;use&#160;of&#160;a&#160;devset&#160;avoids&#160;overfitting&#160;the&#160;test&#160;set,&#160;having&#160;a&#160;fixed&#160;train-<br/>
+ing&#160;set,&#160;devset,&#160;and&#160;test&#160;set&#160;creates&#160;another&#160;problem:&#160;in&#160;order&#160;to&#160;save&#160;lots&#160;of&#160;data<br/>for&#160;training,&#160;the&#160;test&#160;set&#160;(or&#160;devset)&#160;might&#160;not&#160;be&#160;large&#160;enough&#160;to&#160;be&#160;representative.<br/>Wouldn’t&#160;it&#160;be&#160;better&#160;if&#160;we&#160;could&#160;somehow&#160;use&#160;all&#160;our&#160;data&#160;for&#160;training&#160;and&#160;still&#160;use<br/>
+cross-validation<br/>
+all&#160;our&#160;data&#160;for&#160;test?&#160;We&#160;can&#160;do&#160;this&#160;by&#160;cross-validation.<br/>
+In&#160;cross-validation,&#160;we&#160;choose&#160;a&#160;number&#160;k,&#160;and&#160;partition&#160;our&#160;data&#160;into&#160;k&#160;disjoint<br/>
+folds<br/>
+subsets&#160;called&#160;folds.&#160;Now&#160;we&#160;choose&#160;one&#160;of&#160;those&#160;k&#160;folds&#160;as&#160;a&#160;test&#160;set,&#160;train&#160;our<br/>classifier&#160;on&#160;the&#160;remaining&#160;k&#160;−&#160;1&#160;folds,&#160;and&#160;then&#160;compute&#160;the&#160;error&#160;rate&#160;on&#160;the&#160;test<br/>set.&#160;Then&#160;we&#160;repeat&#160;with&#160;another&#160;fold&#160;as&#160;the&#160;test&#160;set,&#160;again&#160;training&#160;on&#160;the&#160;other&#160;k&#160;−&#160;1<br/>folds.&#160;We&#160;do&#160;this&#160;sampling&#160;process&#160;k&#160;times&#160;and&#160;average&#160;the&#160;test&#160;set&#160;error&#160;rate&#160;from<br/>these&#160;k&#160;runs&#160;to&#160;get&#160;an&#160;average&#160;error&#160;rate.&#160;If&#160;we&#160;choose&#160;k&#160;=&#160;10,&#160;we&#160;would&#160;train&#160;10<br/>different&#160;models&#160;(each&#160;on&#160;90%&#160;of&#160;our&#160;data),&#160;test&#160;the&#160;model&#160;10&#160;times,&#160;and&#160;average<br/>
+10-fold<br/>
+these&#160;10&#160;values.&#160;This&#160;is&#160;called&#160;10-fold&#160;cross-validation.<br/>
+cross-validation<br/>
+The&#160;only&#160;problem&#160;with&#160;cross-validation&#160;is&#160;that&#160;because&#160;all&#160;the&#160;data&#160;is&#160;used&#160;for<br/>
+testing,&#160;we&#160;need&#160;the&#160;whole&#160;corpus&#160;to&#160;be&#160;blind;&#160;we&#160;can’t&#160;examine&#160;any&#160;of&#160;the&#160;data<br/>to&#160;suggest&#160;possible&#160;features&#160;and&#160;in&#160;general&#160;see&#160;what’s&#160;going&#160;on,&#160;because&#160;we’d&#160;be<br/>peeking&#160;at&#160;the&#160;test&#160;set,&#160;and&#160;such&#160;cheating&#160;would&#160;cause&#160;us&#160;to&#160;overestimate&#160;the&#160;perfor-<br/>mance&#160;of&#160;our&#160;system.&#160;However,&#160;looking&#160;at&#160;the&#160;corpus&#160;to&#160;understand&#160;what’s&#160;going<br/>on&#160;is&#160;important&#160;in&#160;designing&#160;NLP&#160;systems!&#160;What&#160;to&#160;do?&#160;For&#160;this&#160;reason,&#160;it&#160;is&#160;com-<br/>mon&#160;to&#160;create&#160;a&#160;fixed&#160;training&#160;set&#160;and&#160;test&#160;set,&#160;then&#160;do&#160;10-fold&#160;cross-validation&#160;inside<br/>the&#160;training&#160;set,&#160;but&#160;compute&#160;error&#160;rate&#160;the&#160;normal&#160;way&#160;in&#160;the&#160;test&#160;set,&#160;as&#160;shown&#160;in<br/>Fig.&#160;<a href="4s.html#15">4.7.</a><br/>
+4.9<br/>
+Statistical&#160;Significance&#160;Testing<br/>
+In&#160;building&#160;systems&#160;we&#160;often&#160;need&#160;to&#160;compare&#160;the&#160;performance&#160;of&#160;two&#160;systems.&#160;How<br/>can&#160;we&#160;know&#160;if&#160;the&#160;new&#160;system&#160;we&#160;just&#160;built&#160;is&#160;better&#160;than&#160;our&#160;old&#160;one?&#160;Or&#160;better<br/>than&#160;some&#160;other&#160;system&#160;described&#160;in&#160;the&#160;literature?&#160;This&#160;is&#160;the&#160;domain&#160;of&#160;statistical<br/>hypothesis&#160;testing,&#160;and&#160;in&#160;this&#160;section&#160;we&#160;introduce&#160;tests&#160;for&#160;statistical&#160;significance<br/>for&#160;NLP&#160;classifiers,&#160;drawing&#160;especially&#160;on&#160;the&#160;work&#160;of&#160;<a href="4s.html#22">Dror&#160;et&#160;al.&#160;(2020)&#160;</a>and&#160;<a href="4s.html#22">Berg-<br/>Kirkpatrick&#160;et&#160;al.&#160;(2012).</a><br/>
+Suppose&#160;we’re&#160;comparing&#160;the&#160;performance&#160;of&#160;classifiers&#160;A&#160;and&#160;B&#160;on&#160;a&#160;metric&#160;M<br/>
+<hr/>
+<a name=15></a>4.9<br/>
+•<br/>
+STATISTICAL&#160;SIGNIFICANCE&#160;TESTING<br/>
+15<br/>
+Training&#160;Iterations<br/>
+Testing<br/>
+1<br/>
+Dev<br/>
+Training<br/>
+2<br/>
+Dev<br/>
+Training<br/>
+3<br/>
+Dev<br/>
+Training<br/>
+4<br/>
+Dev<br/>
+Training<br/>
+5<br/>
+Training<br/>
+Test&#160;<br/>
+Dev<br/>
+Training<br/>
+Set<br/>
+6<br/>
+Training<br/>
+Dev<br/>
+7<br/>
+Training<br/>
+Dev<br/>
+8<br/>
+Training<br/>
+Dev<br/>
+9<br/>
+Training<br/>
+Dev<br/>
+10<br/>
+Training<br/>
+Dev<br/>
+Figure&#160;4.7<br/>
+10-fold&#160;cross-validation<br/>
+such&#160;as&#160;F1,&#160;or&#160;accuracy.&#160;Perhaps&#160;we&#160;want&#160;to&#160;know&#160;if&#160;our&#160;logistic&#160;regression&#160;senti-<br/>ment&#160;classifier&#160;A&#160;(Chapter&#160;5)&#160;gets&#160;a&#160;higher&#160;F1&#160;score&#160;than&#160;our&#160;naive&#160;Bayes&#160;sentiment<br/>classifier&#160;B&#160;on&#160;a&#160;particular&#160;test&#160;set&#160;x.&#160;Let’s&#160;call&#160;M(A,&#160;x)&#160;the&#160;score&#160;that&#160;system&#160;A&#160;gets<br/>on&#160;test&#160;set&#160;x,&#160;and&#160;δ&#160;(x)&#160;the&#160;performance&#160;difference&#160;between&#160;A&#160;and&#160;B&#160;on&#160;x:<br/>
+δ&#160;(x)&#160;=&#160;M(A,&#160;x)&#160;−&#160;M(B,&#160;x)<br/>
+(4.19)<br/>
+We&#160;would&#160;like&#160;to&#160;know&#160;if&#160;δ&#160;(x)&#160;&gt;&#160;0,&#160;meaning&#160;that&#160;our&#160;logistic&#160;regression&#160;classifier<br/>
+effect&#160;size<br/>
+has&#160;a&#160;higher&#160;F1&#160;than&#160;our&#160;naive&#160;Bayes&#160;classifier&#160;on&#160;X.&#160;δ&#160;(x)&#160;is&#160;called&#160;the&#160;effect&#160;size;<br/>a&#160;bigger&#160;δ&#160;means&#160;that&#160;A&#160;seems&#160;to&#160;be&#160;way&#160;better&#160;than&#160;B;&#160;a&#160;small&#160;δ&#160;means&#160;A&#160;seems&#160;to<br/>be&#160;only&#160;a&#160;little&#160;better.<br/>
+Why&#160;don’t&#160;we&#160;just&#160;check&#160;if&#160;δ&#160;(x)&#160;is&#160;positive?&#160;Suppose&#160;we&#160;do,&#160;and&#160;we&#160;find&#160;that<br/>
+the&#160;F1&#160;score&#160;of&#160;A&#160;is&#160;higher&#160;than&#160;B’s&#160;by&#160;.04.&#160;Can&#160;we&#160;be&#160;certain&#160;that&#160;A&#160;is&#160;better?&#160;We<br/>cannot!&#160;That’s&#160;because&#160;A&#160;might&#160;just&#160;be&#160;accidentally&#160;better&#160;than&#160;B&#160;on&#160;this&#160;particular&#160;x.<br/>We&#160;need&#160;something&#160;more:&#160;we&#160;want&#160;to&#160;know&#160;if&#160;A’s&#160;superiority&#160;over&#160;B&#160;is&#160;likely&#160;to&#160;hold<br/>again&#160;if&#160;we&#160;checked&#160;another&#160;test&#160;set&#160;x0,&#160;or&#160;under&#160;some&#160;other&#160;set&#160;of&#160;circumstances.<br/>
+In&#160;the&#160;paradigm&#160;of&#160;statistical&#160;hypothesis&#160;testing,&#160;we&#160;test&#160;this&#160;by&#160;formalizing&#160;two<br/>
+hypotheses.<br/>
+H0&#160;:&#160;δ&#160;(x)&#160;≤&#160;0<br/>
+H1&#160;:&#160;δ&#160;(x)&#160;&gt;&#160;0<br/>
+(4.20)<br/>
+null&#160;hypothesis<br/>
+The&#160;hypothesis&#160;H0,&#160;called&#160;the&#160;null&#160;hypothesis,&#160;supposes&#160;that&#160;δ&#160;(x)&#160;is&#160;actually&#160;nega-<br/>tive&#160;or&#160;zero,&#160;meaning&#160;that&#160;A&#160;is&#160;not&#160;better&#160;than&#160;B.&#160;We&#160;would&#160;like&#160;to&#160;know&#160;if&#160;we&#160;can<br/>confidently&#160;rule&#160;out&#160;this&#160;hypothesis,&#160;and&#160;instead&#160;support&#160;H1,&#160;that&#160;A&#160;is&#160;better.<br/>
+We&#160;do&#160;this&#160;by&#160;creating&#160;a&#160;random&#160;variable&#160;X&#160;ranging&#160;over&#160;all&#160;test&#160;sets.&#160;Now&#160;we<br/>
+ask&#160;how&#160;likely&#160;is&#160;it,&#160;if&#160;the&#160;null&#160;hypothesis&#160;H0&#160;was&#160;correct,&#160;that&#160;among&#160;these&#160;test&#160;sets<br/>we&#160;would&#160;encounter&#160;the&#160;value&#160;of&#160;δ&#160;(x)&#160;that&#160;we&#160;found,&#160;if&#160;we&#160;repeated&#160;the&#160;experiment<br/>
+p-value<br/>
+a&#160;great&#160;many&#160;times.&#160;We&#160;formalize&#160;this&#160;likelihood&#160;as&#160;the&#160;p-value:&#160;the&#160;probability,<br/>assuming&#160;the&#160;null&#160;hypothesis&#160;H0&#160;is&#160;true,&#160;of&#160;seeing&#160;the&#160;δ&#160;(x)&#160;that&#160;we&#160;saw&#160;or&#160;one&#160;even<br/>greater<br/>
+P(δ&#160;(X&#160;)&#160;≥&#160;δ&#160;(x)|H0&#160;is&#160;true)<br/>
+(4.21)<br/>
+So&#160;in&#160;our&#160;example,&#160;this&#160;p-value&#160;is&#160;the&#160;probability&#160;that&#160;we&#160;would&#160;see&#160;δ&#160;(x)&#160;assuming<br/>A&#160;is&#160;not&#160;better&#160;than&#160;B.&#160;If&#160;δ&#160;(x)&#160;is&#160;huge&#160;(let’s&#160;say&#160;A&#160;has&#160;a&#160;very&#160;respectable&#160;F1&#160;of&#160;.9<br/>and&#160;B&#160;has&#160;a&#160;terrible&#160;F1&#160;of&#160;only&#160;.2&#160;on&#160;x),&#160;we&#160;might&#160;be&#160;surprised,&#160;since&#160;that&#160;would&#160;be<br/>
+<hr/>
+<a name=16></a>16<br/>
+CHAPTER&#160;4<br/>
+•<br/>
+NAIVE&#160;BAYES,&#160;TEXT&#160;CLASSIFICATION,&#160;AND&#160;SENTIMENT<br/>
+extremely&#160;unlikely&#160;to&#160;occur&#160;if&#160;H0&#160;were&#160;in&#160;fact&#160;true,&#160;and&#160;so&#160;the&#160;p-value&#160;would&#160;be&#160;low<br/>(unlikely&#160;to&#160;have&#160;such&#160;a&#160;large&#160;δ&#160;if&#160;A&#160;is&#160;in&#160;fact&#160;not&#160;better&#160;than&#160;B).&#160;But&#160;if&#160;δ&#160;(x)&#160;is&#160;very<br/>small,&#160;it&#160;might&#160;be&#160;less&#160;surprising&#160;to&#160;us&#160;even&#160;if&#160;H0&#160;were&#160;true&#160;and&#160;A&#160;is&#160;not&#160;really&#160;better<br/>than&#160;B,&#160;and&#160;so&#160;the&#160;p-value&#160;would&#160;be&#160;higher.<br/>
+A&#160;very&#160;small&#160;p-value&#160;means&#160;that&#160;the&#160;difference&#160;we&#160;observed&#160;is&#160;very&#160;unlikely<br/>
+under&#160;the&#160;null&#160;hypothesis,&#160;and&#160;we&#160;can&#160;reject&#160;the&#160;null&#160;hypothesis.&#160;What&#160;counts&#160;as&#160;very<br/>small?&#160;It&#160;is&#160;common&#160;to&#160;use&#160;values&#160;like&#160;.05&#160;or&#160;.01&#160;as&#160;the&#160;thresholds.&#160;A&#160;value&#160;of&#160;.01<br/>means&#160;that&#160;if&#160;the&#160;p-value&#160;(the&#160;probability&#160;of&#160;observing&#160;the&#160;δ&#160;we&#160;saw&#160;assuming&#160;H0&#160;is<br/>true)&#160;is&#160;less&#160;than&#160;.01,&#160;we&#160;reject&#160;the&#160;null&#160;hypothesis&#160;and&#160;assume&#160;that&#160;A&#160;is&#160;indeed&#160;better<br/>
+statistically<br/>
+than&#160;B.&#160;We&#160;say&#160;that&#160;a&#160;result&#160;(e.g.,&#160;“A&#160;is&#160;better&#160;than&#160;B”)&#160;is&#160;statistically&#160;significant&#160;if<br/>
+significant<br/>
+the&#160;δ&#160;we&#160;saw&#160;has&#160;a&#160;probability&#160;that&#160;is&#160;below&#160;the&#160;threshold&#160;and&#160;we&#160;therefore&#160;reject<br/>this&#160;null&#160;hypothesis.<br/>
+How&#160;do&#160;we&#160;compute&#160;this&#160;probability&#160;we&#160;need&#160;for&#160;the&#160;p-value?&#160;In&#160;NLP&#160;we&#160;gen-<br/>
+erally&#160;don’t&#160;use&#160;simple&#160;parametric&#160;tests&#160;like&#160;t-tests&#160;or&#160;ANOVAs&#160;that&#160;you&#160;might&#160;be<br/>familiar&#160;with.&#160;Parametric&#160;tests&#160;make&#160;assumptions&#160;about&#160;the&#160;distributions&#160;of&#160;the&#160;test<br/>statistic&#160;(such&#160;as&#160;normality)&#160;that&#160;don’t&#160;generally&#160;hold&#160;in&#160;our&#160;cases.&#160;So&#160;in&#160;NLP&#160;we<br/>usually&#160;use&#160;non-parametric&#160;tests&#160;based&#160;on&#160;sampling:&#160;we&#160;artificially&#160;create&#160;many&#160;ver-<br/>sions&#160;of&#160;the&#160;experimental&#160;setup.&#160;For&#160;example,&#160;if&#160;we&#160;had&#160;lots&#160;of&#160;different&#160;test&#160;sets&#160;x0<br/>we&#160;could&#160;just&#160;measure&#160;all&#160;the&#160;δ&#160;(x0)&#160;for&#160;all&#160;the&#160;x0.&#160;That&#160;gives&#160;us&#160;a&#160;distribution.&#160;Now<br/>we&#160;set&#160;a&#160;threshold&#160;(like&#160;.01)&#160;and&#160;if&#160;we&#160;see&#160;in&#160;this&#160;distribution&#160;that&#160;99%&#160;or&#160;more&#160;of<br/>those&#160;deltas&#160;are&#160;smaller&#160;than&#160;the&#160;delta&#160;we&#160;observed,&#160;i.e.,&#160;that&#160;p-value(x)—the&#160;proba-<br/>bility&#160;of&#160;seeing&#160;a&#160;δ&#160;(x)&#160;as&#160;big&#160;as&#160;the&#160;one&#160;we&#160;saw—is&#160;less&#160;than&#160;.01,&#160;then&#160;we&#160;can&#160;reject<br/>the&#160;null&#160;hypothesis&#160;and&#160;agree&#160;that&#160;δ&#160;(x)&#160;was&#160;a&#160;sufficiently&#160;surprising&#160;difference&#160;and<br/>A&#160;is&#160;really&#160;a&#160;better&#160;algorithm&#160;than&#160;B.<br/>
+There&#160;are&#160;two&#160;common&#160;non-parametric&#160;tests&#160;used&#160;in&#160;NLP:&#160;approximate&#160;ran-<br/>
+approximate<br/>
+domization&#160;<a href="4s.html#22">(Noreen,&#160;1989)&#160;</a>and&#160;the&#160;bootstrap&#160;test.&#160;We&#160;will&#160;describe&#160;bootstrap<br/>
+randomization<br/>
+below,&#160;showing&#160;the&#160;paired&#160;version&#160;of&#160;the&#160;test,&#160;which&#160;again&#160;is&#160;most&#160;common&#160;in&#160;NLP.<br/>
+paired<br/>
+Paired&#160;tests&#160;are&#160;those&#160;in&#160;which&#160;we&#160;compare&#160;two&#160;sets&#160;of&#160;observations&#160;that&#160;are&#160;aligned:<br/>each&#160;observation&#160;in&#160;one&#160;set&#160;can&#160;be&#160;paired&#160;with&#160;an&#160;observation&#160;in&#160;another.&#160;This&#160;hap-<br/>pens&#160;naturally&#160;when&#160;we&#160;are&#160;comparing&#160;the&#160;performance&#160;of&#160;two&#160;systems&#160;on&#160;the&#160;same<br/>test&#160;set;&#160;we&#160;can&#160;pair&#160;the&#160;performance&#160;of&#160;system&#160;A&#160;on&#160;an&#160;individual&#160;observation&#160;xi<br/>with&#160;the&#160;performance&#160;of&#160;system&#160;B&#160;on&#160;the&#160;same&#160;xi.<br/>
+4.9.1<br/>
+The&#160;Paired&#160;Bootstrap&#160;Test<br/>
+bootstrap&#160;test<br/>
+The&#160;bootstrap&#160;test&#160;<a href="4s.html#22">(Efron&#160;and&#160;Tibshirani,&#160;1993)&#160;</a>can&#160;apply&#160;to&#160;any&#160;metric;&#160;from&#160;pre-<br/>cision,&#160;recall,&#160;or&#160;F1&#160;to&#160;the&#160;BLEU&#160;metric&#160;used&#160;in&#160;machine&#160;translation.&#160;The&#160;word<br/>
+bootstrapping<br/>
+bootstrapping&#160;refers&#160;to&#160;repeatedly&#160;drawing&#160;large&#160;numbers&#160;of&#160;samples&#160;with&#160;replace-<br/>ment&#160;(called&#160;bootstrap&#160;samples)&#160;from&#160;an&#160;original&#160;set.&#160;The&#160;intuition&#160;of&#160;the&#160;bootstrap<br/>test&#160;is&#160;that&#160;we&#160;can&#160;create&#160;many&#160;virtual&#160;test&#160;sets&#160;from&#160;an&#160;observed&#160;test&#160;set&#160;by&#160;repeat-<br/>edly&#160;sampling&#160;from&#160;it.&#160;The&#160;method&#160;only&#160;makes&#160;the&#160;assumption&#160;that&#160;the&#160;sample&#160;is<br/>representative&#160;of&#160;the&#160;population.<br/>
+Consider&#160;a&#160;tiny&#160;text&#160;classification&#160;example&#160;with&#160;a&#160;test&#160;set&#160;x&#160;of&#160;10&#160;documents.&#160;The<br/>
+first&#160;row&#160;of&#160;Fig.&#160;<a href="4s.html#17">4.8&#160;</a>shows&#160;the&#160;results&#160;of&#160;two&#160;classifiers&#160;(A&#160;and&#160;B)&#160;on&#160;this&#160;test&#160;set,<br/>with&#160;each&#160;document&#160;labeled&#160;by&#160;one&#160;of&#160;the&#160;four&#160;possibilities:&#160;(A&#160;and&#160;B&#160;both&#160;right,<br/>both&#160;wrong,&#160;A&#160;right&#160;and&#160;B&#160;wrong,&#160;A&#160;wrong&#160;and&#160;B&#160;right);&#160;a&#160;slash&#160;through&#160;a&#160;letter<br/>(B)&#160;means&#160;that&#160;that&#160;classifier&#160;got&#160;the&#160;answer&#160;wrong.&#160;On&#160;the&#160;first&#160;document&#160;both&#160;A<br/>
+<br/>
+and&#160;B&#160;get&#160;the&#160;correct&#160;class&#160;(AB),&#160;while&#160;on&#160;the&#160;second&#160;document&#160;A&#160;got&#160;it&#160;right&#160;but&#160;B<br/>got&#160;it&#160;wrong&#160;(AB).&#160;If&#160;we&#160;assume&#160;for&#160;simplicity&#160;that&#160;our&#160;metric&#160;is&#160;accuracy,&#160;A&#160;has&#160;an<br/>
+<br/>
+accuracy&#160;of&#160;.70&#160;and&#160;B&#160;of&#160;.50,&#160;so&#160;δ&#160;(x)&#160;is&#160;.20.<br/>
+Now&#160;we&#160;create&#160;a&#160;large&#160;number&#160;b&#160;(perhaps&#160;105)&#160;of&#160;virtual&#160;test&#160;sets&#160;x(i),&#160;each&#160;of&#160;size<br/>
+<hr/>
+<a name=17></a>4.9<br/>
+•<br/>
+STATISTICAL&#160;SIGNIFICANCE&#160;TESTING<br/>
+17<br/>
+n&#160;=&#160;10.&#160;Fig.&#160;<a href="4s.html#17">4.8&#160;</a>shows&#160;a&#160;couple&#160;of&#160;examples.&#160;To&#160;create&#160;each&#160;virtual&#160;test&#160;set&#160;x(i),&#160;we<br/>repeatedly&#160;(n&#160;=&#160;10&#160;times)&#160;select&#160;a&#160;cell&#160;from&#160;row&#160;x&#160;with&#160;replacement.&#160;For&#160;example,&#160;to<br/>create&#160;the&#160;first&#160;cell&#160;of&#160;the&#160;first&#160;virtual&#160;test&#160;set&#160;x(1),&#160;if&#160;we&#160;happened&#160;to&#160;randomly&#160;select<br/>the&#160;second&#160;cell&#160;of&#160;the&#160;x&#160;row;&#160;we&#160;would&#160;copy&#160;the&#160;value&#160;AB&#160;into&#160;our&#160;new&#160;cell,&#160;and<br/>
+<br/>
+move&#160;on&#160;to&#160;create&#160;the&#160;second&#160;cell&#160;of&#160;x(1),&#160;each&#160;time&#160;sampling&#160;(randomly&#160;choosing)<br/>from&#160;the&#160;original&#160;x&#160;with&#160;replacement.<br/>
+1<br/>
+2<br/>
+3<br/>
+4<br/>
+5<br/>
+6<br/>
+7<br/>
+8<br/>
+9<br/>
+10&#160;A%&#160;B%&#160;δ&#160;()<br/>
+x<br/>
+AB&#160;AB&#160;AB&#160;AB&#160;AB&#160;AB&#160;AB&#160;AB&#160;AB&#160;AB&#160;.70<br/>
+.50&#160;.20<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+x(1)<br/>
+AB&#160;AB&#160;AB&#160;AB&#160;AB&#160;AB&#160;AB&#160;AB&#160;AB&#160;AB&#160;.60<br/>
+.60&#160;.00<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+x(2)<br/>
+AB&#160;AB&#160;AB&#160;AB&#160;AB&#160;AB&#160;AB&#160;AB&#160;AB&#160;AB&#160;.60<br/>
+.70&#160;-.10<br/>
+<br/>
+<br/>
+<br/>
+...<br/>x(b)<br/>
+Figure&#160;4.8<br/>
+The&#160;paired&#160;bootstrap&#160;test:&#160;Examples&#160;of&#160;b&#160;pseudo&#160;test&#160;sets&#160;x(i)&#160;being&#160;created<br/>
+from&#160;an&#160;initial&#160;true&#160;test&#160;set&#160;x.&#160;Each&#160;pseudo&#160;test&#160;set&#160;is&#160;created&#160;by&#160;sampling&#160;n&#160;=&#160;10&#160;times&#160;with<br/>replacement;&#160;thus&#160;an&#160;individual&#160;sample&#160;is&#160;a&#160;single&#160;cell,&#160;a&#160;document&#160;with&#160;its&#160;gold&#160;label&#160;and<br/>the&#160;correct&#160;or&#160;incorrect&#160;performance&#160;of&#160;classifiers&#160;A&#160;and&#160;B.&#160;Of&#160;course&#160;real&#160;test&#160;sets&#160;don’t&#160;have<br/>only&#160;10&#160;examples,&#160;and&#160;b&#160;needs&#160;to&#160;be&#160;large&#160;as&#160;well.<br/>
+Now&#160;that&#160;we&#160;have&#160;the&#160;b&#160;test&#160;sets,&#160;providing&#160;a&#160;sampling&#160;distribution,&#160;we&#160;can&#160;do<br/>
+statistics&#160;on&#160;how&#160;often&#160;A&#160;has&#160;an&#160;accidental&#160;advantage.&#160;There&#160;are&#160;various&#160;ways&#160;to<br/>compute&#160;this&#160;advantage;&#160;here&#160;we&#160;follow&#160;the&#160;version&#160;laid&#160;out&#160;in&#160;<a href="4s.html#22">Berg-Kirkpatrick<br/>et&#160;al.&#160;(2012).&#160;</a>Assuming&#160;H0&#160;(A&#160;isn’t&#160;better&#160;than&#160;B),&#160;we&#160;would&#160;expect&#160;that&#160;δ&#160;(X),&#160;esti-<br/>mated&#160;over&#160;many&#160;test&#160;sets,&#160;would&#160;be&#160;zero;&#160;a&#160;much&#160;higher&#160;value&#160;would&#160;be&#160;surprising,<br/>since&#160;H0&#160;specifically&#160;assumes&#160;A&#160;isn’t&#160;better&#160;than&#160;B.&#160;To&#160;measure&#160;exactly&#160;how&#160;surpris-<br/>ing&#160;our&#160;observed&#160;δ&#160;(x)&#160;is,&#160;we&#160;would&#160;in&#160;other&#160;circumstances&#160;compute&#160;the&#160;p-value&#160;by<br/>counting&#160;over&#160;many&#160;test&#160;sets&#160;how&#160;often&#160;δ&#160;(x(i))&#160;exceeds&#160;the&#160;expected&#160;zero&#160;value&#160;by<br/>
+δ&#160;(x)&#160;or&#160;more:<br/>
+b<br/>
+1&#160;X<br/>
+<br/>
+p-value(x)&#160;=<br/>
+1δ(x(i))&#160;−&#160;δ(x)&#160;≥&#160;0<br/>
+b&#160;i=1<br/>
+(We&#160;use&#160;the&#160;notation&#160;1(x)&#160;to&#160;mean&#160;“1&#160;if&#160;x&#160;is&#160;true,&#160;and&#160;0&#160;otherwise”.)&#160;However,<br/>although&#160;it’s&#160;generally&#160;true&#160;that&#160;the&#160;expected&#160;value&#160;of&#160;δ&#160;(X&#160;)&#160;over&#160;many&#160;test&#160;sets,<br/>(again&#160;assuming&#160;A&#160;isn’t&#160;better&#160;than&#160;B)&#160;is&#160;0,&#160;this&#160;isn’t&#160;true&#160;for&#160;the&#160;bootstrapped&#160;test<br/>sets&#160;we&#160;created.&#160;That’s&#160;because&#160;we&#160;didn’t&#160;draw&#160;these&#160;samples&#160;from&#160;a&#160;distribution<br/>with&#160;0&#160;mean;&#160;we&#160;happened&#160;to&#160;create&#160;them&#160;from&#160;the&#160;original&#160;test&#160;set&#160;x,&#160;which&#160;happens<br/>to&#160;be&#160;biased&#160;(by&#160;.20)&#160;in&#160;favor&#160;of&#160;A.&#160;So&#160;to&#160;measure&#160;how&#160;surprising&#160;is&#160;our&#160;observed<br/>
+δ&#160;(x),&#160;we&#160;actually&#160;compute&#160;the&#160;p-value&#160;by&#160;counting&#160;over&#160;many&#160;test&#160;sets&#160;how&#160;often<br/>
+δ&#160;(x(i))&#160;exceeds&#160;the&#160;expected&#160;value&#160;of&#160;δ&#160;(x)&#160;by&#160;δ&#160;(x)&#160;or&#160;more:<br/>
+b<br/>
+1&#160;X<br/>
+<br/>
+p-value(x)&#160;=<br/>
+1δ(x(i))&#160;−&#160;δ(x)&#160;≥&#160;δ(x)<br/>
+b&#160;i=1<br/>
+b<br/>
+1&#160;X<br/>
+<br/>
+=<br/>
+1δ(x(i))&#160;≥&#160;2δ(x)<br/>
+(4.22)<br/>
+b&#160;i=1<br/>
+So&#160;if&#160;for&#160;example&#160;we&#160;have&#160;10,000&#160;test&#160;sets&#160;x(i)&#160;and&#160;a&#160;threshold&#160;of&#160;.01,&#160;and&#160;in&#160;only&#160;47<br/>of&#160;the&#160;test&#160;sets&#160;do&#160;we&#160;find&#160;that&#160;A&#160;is&#160;accidentally&#160;better&#160;δ&#160;(x(i))&#160;≥&#160;2δ&#160;(x),&#160;the&#160;resulting<br/>p-value&#160;of&#160;.0047&#160;is&#160;smaller&#160;than&#160;.01,&#160;indicating&#160;that&#160;the&#160;delta&#160;we&#160;found,&#160;δ&#160;(x)&#160;is&#160;indeed<br/>
+<hr/>
+<a name=18></a>18<br/>
+CHAPTER&#160;4<br/>
+•<br/>
+NAIVE&#160;BAYES,&#160;TEXT&#160;CLASSIFICATION,&#160;AND&#160;SENTIMENT<br/>
+sufficiently&#160;surprising&#160;and&#160;unlikely&#160;to&#160;have&#160;happened&#160;by&#160;accident,&#160;and&#160;we&#160;can&#160;reject<br/>the&#160;null&#160;hypothesis&#160;and&#160;conclude&#160;A&#160;is&#160;better&#160;than&#160;B.<br/>
+function&#160;BOOTSTRAP(test&#160;set&#160;x,&#160;num&#160;of&#160;samples&#160;b)&#160;returns&#160;p-value(x)<br/>
+Calculate&#160;δ&#160;(x)&#160;#&#160;how&#160;much&#160;better&#160;does&#160;algorithm&#160;A&#160;do&#160;than&#160;B&#160;on&#160;x<br/>
+s&#160;=&#160;0<br/>for&#160;i&#160;=&#160;1&#160;to&#160;b&#160;do<br/>
+for&#160;j&#160;=&#160;1&#160;to&#160;n&#160;do<br/>
+#&#160;Draw&#160;a&#160;bootstrap&#160;sample&#160;x(i)&#160;of&#160;size&#160;n<br/>
+Select&#160;a&#160;member&#160;of&#160;x&#160;at&#160;random&#160;and&#160;add&#160;it&#160;to&#160;x(i)<br/>
+Calculate&#160;δ&#160;(x(i))<br/>
+#&#160;how&#160;much&#160;better&#160;does&#160;algorithm&#160;A&#160;do&#160;than&#160;B&#160;on&#160;x(i)<br/>
+s&#160;←&#160;s&#160;+&#160;1&#160;if&#160;δ&#160;(x(i))&#160;≥&#160;2δ&#160;(x)<br/>
+p-value(x)&#160;≈&#160;s<br/>
+#&#160;on&#160;what&#160;%&#160;of&#160;the&#160;b&#160;samples&#160;did&#160;algorithm&#160;A&#160;beat&#160;expectations?<br/>
+b<br/>
+return&#160;p-value(x)<br/>
+#&#160;if&#160;very&#160;few&#160;did,&#160;our&#160;observed&#160;δ&#160;is&#160;probably&#160;not&#160;accidental<br/>
+Figure&#160;4.9<br/>
+A&#160;version&#160;of&#160;the&#160;paired&#160;bootstrap&#160;algorithm&#160;after&#160;<a href="4s.html#22">Berg-Kirkpatrick&#160;et&#160;al.&#160;(2012).</a><br/>
+The&#160;full&#160;algorithm&#160;for&#160;the&#160;bootstrap&#160;is&#160;shown&#160;in&#160;Fig.&#160;<a href="4s.html#18">4.9.&#160;</a>It&#160;is&#160;given&#160;a&#160;test&#160;set&#160;x,&#160;a<br/>
+number&#160;of&#160;samples&#160;b,&#160;and&#160;counts&#160;the&#160;percentage&#160;of&#160;the&#160;b&#160;bootstrap&#160;test&#160;sets&#160;in&#160;which<br/>
+δ&#160;(x∗(i))&#160;&gt;&#160;2δ&#160;(x).&#160;This&#160;percentage&#160;then&#160;acts&#160;as&#160;a&#160;one-sided&#160;empirical&#160;p-value<br/>
+4.10<br/>
+Avoiding&#160;Harms&#160;in&#160;Classification<br/>
+It&#160;is&#160;important&#160;to&#160;avoid&#160;harms&#160;that&#160;may&#160;result&#160;from&#160;classifiers,&#160;harms&#160;that&#160;exist&#160;both<br/>for&#160;naive&#160;Bayes&#160;classifiers&#160;and&#160;for&#160;the&#160;other&#160;classification&#160;algorithms&#160;we&#160;introduce<br/>in&#160;later&#160;chapters.<br/>
+representational<br/>
+One&#160;class&#160;of&#160;harms&#160;is&#160;representational&#160;harms&#160;<a href="4s.html#22">(Crawford&#160;2017,&#160;Blodgett&#160;et&#160;al.</a><br/>
+harms<br/>
+<a href="4s.html#22">2020),&#160;</a>harms&#160;caused&#160;by&#160;a&#160;system&#160;that&#160;demeans&#160;a&#160;social&#160;group,&#160;for&#160;example&#160;by&#160;per-<br/>petuating&#160;negative&#160;stereotypes&#160;about&#160;them.&#160;For&#160;example&#160;<a href="4s.html#22">Kiritchenko&#160;and&#160;Moham-<br/>mad&#160;(2018)&#160;</a>examined&#160;the&#160;performance&#160;of&#160;200&#160;sentiment&#160;analysis&#160;systems&#160;on&#160;pairs&#160;of<br/>sentences&#160;that&#160;were&#160;identical&#160;except&#160;for&#160;containing&#160;either&#160;a&#160;common&#160;African&#160;Amer-<br/>ican&#160;first&#160;name&#160;(like&#160;Shaniqua)&#160;or&#160;a&#160;common&#160;European&#160;American&#160;first&#160;name&#160;(like<br/>Stephanie),&#160;chosen&#160;from&#160;the&#160;<a href="4s.html#22">Caliskan&#160;et&#160;al.&#160;(2017)&#160;</a>study&#160;discussed&#160;in&#160;Chapter&#160;6.<br/>They&#160;found&#160;that&#160;most&#160;systems&#160;assigned&#160;lower&#160;sentiment&#160;and&#160;more&#160;negative&#160;emotion<br/>to&#160;sentences&#160;with&#160;African&#160;American&#160;names,&#160;reflecting&#160;and&#160;perpetuating&#160;stereotypes<br/>that&#160;associate&#160;African&#160;Americans&#160;with&#160;negative&#160;emotions&#160;<a href="4s.html#23">(Popp&#160;et&#160;al.,&#160;2003).</a><br/>
+In&#160;other&#160;tasks&#160;classifiers&#160;may&#160;lead&#160;to&#160;both&#160;representational&#160;harms&#160;and&#160;other<br/>
+harms,&#160;such&#160;as&#160;censorship.&#160;For&#160;example&#160;the&#160;important&#160;text&#160;classification&#160;task&#160;of<br/>
+toxicity<br/>
+toxicity&#160;detection&#160;is&#160;the&#160;task&#160;of&#160;detecting&#160;hate&#160;speech,&#160;abuse,&#160;harassment,&#160;or&#160;other<br/>
+detection<br/>
+kinds&#160;of&#160;toxic&#160;language.&#160;While&#160;the&#160;goal&#160;of&#160;such&#160;classifiers&#160;is&#160;to&#160;help&#160;reduce&#160;societal<br/>harm,&#160;toxicity&#160;classifiers&#160;can&#160;themselves&#160;cause&#160;harms.&#160;For&#160;example,&#160;researchers&#160;have<br/>shown&#160;that&#160;some&#160;widely&#160;used&#160;toxicity&#160;classifiers&#160;incorrectly&#160;flag&#160;as&#160;being&#160;toxic&#160;sen-<br/>tences&#160;that&#160;are&#160;non-toxic&#160;but&#160;simply&#160;mention&#160;minority&#160;identities&#160;like&#160;women&#160;<a href="4s.html#23">(Park<br/>et&#160;al.,&#160;2018),&#160;</a>blind&#160;people&#160;<a href="4s.html#22">(Hutchinson&#160;et&#160;al.,&#160;2020)&#160;</a>or&#160;gay&#160;people&#160;<a href="4s.html#22">(Dixon&#160;et&#160;al.,&#160;2018;<br/>Dias&#160;Oliva&#160;et&#160;al.,&#160;2021),&#160;</a>or&#160;simply&#160;use&#160;linguistic&#160;features&#160;characteristic&#160;of&#160;varieties<br/>like&#160;African-American&#160;Vernacular&#160;English&#160;<a href="4s.html#23">(Sap&#160;et&#160;al.&#160;2019,&#160;</a><a href="4s.html#22">Davidson&#160;et&#160;al.&#160;2019).<br/></a>Such&#160;false&#160;positive&#160;errors,&#160;if&#160;employed&#160;by&#160;toxicity&#160;detection&#160;systems&#160;without&#160;human<br/>oversight,&#160;could&#160;lead&#160;to&#160;the&#160;censoring&#160;of&#160;discourse&#160;by&#160;or&#160;about&#160;these&#160;groups.<br/>
+These&#160;model&#160;problems&#160;can&#160;be&#160;caused&#160;by&#160;biases&#160;or&#160;other&#160;problems&#160;in&#160;the&#160;training<br/>
+<hr/>
+<a name=19></a>4.11<br/>
+•<br/>
+SUMMARY<br/>
+19<br/>
+data;&#160;in&#160;general,&#160;machine&#160;learning&#160;systems&#160;replicate&#160;and&#160;even&#160;amplify&#160;the&#160;biases<br/>in&#160;their&#160;training&#160;data.&#160;But&#160;these&#160;problems&#160;can&#160;also&#160;be&#160;caused&#160;by&#160;the&#160;labels&#160;(for<br/>example&#160;due&#160;to&#160;biases&#160;in&#160;the&#160;human&#160;labelers),&#160;by&#160;the&#160;resources&#160;used&#160;(like&#160;lexicons,<br/>or&#160;model&#160;components&#160;like&#160;pretrained&#160;embeddings),&#160;or&#160;even&#160;by&#160;model&#160;architecture<br/>(like&#160;what&#160;the&#160;model&#160;is&#160;trained&#160;to&#160;optimize).&#160;While&#160;the&#160;mitigation&#160;of&#160;these&#160;biases<br/>(for&#160;example&#160;by&#160;carefully&#160;considering&#160;the&#160;training&#160;data&#160;sources)&#160;is&#160;an&#160;important&#160;area<br/>of&#160;research,&#160;we&#160;currently&#160;don’t&#160;have&#160;general&#160;solutions.&#160;For&#160;this&#160;reason&#160;it’s&#160;important,<br/>when&#160;introducing&#160;any&#160;NLP&#160;model,&#160;to&#160;study&#160;these&#160;kinds&#160;of&#160;factors&#160;and&#160;make&#160;them<br/>
+model&#160;card<br/>
+clear.&#160;One&#160;way&#160;to&#160;do&#160;this&#160;is&#160;by&#160;releasing&#160;a&#160;model&#160;card&#160;<a href="4s.html#22">(Mitchell&#160;et&#160;al.,&#160;2019)&#160;</a>for<br/>each&#160;version&#160;of&#160;a&#160;model.&#160;A&#160;model&#160;card&#160;documents&#160;a&#160;machine&#160;learning&#160;model&#160;with<br/>information&#160;like:<br/>
+•&#160;training&#160;algorithms&#160;and&#160;parameters<br/>•&#160;training&#160;data&#160;sources,&#160;motivation,&#160;and&#160;preprocessing<br/>•&#160;evaluation&#160;data&#160;sources,&#160;motivation,&#160;and&#160;preprocessing<br/>•&#160;intended&#160;use&#160;and&#160;users<br/>•&#160;model&#160;performance&#160;across&#160;different&#160;demographic&#160;or&#160;other&#160;groups&#160;and&#160;envi-<br/>
+ronmental&#160;situations<br/>
+4.11<br/>
+Summary<br/>
+This&#160;chapter&#160;introduced&#160;the&#160;naive&#160;Bayes&#160;model&#160;for&#160;classification&#160;and&#160;applied&#160;it&#160;to<br/>the&#160;text&#160;categorization&#160;task&#160;of&#160;sentiment&#160;analysis.<br/>
+•&#160;Many&#160;language&#160;processing&#160;tasks&#160;can&#160;be&#160;viewed&#160;as&#160;tasks&#160;of&#160;classification.<br/>
+•&#160;Text&#160;categorization,&#160;in&#160;which&#160;an&#160;entire&#160;text&#160;is&#160;assigned&#160;a&#160;class&#160;from&#160;a&#160;finite&#160;set,<br/>
+includes&#160;such&#160;tasks&#160;as&#160;sentiment&#160;analysis,&#160;spam&#160;detection,&#160;language&#160;identi-<br/>fication,&#160;and&#160;authorship&#160;attribution.<br/>
+•&#160;Sentiment&#160;analysis&#160;classifies&#160;a&#160;text&#160;as&#160;reflecting&#160;the&#160;positive&#160;or&#160;negative&#160;orien-<br/>
+tation&#160;(sentiment)&#160;that&#160;a&#160;writer&#160;expresses&#160;toward&#160;some&#160;object.<br/>
+•&#160;Naive&#160;Bayes&#160;is&#160;a&#160;generative&#160;model&#160;that&#160;makes&#160;the&#160;bag-of-words&#160;assumption<br/>
+(position&#160;doesn’t&#160;matter)&#160;and&#160;the&#160;conditional&#160;independence&#160;assumption&#160;(words<br/>are&#160;conditionally&#160;independent&#160;of&#160;each&#160;other&#160;given&#160;the&#160;class)<br/>
+•&#160;Naive&#160;Bayes&#160;with&#160;binarized&#160;features&#160;seems&#160;to&#160;work&#160;better&#160;for&#160;many&#160;text&#160;clas-<br/>
+sification&#160;tasks.<br/>
+•&#160;Classifiers&#160;are&#160;evaluated&#160;based&#160;on&#160;precision&#160;and&#160;recall.<br/>
+•&#160;Classifiers&#160;are&#160;trained&#160;using&#160;distinct&#160;training,&#160;dev,&#160;and&#160;test&#160;sets,&#160;including&#160;the<br/>
+use&#160;of&#160;cross-validation&#160;in&#160;the&#160;training&#160;set.<br/>
+•&#160;Statistical&#160;significance&#160;tests&#160;should&#160;be&#160;used&#160;to&#160;determine&#160;whether&#160;we&#160;can&#160;be<br/>
+confident&#160;that&#160;one&#160;version&#160;of&#160;a&#160;classifier&#160;is&#160;better&#160;than&#160;another.<br/>
+•&#160;Designers&#160;of&#160;classifiers&#160;should&#160;carefully&#160;consider&#160;harms&#160;that&#160;may&#160;be&#160;caused<br/>
+by&#160;the&#160;model,&#160;including&#160;its&#160;training&#160;data&#160;and&#160;other&#160;components,&#160;and&#160;report<br/>model&#160;characteristics&#160;in&#160;a&#160;model&#160;card.<br/>
+Bibliographical&#160;and&#160;Historical&#160;Notes<br/>
+Multinomial&#160;naive&#160;Bayes&#160;text&#160;classification&#160;was&#160;proposed&#160;by&#160;<a href="4s.html#22">Maron&#160;(1961)&#160;</a>at&#160;the<br/>RAND&#160;Corporation&#160;for&#160;the&#160;task&#160;of&#160;assigning&#160;subject&#160;categories&#160;to&#160;journal&#160;abstracts.<br/>
+<hr/>
+<a name=20></a>20<br/>
+CHAPTER&#160;4<br/>
+•<br/>
+NAIVE&#160;BAYES,&#160;TEXT&#160;CLASSIFICATION,&#160;AND&#160;SENTIMENT<br/>
+His&#160;model&#160;introduced&#160;most&#160;of&#160;the&#160;features&#160;of&#160;the&#160;modern&#160;form&#160;presented&#160;here,&#160;ap-<br/>proximating&#160;the&#160;classification&#160;task&#160;with&#160;one-of&#160;categorization,&#160;and&#160;implementing<br/>add-δ&#160;smoothing&#160;and&#160;information-based&#160;feature&#160;selection.<br/>
+The&#160;conditional&#160;independence&#160;assumptions&#160;of&#160;naive&#160;Bayes&#160;and&#160;the&#160;idea&#160;of&#160;Bayes-<br/>
+ian&#160;analysis&#160;of&#160;text&#160;seems&#160;to&#160;have&#160;arisen&#160;multiple&#160;times.&#160;The&#160;same&#160;year&#160;as&#160;Maron’s<br/>paper,&#160;<a href="4s.html#22">Minsky&#160;(1961)&#160;</a>proposed&#160;a&#160;naive&#160;Bayes&#160;classifier&#160;for&#160;vision&#160;and&#160;other&#160;arti-<br/>ficial&#160;intelligence&#160;problems,&#160;and&#160;Bayesian&#160;techniques&#160;were&#160;also&#160;applied&#160;to&#160;the&#160;text<br/>classification&#160;task&#160;of&#160;authorship&#160;attribution&#160;by&#160;<a href="4s.html#22">Mosteller&#160;and&#160;Wallace&#160;(1963).&#160;</a>It&#160;had<br/>long&#160;been&#160;known&#160;that&#160;Alexander&#160;Hamilton,&#160;John&#160;Jay,&#160;and&#160;James&#160;Madison&#160;wrote<br/>the&#160;anonymously-published&#160;Federalist&#160;papers&#160;in&#160;1787–1788&#160;to&#160;persuade&#160;New&#160;York<br/>to&#160;ratify&#160;the&#160;United&#160;States&#160;Constitution.&#160;Yet&#160;although&#160;some&#160;of&#160;the&#160;85&#160;essays&#160;were<br/>clearly&#160;attributable&#160;to&#160;one&#160;author&#160;or&#160;another,&#160;the&#160;authorship&#160;of&#160;12&#160;were&#160;in&#160;dispute<br/>between&#160;Hamilton&#160;and&#160;Madison.&#160;<a href="4s.html#22">Mosteller&#160;and&#160;Wallace&#160;(1963)&#160;</a>trained&#160;a&#160;Bayesian<br/>probabilistic&#160;model&#160;of&#160;the&#160;writing&#160;of&#160;Hamilton&#160;and&#160;another&#160;model&#160;on&#160;the&#160;writings<br/>of&#160;Madison,&#160;then&#160;computed&#160;the&#160;maximum-likelihood&#160;author&#160;for&#160;each&#160;of&#160;the&#160;disputed<br/>essays.&#160;Naive&#160;Bayes&#160;was&#160;first&#160;applied&#160;to&#160;spam&#160;detection&#160;in&#160;<a href="4s.html#22">Heckerman&#160;et&#160;al.&#160;(1998).</a><br/>
+<a href="4s.html#22">Metsis&#160;et&#160;al.&#160;(2006),&#160;</a><a href="4s.html#23">Pang&#160;et&#160;al.&#160;(2002),&#160;</a>and&#160;<a href="4s.html#23">Wang&#160;and&#160;Manning&#160;(2012)&#160;</a>show<br/>
+that&#160;using&#160;boolean&#160;attributes&#160;with&#160;multinomial&#160;naive&#160;Bayes&#160;works&#160;better&#160;than&#160;full<br/>counts.&#160;Binary&#160;multinomial&#160;naive&#160;Bayes&#160;is&#160;sometimes&#160;confused&#160;with&#160;another&#160;variant<br/>of&#160;naive&#160;Bayes&#160;that&#160;also&#160;uses&#160;a&#160;binary&#160;representation&#160;of&#160;whether&#160;a&#160;term&#160;occurs&#160;in<br/>a&#160;document:&#160;Multivariate&#160;Bernoulli&#160;naive&#160;Bayes.&#160;The&#160;Bernoulli&#160;variant&#160;instead<br/>estimates&#160;P(w|c)&#160;as&#160;the&#160;fraction&#160;of&#160;documents&#160;that&#160;contain&#160;a&#160;term,&#160;and&#160;includes&#160;a<br/>probability&#160;for&#160;whether&#160;a&#160;term&#160;is&#160;not&#160;in&#160;a&#160;document.&#160;<a href="4s.html#22">McCallum&#160;and&#160;Nigam&#160;(1998)<br/></a>and&#160;<a href="4s.html#23">Wang&#160;and&#160;Manning&#160;(2012)&#160;</a>show&#160;that&#160;the&#160;multivariate&#160;Bernoulli&#160;variant&#160;of&#160;naive<br/>Bayes&#160;doesn’t&#160;work&#160;as&#160;well&#160;as&#160;the&#160;multinomial&#160;algorithm&#160;for&#160;sentiment&#160;or&#160;other&#160;text<br/>tasks.<br/>
+There&#160;are&#160;a&#160;variety&#160;of&#160;sources&#160;covering&#160;the&#160;many&#160;kinds&#160;of&#160;text&#160;classification<br/>
+tasks.&#160;For&#160;sentiment&#160;analysis&#160;see&#160;<a href="4s.html#22">Pang&#160;and&#160;Lee&#160;(2008),&#160;</a>and&#160;<a href="4s.html#22">Liu&#160;and&#160;Zhang&#160;(2012).<br/></a><a href="4s.html#23">Stamatatos&#160;(2009)&#160;</a>surveys&#160;authorship&#160;attribute&#160;algorithms.&#160;On&#160;language&#160;identifica-<br/>tion&#160;see&#160;<a href="4s.html#22">Jauhiainen&#160;et&#160;al.&#160;(2019);&#160;Jaech&#160;et&#160;al.&#160;(2016)&#160;</a>is&#160;an&#160;important&#160;early&#160;neural<br/>system.&#160;The&#160;task&#160;of&#160;newswire&#160;indexing&#160;was&#160;often&#160;used&#160;as&#160;a&#160;test&#160;case&#160;for&#160;text&#160;classi-<br/>fication&#160;algorithms,&#160;based&#160;on&#160;the&#160;Reuters-21578&#160;collection&#160;of&#160;newswire&#160;articles.<br/>
+See&#160;<a href="4s.html#22">Manning&#160;et&#160;al.&#160;(2008)&#160;</a>and&#160;<a href="4s.html#22">Aggarwal&#160;and&#160;Zhai&#160;(2012)&#160;</a>on&#160;text&#160;classification;<br/>
+classification&#160;in&#160;general&#160;is&#160;covered&#160;in&#160;machine&#160;learning&#160;textbooks&#160;<a href="4s.html#22">(Hastie&#160;et&#160;al.&#160;2001,<br/></a><a href="4s.html#23">Witten&#160;and&#160;Frank&#160;2005,&#160;</a><a href="4s.html#22">Bishop&#160;2006,&#160;Murphy&#160;2012).</a><br/>
+Non-parametric&#160;methods&#160;for&#160;computing&#160;statistical&#160;significance&#160;were&#160;used&#160;first&#160;in<br/>
+NLP&#160;in&#160;the&#160;MUC&#160;competition&#160;<a href="4s.html#22">(Chinchor&#160;et&#160;al.,&#160;1993),&#160;</a>and&#160;even&#160;earlier&#160;in&#160;speech<br/>recognition&#160;<a href="4s.html#22">(Gillick&#160;and&#160;Cox&#160;1989,&#160;Bisani&#160;and&#160;Ney&#160;2004).&#160;</a>Our&#160;description&#160;of&#160;the<br/>bootstrap&#160;draws&#160;on&#160;the&#160;description&#160;in&#160;<a href="4s.html#22">Berg-Kirkpatrick&#160;et&#160;al.&#160;(2012).&#160;</a>Recent&#160;work<br/>has&#160;focused&#160;on&#160;issues&#160;including&#160;multiple&#160;test&#160;sets&#160;and&#160;multiple&#160;metrics&#160;<a href="4s.html#23">(Søgaard&#160;et&#160;al.<br/>2014,&#160;</a><a href="4s.html#22">Dror&#160;et&#160;al.&#160;2017).</a><br/>
+Feature&#160;selection&#160;is&#160;a&#160;method&#160;of&#160;removing&#160;features&#160;that&#160;are&#160;unlikely&#160;to&#160;generalize<br/>
+well.&#160;Features&#160;are&#160;generally&#160;ranked&#160;by&#160;how&#160;informative&#160;they&#160;are&#160;about&#160;the&#160;classifica-<br/>
+information<br/>
+tion&#160;decision.&#160;A&#160;very&#160;common&#160;metric,&#160;information&#160;gain,&#160;tells&#160;us&#160;how&#160;many&#160;bits&#160;of<br/>
+gain<br/>
+information&#160;the&#160;presence&#160;of&#160;the&#160;word&#160;gives&#160;us&#160;for&#160;guessing&#160;the&#160;class.&#160;Other&#160;feature<br/>selection&#160;metrics&#160;include<br/>
+2<br/>
+χ&#160;,&#160;pointwise&#160;mutual&#160;information,&#160;and&#160;GINI&#160;index;&#160;see<br/>
+<a href="4s.html#23">Yang&#160;and&#160;Pedersen&#160;(1997)&#160;</a>for&#160;a&#160;comparison&#160;and&#160;<a href="4s.html#22">Guyon&#160;and&#160;Elisseeff&#160;(2003)&#160;</a>for&#160;an<br/>introduction&#160;to&#160;feature&#160;selection.<br/>
+<hr/>
+<a name=21></a>EXERCISES<br/>
+21<br/>
+Exercises<br/>
+4.1<br/>
+Assume&#160;the&#160;following&#160;likelihoods&#160;for&#160;each&#160;word&#160;being&#160;part&#160;of&#160;a&#160;positive&#160;or<br/>negative&#160;movie&#160;review,&#160;and&#160;equal&#160;prior&#160;probabilities&#160;for&#160;each&#160;class.<br/>
+pos<br/>
+neg<br/>
+I<br/>
+0.09&#160;0.16<br/>
+always&#160;0.07&#160;0.06<br/>like<br/>
+0.29&#160;0.06<br/>
+foreign&#160;0.04&#160;0.15<br/>films<br/>
+0.08&#160;0.11<br/>
+What&#160;class&#160;will&#160;Naive&#160;bayes&#160;assign&#160;to&#160;the&#160;sentence&#160;“I&#160;always&#160;like&#160;foreign<br/>films.”?<br/>
+4.2<br/>
+Given&#160;the&#160;following&#160;short&#160;movie&#160;reviews,&#160;each&#160;labeled&#160;with&#160;a&#160;genre,&#160;either<br/>comedy&#160;or&#160;action:<br/>
+1.&#160;fun,&#160;couple,&#160;love,&#160;love<br/>
+comedy<br/>
+2.&#160;fast,&#160;furious,&#160;shoot<br/>
+action<br/>
+3.&#160;couple,&#160;fly,&#160;fast,&#160;fun,&#160;fun<br/>
+comedy<br/>
+4.&#160;furious,&#160;shoot,&#160;shoot,&#160;fun<br/>
+action<br/>
+5.&#160;fly,&#160;fast,&#160;shoot,&#160;love<br/>
+action<br/>
+and&#160;a&#160;new&#160;document&#160;D:<br/>
+fast,&#160;couple,&#160;shoot,&#160;fly<br/>
+compute&#160;the&#160;most&#160;likely&#160;class&#160;for&#160;D.&#160;Assume&#160;a&#160;naive&#160;Bayes&#160;classifier&#160;and&#160;use<br/>add-1&#160;smoothing&#160;for&#160;the&#160;likelihoods.<br/>
+4.3<br/>
+Train&#160;two&#160;models,&#160;multinomial&#160;naive&#160;Bayes&#160;and&#160;binarized&#160;naive&#160;Bayes,&#160;both<br/>with&#160;add-1&#160;smoothing,&#160;on&#160;the&#160;following&#160;document&#160;counts&#160;for&#160;key&#160;sentiment<br/>words,&#160;with&#160;positive&#160;or&#160;negative&#160;class&#160;assigned&#160;as&#160;noted.<br/>
+doc&#160;“good”&#160;“poor”&#160;“great”&#160;(class)<br/>d1.&#160;3<br/>
+0<br/>
+3<br/>
+pos<br/>
+d2.&#160;0<br/>
+1<br/>
+2<br/>
+pos<br/>
+d3.&#160;1<br/>
+3<br/>
+0<br/>
+neg<br/>
+d4.&#160;1<br/>
+5<br/>
+2<br/>
+neg<br/>
+d5.&#160;0<br/>
+2<br/>
+0<br/>
+neg<br/>
+Use&#160;both&#160;naive&#160;Bayes&#160;models&#160;to&#160;assign&#160;a&#160;class&#160;(pos&#160;or&#160;neg)&#160;to&#160;this&#160;sentence:<br/>
+A&#160;good,&#160;good&#160;plot&#160;and&#160;great&#160;characters,&#160;but&#160;poor&#160;acting.<br/>
+Recall&#160;from&#160;page&#160;<a href="4s.html#6">6&#160;</a>that&#160;with&#160;naive&#160;Bayes&#160;text&#160;classification,&#160;we&#160;simply&#160;ignore<br/>(throw&#160;out)&#160;any&#160;word&#160;that&#160;never&#160;occurred&#160;in&#160;the&#160;training&#160;document.&#160;(We&#160;don’t<br/>throw&#160;out&#160;words&#160;that&#160;appear&#160;in&#160;some&#160;classes&#160;but&#160;not&#160;others;&#160;that’s&#160;what&#160;add-<br/>one&#160;smoothing&#160;is&#160;for.)&#160;Do&#160;the&#160;two&#160;models&#160;agree&#160;or&#160;disagree?<br/>
+<hr/>
+<a name=22></a>22<br/>
+Chapter&#160;4<br/>
+•<br/>
+Naive&#160;Bayes,&#160;Text&#160;Classification,&#160;and&#160;Sentiment<br/>
+Aggarwal,&#160;C.&#160;C.&#160;and&#160;C.&#160;Zhai.&#160;2012.&#160;A&#160;survey&#160;of&#160;text&#160;classifi-<br/>
+Heckerman,&#160;D.,&#160;E.&#160;Horvitz,&#160;M.&#160;Sahami,&#160;and&#160;S.&#160;T.&#160;Dumais.<br/>
+cation&#160;algorithms.&#160;In&#160;C.&#160;C.&#160;Aggarwal&#160;and&#160;C.&#160;Zhai,&#160;editors,<br/>
+1998.&#160;A&#160;bayesian&#160;approach&#160;to&#160;filtering&#160;junk&#160;e-mail.&#160;AAAI-<br/>
+Mining&#160;text&#160;data,&#160;pages&#160;163–222.&#160;Springer.<br/>
+98&#160;Workshop&#160;on&#160;Learning&#160;for&#160;Text&#160;Categorization.<br/>
+Bayes,&#160;T.&#160;1763.&#160;An&#160;Essay&#160;Toward&#160;Solving&#160;a&#160;Problem&#160;in&#160;the<br/>
+Hu,&#160;M.&#160;and&#160;B.&#160;Liu.&#160;2004.&#160;Mining&#160;and&#160;summarizing&#160;customer<br/>
+Doctrine&#160;of&#160;Chances,&#160;volume&#160;53.&#160;Reprinted&#160;in&#160;Facsimiles<br/>
+reviews.&#160;KDD.<br/>
+of&#160;Two&#160;Papers&#160;by&#160;Bayes,&#160;Hafner&#160;Publishing,&#160;1963.<br/>
+Hutchinson,&#160;B.,&#160;V.&#160;Prabhakaran,&#160;E.&#160;Denton,&#160;K.&#160;Webster,<br/>
+Berg-Kirkpatrick,&#160;T.,&#160;D.&#160;Burkett,&#160;and&#160;D.&#160;Klein.&#160;2012.&#160;<a href="https://www.aclweb.org/anthology/D12-1091">An</a><br/>
+Y.&#160;Zhong,&#160;and&#160;S.&#160;Denuyl.&#160;2020.&#160;<a href="https://doi.org/10.18653/v1/2020.acl-main.487">Social&#160;biases&#160;in&#160;NLP</a><br/>
+<a href="https://www.aclweb.org/anthology/D12-1091">empirical&#160;investigation&#160;of&#160;statistical&#160;significance&#160;in&#160;NLP.</a><br/>
+<a href="https://doi.org/10.18653/v1/2020.acl-main.487">models&#160;as&#160;barriers&#160;for&#160;persons&#160;with&#160;disabilities.&#160;</a>ACL.<br/>
+EMNLP.<br/>
+Jaech,&#160;A.,&#160;G.&#160;Mulcaire,&#160;S.&#160;Hathi,&#160;M.&#160;Ostendorf,&#160;and&#160;N.&#160;A.<br/>
+Bisani,&#160;M.&#160;and&#160;H.&#160;Ney.&#160;2004.&#160;Bootstrap&#160;estimates&#160;for&#160;confi-<br/>
+Smith.&#160;2016.&#160;<a href="https://doi.org/10.18653/v1/W16-6212">Hierarchical&#160;character-word&#160;models&#160;for&#160;lan-</a><br/>
+dence&#160;intervals&#160;in&#160;ASR&#160;performance&#160;evaluation.&#160;ICASSP.<br/>
+<a href="https://doi.org/10.18653/v1/W16-6212">guage&#160;identification.&#160;</a>ACL&#160;Workshop&#160;on&#160;NLP&#160;for&#160;Social<br/>
+Bishop,&#160;C.&#160;M.&#160;2006.&#160;Pattern&#160;recognition&#160;and&#160;machine&#160;learn-<br/>
+Media.<br/>
+ing.&#160;Springer.<br/>
+Jauhiainen,&#160;T.,&#160;M.&#160;Lui,&#160;M.&#160;Zampieri,&#160;T.&#160;Baldwin,&#160;and<br/>
+Blodgett,&#160;S.&#160;L.,&#160;S.&#160;Barocas,&#160;H.&#160;Daum´e&#160;III,&#160;and&#160;H.&#160;Wallach.<br/>
+K.&#160;Lind´en.&#160;2019.&#160;<a href="https://doi.org/10.1613/jair.1.11675">Automatic&#160;language&#160;identification&#160;in</a><br/>
+2020.&#160;<a href="https://doi.org/10.18653/v1/2020.acl-main.485">Language&#160;(technology)&#160;is&#160;power:&#160;A&#160;critical&#160;survey</a><br/>
+<a href="https://doi.org/10.1613/jair.1.11675">texts:&#160;A&#160;survey.&#160;</a>JAIR,&#160;65(1):675–682.<br/>
+<a href="https://doi.org/10.18653/v1/2020.acl-main.485">of&#160;“bias”&#160;in&#160;NLP.&#160;</a>ACL.<br/>
+Jurgens,&#160;D.,&#160;Y.&#160;Tsvetkov,&#160;and&#160;D.&#160;Jurafsky.&#160;2017.&#160;<a href="https://doi.org/10.18653/v1/P17-2009">Incorpo-</a><br/>
+Blodgett,&#160;S.&#160;L.,&#160;L.&#160;Green,&#160;and&#160;B.&#160;O’Connor.&#160;2016.&#160;<a href="https://doi.org/10.18653/v1/D16-1120">Demo-</a><br/>
+<a href="https://doi.org/10.18653/v1/P17-2009">rating&#160;dialectal&#160;variability&#160;for&#160;socially&#160;equitable&#160;language</a><br/>
+<a href="https://doi.org/10.18653/v1/D16-1120">graphic&#160;dialectal&#160;variation&#160;in&#160;social&#160;media:&#160;A&#160;case&#160;study</a><br/>
+<a href="https://doi.org/10.18653/v1/P17-2009">identification.&#160;</a>ACL.<br/>
+<a href="https://doi.org/10.18653/v1/D16-1120">of&#160;African-American&#160;English.&#160;</a>EMNLP.<br/>
+Kiritchenko,&#160;S.&#160;and&#160;S.&#160;M.&#160;Mohammad.&#160;2018.&#160;<a href="https://doi.org/10.18653/v1/S18-2005">Examining</a><br/>
+<a href="https://doi.org/10.18653/v1/S18-2005">gender&#160;and&#160;race&#160;bias&#160;in&#160;two&#160;hundred&#160;sentiment&#160;analysis</a><br/>
+Borges,&#160;J.&#160;L.&#160;1964.&#160;The&#160;analytical&#160;language&#160;of&#160;john&#160;wilkins.<br/>
+<a href="https://doi.org/10.18653/v1/S18-2005">systems.&#160;</a>*SEM.<br/>
+In&#160;Other&#160;inquisitions&#160;1937–1952.&#160;University&#160;of&#160;Texas<br/>Press.&#160;Trans.&#160;Ruth&#160;L.&#160;C.&#160;Simms.<br/>
+Liu,&#160;B.&#160;and&#160;L.&#160;Zhang.&#160;2012.&#160;A&#160;survey&#160;of&#160;opinion&#160;mining<br/>
+and&#160;sentiment&#160;analysis.&#160;In&#160;C.&#160;C.&#160;Aggarwal&#160;and&#160;C.&#160;Zhai,<br/>
+Caliskan,&#160;A.,&#160;J.&#160;J.&#160;Bryson,&#160;and&#160;A.&#160;Narayanan.&#160;2017.&#160;<a href="https://doi.org/10.1126/science.aal4230">Seman-</a><br/>
+editors,&#160;Mining&#160;text&#160;data,&#160;pages&#160;415–464.&#160;Springer.<br/>
+<a href="https://doi.org/10.1126/science.aal4230">tics&#160;derived&#160;automatically&#160;from&#160;language&#160;corpora&#160;contain<br/>human-like&#160;biases.&#160;</a>Science,&#160;356(6334):183–186.<br/>
+Lui,&#160;M.&#160;and&#160;T.&#160;Baldwin.&#160;2011.&#160;<a href="https://www.aclweb.org/anthology/I11-1062">Cross-domain&#160;feature&#160;selec-</a><br/>
+<a href="https://www.aclweb.org/anthology/I11-1062">tion&#160;for&#160;language&#160;identification.&#160;</a>IJCNLP.<br/>
+Chinchor,&#160;N.,&#160;L.&#160;Hirschman,&#160;and&#160;D.&#160;L.&#160;Lewis.&#160;1993.&#160;<a href="https://www.aclweb.org/anthology/J93-3001">Eval-</a><br/>
+<a href="https://www.aclweb.org/anthology/J93-3001">uating&#160;Message&#160;Understanding&#160;systems:&#160;An&#160;analysis&#160;of</a><br/>
+Lui,&#160;M.&#160;and&#160;T.&#160;Baldwin.&#160;2012.&#160;<a href="https://www.aclweb.org/anthology/P12-3005">langid.py:&#160;An&#160;off-the-shelf</a><br/>
+<a href="https://www.aclweb.org/anthology/J93-3001">the&#160;third&#160;Message&#160;Understanding&#160;Conference.&#160;</a>Computa-<br/>
+<a href="https://www.aclweb.org/anthology/P12-3005">language&#160;identification&#160;tool.&#160;</a>ACL.<br/>
+tional&#160;Linguistics,&#160;19(3):409–449.<br/>
+Manning,&#160;C.&#160;D.,&#160;P.&#160;Raghavan,&#160;and&#160;H.&#160;Sch¨utze.&#160;2008.&#160;Intro-<br/>
+Crawford,&#160;K.&#160;2017.<br/>
+The&#160;trouble&#160;with&#160;bias.<br/>
+Keynote&#160;at<br/>
+duction&#160;to&#160;Information&#160;Retrieval.&#160;Cambridge.<br/>
+NeurIPS.<br/>
+Maron,&#160;M.&#160;E.&#160;1961.&#160;<a href="https://doi.org/10.1145/321075.321084">Automatic&#160;indexing:&#160;an&#160;experimental</a><br/>
+Davidson,&#160;T.,&#160;D.&#160;Bhattacharya,&#160;and&#160;I.&#160;Weber.&#160;2019.&#160;<a href="https://doi.org/10.18653/v1/W19-3504">Racial</a><br/>
+<a href="https://doi.org/10.1145/321075.321084">inquiry.&#160;</a>Journal&#160;of&#160;the&#160;ACM,&#160;8(3):404–417.<br/>
+<a href="https://doi.org/10.18653/v1/W19-3504">bias&#160;in&#160;hate&#160;speech&#160;and&#160;abusive&#160;language&#160;detection</a><br/>
+McCallum,&#160;A.&#160;and&#160;K.&#160;Nigam.&#160;1998.&#160;A&#160;comparison&#160;of&#160;event<br/>
+<a href="https://doi.org/10.18653/v1/W19-3504">datasets.&#160;</a>Third&#160;Workshop&#160;on&#160;Abusive&#160;Language&#160;Online.<br/>
+models&#160;for&#160;naive&#160;bayes&#160;text&#160;classification.&#160;AAAI/ICML-98<br/>
+Dias&#160;Oliva,&#160;T.,&#160;D.&#160;Antonialli,&#160;and&#160;A.&#160;Gomes.&#160;2021.&#160;<a href="https://doi.org/10.1007/s12119-020-09790-w">Fighting</a><br/>
+Workshop&#160;on&#160;Learning&#160;for&#160;Text&#160;Categorization.<br/>
+<a href="https://doi.org/10.1007/s12119-020-09790-w">hate&#160;speech,&#160;silencing&#160;drag&#160;queens?&#160;artificial&#160;intelligence</a><br/>
+Metsis,&#160;V.,&#160;I.&#160;Androutsopoulos,&#160;and&#160;G.&#160;Paliouras.&#160;2006.<br/>
+<a href="https://doi.org/10.1007/s12119-020-09790-w">in&#160;content&#160;moderation&#160;and&#160;risks&#160;to&#160;lgbtq&#160;voices&#160;online.</a><br/>
+Spam&#160;filtering&#160;with&#160;naive&#160;bayes-which&#160;naive&#160;bayes?<br/>
+Sexuality&#160;&amp;&#160;Culture,&#160;25:700–732.<br/>
+CEAS.<br/>
+Dixon,&#160;L.,&#160;J.&#160;Li,&#160;J.&#160;Sorensen,&#160;N.&#160;Thain,&#160;and&#160;L.&#160;Vasserman.<br/>
+Minsky,&#160;M.&#160;1961.&#160;Steps&#160;toward&#160;artificial&#160;intelligence.&#160;Pro-<br/>
+2018.&#160;Measuring&#160;and&#160;mitigating&#160;unintended&#160;bias&#160;in&#160;text<br/>
+ceedings&#160;of&#160;the&#160;IRE,&#160;49(1):8–30.<br/>
+classification.&#160;2018&#160;AAAI/ACM&#160;Conference&#160;on&#160;AI,&#160;Ethics,<br/>
+Mitchell,&#160;M.,&#160;S.&#160;Wu,&#160;A.&#160;Zaldivar,&#160;P.&#160;Barnes,&#160;L.&#160;Vasserman,<br/>
+and&#160;Society.<br/>
+B.&#160;Hutchinson,&#160;E.&#160;Spitzer,&#160;I.&#160;D.&#160;Raji,&#160;and&#160;T.&#160;Gebru.&#160;2019.<br/>
+Dror,&#160;R.,&#160;G.&#160;Baumer,&#160;M.&#160;Bogomolov,&#160;and&#160;R.&#160;Reichart.&#160;2017.<br/>
+<a href="https://doi.org/10.1145/3287560.3287596">Model&#160;cards&#160;for&#160;model&#160;reporting.&#160;</a>ACM&#160;FAccT.<br/>
+<a href="https://doi.org/10.1162/tacl_a_00074">Replicability&#160;analysis&#160;for&#160;natural&#160;language&#160;processing:</a><br/>
+Mosteller,&#160;F.&#160;and&#160;D.&#160;L.&#160;Wallace.&#160;1963.&#160;Inference&#160;in&#160;an&#160;au-<br/>
+<a href="https://doi.org/10.1162/tacl_a_00074">Testing&#160;significance&#160;with&#160;multiple&#160;datasets.&#160;</a>TACL,&#160;5:471–<br/>
+thorship&#160;problem:&#160;A&#160;comparative&#160;study&#160;of&#160;discrimination<br/>
+–486.<br/>
+methods&#160;applied&#160;to&#160;the&#160;authorship&#160;of&#160;the&#160;disputed&#160;feder-<br/>
+Dror,&#160;R.,&#160;L.&#160;Peled-Cohen,&#160;S.&#160;Shlomov,&#160;and&#160;R.&#160;Reichart.<br/>
+alist&#160;papers.&#160;Journal&#160;of&#160;the&#160;American&#160;Statistical&#160;Associa-<br/>
+2020.&#160;Statistical&#160;Significance&#160;Testing&#160;for&#160;Natural&#160;Lan-<br/>
+tion,&#160;58(302):275–309.<br/>
+guage&#160;Processing,&#160;volume&#160;45&#160;of&#160;Synthesis&#160;Lectures&#160;on<br/>
+Mosteller,&#160;F.&#160;and&#160;D.&#160;L.&#160;Wallace.&#160;1964.&#160;Inference&#160;and&#160;Dis-<br/>
+Human&#160;Language&#160;Technologies.&#160;Morgan&#160;&amp;&#160;Claypool.<br/>
+puted&#160;Authorship:&#160;The&#160;Federalist.&#160;Springer-Verlag.&#160;1984<br/>
+Efron,&#160;B.&#160;and&#160;R.&#160;J.&#160;Tibshirani.&#160;1993.&#160;An&#160;introduction&#160;to&#160;the<br/>
+2nd&#160;edition:&#160;Applied&#160;Bayesian&#160;and&#160;Classical&#160;Inference.<br/>
+bootstrap.&#160;CRC&#160;press.<br/>
+Murphy,&#160;K.&#160;P.&#160;2012.&#160;Machine&#160;learning:&#160;A&#160;probabilistic&#160;per-<br/>
+Gillick,&#160;L.&#160;and&#160;S.&#160;J.&#160;Cox.&#160;1989.&#160;<a href="https://doi.org/10.1109/ICASSP.1989.266481">Some&#160;statistical&#160;issues&#160;in&#160;the</a><br/>
+spective.&#160;MIT&#160;Press.<br/>
+<a href="https://doi.org/10.1109/ICASSP.1989.266481">comparison&#160;of&#160;speech&#160;recognition&#160;algorithms.&#160;</a>ICASSP.<br/>
+Noreen,&#160;E.&#160;W.&#160;1989.&#160;Computer&#160;Intensive&#160;Methods&#160;for&#160;Testing<br/>
+Guyon,&#160;I.&#160;and&#160;A.&#160;Elisseeff.&#160;2003.&#160;An&#160;introduction&#160;to&#160;variable<br/>
+Hypothesis.&#160;Wiley.<br/>
+and&#160;feature&#160;selection.&#160;JMLR,&#160;3:1157–1182.<br/>
+Pang,&#160;B.&#160;and&#160;L.&#160;Lee.&#160;2008.&#160;Opinion&#160;mining&#160;and&#160;sentiment<br/>
+Hastie,&#160;T.,&#160;R.&#160;J.&#160;Tibshirani,&#160;and&#160;J.&#160;H.&#160;Friedman.&#160;2001.&#160;The<br/>
+analysis.&#160;Foundations&#160;and&#160;trends&#160;in&#160;information&#160;retrieval,<br/>
+Elements&#160;of&#160;Statistical&#160;Learning.&#160;Springer.<br/>
+2(1-2):1–135.<br/>
+<hr/>
+<a name=23></a>Exercises<br/>
+23<br/>
+Pang,&#160;B.,&#160;L.&#160;Lee,&#160;and&#160;S.&#160;Vaithyanathan.&#160;2002.<br/>
+<a href="https://doi.org/10.3115/1118693.1118704">Thumbs</a><br/>
+<a href="https://doi.org/10.3115/1118693.1118704">up?&#160;Sentiment&#160;classification&#160;using&#160;machine&#160;learning&#160;tech-<br/>niques.&#160;</a>EMNLP.<br/>
+Park,&#160;J.&#160;H.,&#160;J.&#160;Shin,&#160;and&#160;P.&#160;Fung.&#160;2018.&#160;<a href="https://doi.org/10.18653/v1/D18-1302">Reducing&#160;gender&#160;bias</a><br/>
+<a href="https://doi.org/10.18653/v1/D18-1302">in&#160;abusive&#160;language&#160;detection.&#160;</a>EMNLP.<br/>
+Pennebaker,&#160;J.&#160;W.,&#160;R.&#160;J.&#160;Booth,&#160;and&#160;M.&#160;E.&#160;Francis.&#160;2007.<br/>
+Linguistic&#160;Inquiry&#160;and&#160;Word&#160;Count:&#160;LIWC&#160;2007.&#160;Austin,<br/>TX.<br/>
+Popp,&#160;D.,&#160;R.&#160;A.&#160;Donovan,&#160;M.&#160;Crawford,&#160;K.&#160;L.&#160;Marsh,&#160;and<br/>
+M.&#160;Peele.&#160;2003.&#160;Gender,&#160;race,&#160;and&#160;speech&#160;style&#160;stereo-<br/>types.&#160;Sex&#160;Roles,&#160;48(7-8):317–325.<br/>
+Sahami,&#160;M.,&#160;S.&#160;T.&#160;Dumais,&#160;D.&#160;Heckerman,&#160;and&#160;E.&#160;Horvitz.<br/>
+1998.&#160;A&#160;Bayesian&#160;approach&#160;to&#160;filtering&#160;junk&#160;e-mail.&#160;AAAI<br/>Workshop&#160;on&#160;Learning&#160;for&#160;Text&#160;Categorization.<br/>
+Sap,&#160;M.,&#160;D.&#160;Card,&#160;S.&#160;Gabriel,&#160;Y.&#160;Choi,&#160;and&#160;N.&#160;A.&#160;Smith.&#160;2019.<br/>
+<a href="https://doi.org/10.18653/v1/P19-1163">The&#160;risk&#160;of&#160;racial&#160;bias&#160;in&#160;hate&#160;speech&#160;detection.&#160;</a>ACL.<br/>
+Søgaard,&#160;A.,&#160;A.&#160;Johannsen,&#160;B.&#160;Plank,&#160;D.&#160;Hovy,&#160;and&#160;H.&#160;M.<br/>
+Alonso.&#160;2014.&#160;<a href="https://doi.org/10.3115/v1/W14-1601">What’s&#160;in&#160;a&#160;p-value&#160;in&#160;NLP?&#160;</a>CoNLL.<br/>
+Stamatatos,&#160;E.&#160;2009.&#160;A&#160;survey&#160;of&#160;modern&#160;authorship&#160;attribu-<br/>
+tion&#160;methods.&#160;JASIST,&#160;60(3):538–556.<br/>
+Stone,&#160;P.,&#160;D.&#160;Dunphry,&#160;M.&#160;Smith,&#160;and&#160;D.&#160;Ogilvie.&#160;1966.<br/>
+The&#160;General&#160;Inquirer:&#160;A&#160;Computer&#160;Approach&#160;to&#160;Content<br/>Analysis.&#160;MIT&#160;Press.<br/>
+van&#160;Rijsbergen,&#160;C.&#160;J.&#160;1975.&#160;Information&#160;Retrieval.&#160;Butter-<br/>
+worths.<br/>
+Wang,&#160;S.&#160;and&#160;C.&#160;D.&#160;Manning.&#160;2012.&#160;<a href="https://www.aclweb.org/anthology/P12-2018">Baselines&#160;and&#160;bigrams:</a><br/>
+<a href="https://www.aclweb.org/anthology/P12-2018">Simple,&#160;good&#160;sentiment&#160;and&#160;topic&#160;classification.&#160;</a>ACL.<br/>
+Wilson,&#160;T.,&#160;J.&#160;Wiebe,&#160;and&#160;P.&#160;Hoffmann.&#160;2005.&#160;<a href="https://doi.org/10.1162/coli.08-012-R1-06-90">Recogniz-</a><br/>
+<a href="https://doi.org/10.1162/coli.08-012-R1-06-90">ing&#160;contextual&#160;polarity&#160;in&#160;phrase-level&#160;sentiment&#160;analysis.<br/></a>EMNLP.<br/>
+Witten,&#160;I.&#160;H.&#160;and&#160;E.&#160;Frank.&#160;2005.&#160;Data&#160;Mining:&#160;Practi-<br/>
+cal&#160;Machine&#160;Learning&#160;Tools&#160;and&#160;Techniques,&#160;2nd&#160;edition.<br/>Morgan&#160;Kaufmann.<br/>
+Yang,&#160;Y.&#160;and&#160;J.&#160;Pedersen.&#160;1997.&#160;A&#160;comparative&#160;study&#160;on<br/>
+feature&#160;selection&#160;in&#160;text&#160;categorization.&#160;ICML.<br/>
+<hr/>
+<a name="outline"></a><h1>Document Outline</h1>
+<ul>
+<li><a href="4s.html#1">Naive Bayes, Text Classification, and Sentiment</a>
+<ul>
+<li><a href="4s.html#2">Naive Bayes Classifiers</a></li>
+<li><a href="4s.html#5">Training the Naive Bayes Classifier</a></li>
+<li><a href="4s.html#7">Worked example</a></li>
+<li><a href="4s.html#7">Optimizing for Sentiment Analysis</a></li>
+<li><a href="4s.html#9">Naive Bayes for other text classification tasks</a></li>
+<li><a href="4s.html#10">Naive Bayes as a Language Model</a></li>
+<li><a href="4s.html#11">Evaluation: Precision, Recall, F-measure</a>
+<ul>
+<li><a href="4s.html#13">Evaluating with more than two classes</a></li>
+</ul>
+</li>
+<li><a href="4s.html#13">Test sets and Cross-validation</a></li>
+<li><a href="4s.html#14">Statistical Significance Testing</a>
+<ul>
+<li><a href="4s.html#16">The Paired Bootstrap Test</a></li>
+</ul>
+</li>
+<li><a href="4s.html#18">Avoiding Harms in Classification</a></li>
+<li><a href="4s.html#19">Summary</a></li>
+<li><a href="4s.html#19">Bibliographical and Historical Notes</a></li>
+<li><a href="4s.html#19">Exercises</a></li>
+</ul>
+</li>
+</ul>
+<hr/>
+</body>
+</html>
